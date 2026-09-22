@@ -1649,6 +1649,26 @@ test('el motivo de rechazo no se contagia entre compañías con el mismo nameKey
   assert.strictEqual(nable.motivoClave, '', 'y no se le pega a la que comparte nombre');
 });
 
+test('una candidata rescatada a mano después del rechazo no arrastra su motivo', () => {
+  /* Caso real: ACO SOLUCIONES DE DRENAJE (2026-09-21). El motor rechazó la candidata en
+     su corrida —queda en `auditoria.rechazadas` con su motivo—, y el analista la rescató
+     después agregando su EEFF a mano, así que la misma compañía queda TAMBIÉN en
+     `comparables`. `idxEvaluadas` indexa `rechazadas` antes que `comparables`, así que sin
+     el candado la fila salía `seleccionada: true` y con `motivoClave: 'rigorFuncional'` a
+     la vez: el ANEXO C y la hoja «Selección comparables» del Excel la contaban como
+     aceptada Y como rechazada por diferencias funcionales. */
+  const universo = [{ id: 'IQ_1', name: 'Rescatada SA', s: 100 }];
+  const comparables = [{ id: 'IQ_1', name: 'Rescatada SA', s: 100 }];
+  const auditoria = {
+    rechazadas: [{ id: 'IQ_1', name: 'Rescatada SA', motivoClave: 'rigorFuncional', categoriaRechazo: 'rigor', motivoRechazo: 'No comparable con la parte examinada' }],
+  };
+  const [r] = enriquecerUniverso(universo, comparables, auditoria);
+  assert.strictEqual(r.seleccionada, true);
+  assert.strictEqual(r.motivoClave, '', 'seleccionada: no puede seguir marcada con un motivo de rechazo');
+  assert.strictEqual(r.motivoRechazo, '');
+  assert.strictEqual(r.categoriaRechazo, '');
+});
+
 test('sin identificador el cruce por nombre sigue funcionando', () => {
   /* Las candidatas cargadas a mano o traídas de otras fuentes no traen id; para
      ellas el nombre es lo único que hay. */

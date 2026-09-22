@@ -16,7 +16,7 @@ Lee este informe / estudio de precios de transferencia del año anterior y extra
 
 Devuelve ÚNICAMENTE un JSON estricto sin marcas markdown con esta estructura:
 {
-  "actividad_especifica": "Descripción detallada y completa de la actividad económica real, funciones (compras, logística, ventas, marketing), activos empleados y riesgos asumidos, así como la caracterización de los productos o servicios transaccionados de la compañía examinada.",
+  "actividad_especifica": "Descripción Directa y completa de la actividad económica real, funciones (compras, logística, ventas, marketing), activos empleados y riesgos asumidos, así como la caracterización de los productos o servicios transaccionados de la compañía examinada.",
   "anio_gravable": 2024,
   "vinculado": {
     "razon_social": "Razón social del vinculado económico del exterior con el que se hizo la operación analizada; cadena vacía si no aparece",
@@ -173,7 +173,7 @@ export async function parsePriorStudyFile(file) {
 
   // Fallback a Gemini Vision OCR siempre con inline_data Base64 (PDF escaneado o imágenes)
   console.log(`[priorStudyParser] Usando Vision OCR de respaldo para estudio anterior: ${file.name}`);
-  
+
   let base64Data = '';
   if (typeof FileReader === 'undefined') {
     const arrayBuffer = await file.arrayBuffer();

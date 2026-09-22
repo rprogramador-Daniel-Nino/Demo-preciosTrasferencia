@@ -219,7 +219,7 @@ export function coleccionesDelEstudio(estudio) {
     margenAjustado: pctf(f.ajustado),
   }));
 
-  const { filas } = filasRazonesRechazo(study.embudoSeleccion);
+  const { filas } = filasRazonesRechazo(study.embudoSeleccion, study.matrizRechazo);
   const razonesRechazo = (filas || []).map((f) => ({
     letra: f.letra,
     criterio: f.etiqueta,
@@ -2628,7 +2628,9 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
 
   // 10. Razones de rechazo
   reemplazar('Razones de rechazo', (b) => {
-    const { filas: razonesFilas } = filasRazonesRechazo(estudio.embudoSeleccion);
+    const { filas: razonesFilas, total: totalRazones, sinDatos: sinDatosRazones } = filasRazonesRechazo(
+      estudio.embudoSeleccion, estudio.matrizRechazo,
+    );
     /* Sin embudo no hay filtros que declarar, y la tabla saldría con su única fila
        «TOTAL, UNIVERSO — » encima del embudo que la plantilla ya publicaba: se conserva
        aquélla y se avisa. El total no cuenta como dato porque lo pone esta función. */
@@ -2638,7 +2640,12 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
       f.letra,
       String(f.cuantas)
     ]);
-    const totalEvaluadas = estudio.embudoSeleccion ? String(estudio.embudoSeleccion.evaluadas) : '—';
+    /* El total es el que de verdad sumó `filasRazonesRechazo` —`totalRazones`—, y NO
+       `estudio.embudoSeleccion.evaluadas` leído aparte: eran dos números distintos en cuanto el
+       embudo se desactualizaba, así que la fila «TOTAL, UNIVERSO» declaraba 1089 aunque las
+       filas de arriba sumaran 1102. Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21):
+       la Tabla 16 no cuadraba ni con su PROPIO total, no solo con el del ANEXO C. */
+    const totalEvaluadas = sinDatosRazones ? '—' : String(totalRazones);
     filas16.push([
       'TOTAL, UNIVERSO',
       '',

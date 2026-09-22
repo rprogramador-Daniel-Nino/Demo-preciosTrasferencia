@@ -5,6 +5,7 @@ import { evaluarRadicacion } from './semaforoRadicacion.js';
 const DIAGNOSTICO_LIMPIO = {
   seriesFaltantes: [], narrativaCubierta: true, sectorNarrativaCubierta: true,
   razonesRechazoCubiertas: true, razonesRechazoDescuadradas: false,
+  matrizRechazoDesactualizada: false,
   comparablesCubiertas: true, comparablesSinCifras: 0, sectorialCubierto: true,
 };
 
@@ -54,6 +55,35 @@ test('evaluarRadicacion bloquea si la tabla de razones de rechazo no está cubie
   });
   assert.equal(veredicto.listo, false);
   assert.match(veredicto.bloqueantes.join(' '), /razones de rechazo/i);
+});
+
+test('evaluarRadicacion bloquea si la tabla de razones de rechazo no cuadra con el universo', () => {
+  /* Caso real: ACO SOLUCIONES DE DRENAJE se radicó dos veces con la Tabla 16 y el ANEXO C
+     contradiciéndose entre sí —y contra la propia muestra final— sin que nada más visible que
+     una advertencia lo señalara. Un embudo descuadrado no es un hueco a medio llenar: es el
+     documento afirmando dos cosas distintas sobre la misma compañía. */
+  const veredicto = evaluarRadicacion({
+    diagnostico: { ...DIAGNOSTICO_LIMPIO, razonesRechazoDescuadradas: true },
+    fugasReferencia: [],
+    avisosTablas: [],
+    camposVacios: [],
+  });
+  assert.equal(veredicto.listo, false);
+  assert.match(veredicto.bloqueantes.join(' '), /no cuadran con el universo evaluado/i);
+});
+
+test('evaluarRadicacion bloquea si la matriz de rechazo no refleja la muestra final actual', () => {
+  /* La foto puede sumar perfectamente su propio universo —`razonesRechazoDescuadradas: false`—
+     y aun así ser una foto vieja: se guardó antes de que el analista agregara o retirara una
+     comparable en otra pantalla, y nada la refresca sola. */
+  const veredicto = evaluarRadicacion({
+    diagnostico: { ...DIAGNOSTICO_LIMPIO, matrizRechazoDesactualizada: true },
+    fugasReferencia: [],
+    avisosTablas: [],
+    camposVacios: [],
+  });
+  assert.equal(veredicto.listo, false);
+  assert.match(veredicto.bloqueantes.join(' '), /no reflejan la muestra final/i);
 });
 
 test('evaluarRadicacion reporta como advertencias las tablas y campos que no se encontraron', () => {

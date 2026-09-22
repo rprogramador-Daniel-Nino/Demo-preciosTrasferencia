@@ -1225,7 +1225,9 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
   };
 
   const runEngineSelection = async (
-    alternativaForzada = null, direccionForzada = null, priorizarForzado = null,
+    alternativaForzada = null,
+    direccionForzada = null,
+    priorizarForzado = null,
   ) => {
     if (!universo || universo.length === 0) {
       alert("Por favor importe primero un archivo de Capital IQ en el Paso 1.");
@@ -1711,6 +1713,38 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
       ...prev,
       seleccionadas: Math.max(0, (Number(prev.seleccionadas) || 0) - cuantas),
       sinEeff: (Number(prev.sinEeff) || 0) + cuantas,
+    } : prev));
+  };
+
+  /* Lo mismo en el sentido contrario: crear una comparable desde su EEFF (segundo camino del
+     proceso, `muestraManual.js`) la mete a la muestra sin pasar por el motor, y hasta ahora el
+     embudo nunca se enteraba. `seleccionadas` se quedaba con el número de la última corrida —o
+     en 0 tras suficientes retiros manuales— mientras la Tabla 16 del informe seguía citando esa
+     cifra vieja y el Excel de soporte, el ANEXO C y la muestra real ya declaraban otra.
+     Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21).
+
+     No se toca `evaluadas` ni `porMotivo`: esas describen el universo que cribó Capital IQ, y
+     una comparable agregada a mano —haya pasado por ese universo y haya sido rescatada, o sea
+     enteramente ajena a él— no lo agranda. Si `seleccionadas` crece sin que el universo lo
+     explique, `filasRazonesRechazo` deja de cuadrar y `razonesRechazoDescuadradas` lo avisa antes
+     de radicar: preferible ese aviso a una Tabla 16 que se calla el cambio. */
+  const anotarAgregadasEnEmbudo = (cuantas) => {
+    if (!cuantas) return;
+    setSelectionFunnel((prev) => (prev ? {
+      ...prev,
+      seleccionadas: (Number(prev.seleccionadas) || 0) + cuantas,
+    } : prev));
+  };
+
+  /* La inversa: se retira una comparable creada desde su EEFF. No pasa por `retirarDeMuestra`
+     —esa reserva un cupo en `retiradasManual` para que `filasRazonesRechazo` la sume a las
+     diferencias funcionales, y esta fila nunca estuvo en el universo evaluado que esa cuenta
+     describe, así que sumarla ahí inventaría un rechazo que no existe—. Se quita del mismo
+     sitio donde `anotarAgregadasEnEmbudo` la sumó y nada más. */
+  const quitarAgregadaDelEmbudo = () => {
+    setSelectionFunnel((prev) => (prev ? {
+      ...prev,
+      seleccionadas: Math.max(0, (Number(prev.seleccionadas) || 0) - 1),
     } : prev));
   };
 
@@ -2263,6 +2297,7 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
 
       if (aplicadasTodas.length || aRetirar.size) setComparables(filasConActividad);
       anotarRetiradasEnEmbudo(aRetirar.size);
+      anotarAgregadasEnEmbudo(creadas.length);
       if (indicesAplicados.length) {
         await publicarEeff(filasConActividad, indicesAplicados);
         redactarDescripcionesDeFilas(filasConActividad, indicesAplicados).catch((err) =>
@@ -2345,6 +2380,12 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
        Quitar la fila y no anotarla dejaba el informe declarando más comparables aceptadas de las
        que la muestra tiene, sin que nada lo advirtiera. */
     if (!fila || fila.aMano) return;
+    /* Creada desde su EEFF: la sumó `anotarAgregadasEnEmbudo`, con su propio contador. Antes
+       caía en `retirarDeMuestra` igual que una comparable del motor, y esa función descontaba
+       una «aceptada» que el embudo nunca había contado —quedó así el defecto reportado el
+       2026-09-21 en ACO SOLUCIONES DE DRENAJE: cargar EEFF a mano y luego retirar alguna hundía
+       `seleccionadas` hasta 0 sin que la muestra real cambiara tanto—. */
+    if (fila.creadaDesdeEeff) { quitarAgregadaDelEmbudo(); return; }
     retirarDeMuestra(fila);
   };
 

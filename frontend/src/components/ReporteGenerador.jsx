@@ -4,7 +4,7 @@ import React, {
 import axios from 'axios';
 import { Upload, FileDown, Edit3, Loader2, Sparkles, Check, FileText, AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import mammoth from 'mammoth';
-import { diagnosticarCobertura } from '../services/tablasInforme';
+import { diagnosticarCobertura, sincronizarMatrizConMuestra } from '../services/tablasInforme';
 import {
   normalizarActividad, claveActividad, corridaSectorIncompleta,
 } from '../services/analisisMercado';
@@ -389,8 +389,8 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      en concreto —qué serie y de qué año— porque un aviso genérico se ignora, y
      estas son las cifras que el Decreto 1625 de 2016 obliga a respaldar con fuente
      y fecha de consulta antes de radicar. */
-  const avisosDeMercado = (htmlBase) => {
-    const d = diagnosticarCobertura(htmlBase, study, analisisMercado, analisisSector);
+  const avisosDeMercado = (htmlBase, estudioOverride) => {
+    const d = diagnosticarCobertura(htmlBase, estudioOverride || study, analisisMercado, analisisSector);
     const avisos = [];
     /* Mismo chequeo que dispara (o no) el análisis en el efecto de arriba. Antes, sin
        actividad ni objeto o sin año gravable, el efecto se limitaba a `setAnalisisSector
@@ -478,12 +478,10 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
         'ejecuta la selección del motor de comparables para que se calculen con este estudio'
       );
     }
-    if (d.razonesRechazoDescuadradas) {
-      avisos.push(
-        'los conteos de la tabla 16 no suman el universo evaluado, así que el estudio ' +
-        'cambió después de la última selección: vuelve a ejecutarla antes de radicar'
-      );
-    }
+    /* `razonesRechazoDescuadradas` ya no se avisa aquí: desde el 2026-09-21 es BLOQUEANTE
+       en `evaluarRadicacion` (semaforoRadicacion.js), no una advertencia de esta lista —
+       repetirla en las dos habría dejado el mismo hecho leyéndose como «bloquea» y como
+       «solo avisa» a la vez en el mismo banner. */
     /* Sin comparables en el estudio, las tablas 17 y 19 salen con las de la plantilla,
        nombre por nombre y margen por margen. Es la fuga más fácil de ver de todo el
        documento. */
@@ -515,17 +513,23 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      encontró en la plantilla, y decide si algo de eso es BLOQUEANTE —dato de otro
      contribuyente con aspecto de estar completo— o solo ADVERTENCIA —un marcador
      visible que hay que completar—. */
-  const revisarCobertura = (htmlDelInforme, { valores = [], avisosTablas = [], camposVacios = [] } = {}) => {
-    const d = diagnosticarCobertura(htmlDelInforme, study, analisisMercado, analisisSector);
+  /* `estudioOverride`: quien llama puede pasar una versión del estudio más fresca que la de este
+     cierre —p. ej. `actualizarInformacion` justo después de reconciliar `matrizRechazo` contra la
+     muestra actual (`sincronizarMatrizConMuestra`)—. `updateStudy` no cambia el `study` ya
+     capturado en la ejecución en curso, así que sin esto el mismo clic corregía el dato guardado
+     pero seguía mostrando el banner y la vista previa con la foto vieja hasta el siguiente clic. */
+  const revisarCobertura = (htmlDelInforme, { valores = [], avisosTablas = [], camposVacios = [] } = {}, estudioOverride) => {
+    const estudioParaDiagnostico = estudioOverride || study;
+    const d = diagnosticarCobertura(htmlDelInforme, estudioParaDiagnostico, analisisMercado, analisisSector);
     const fugasReferencia = revisarSalidaRenderizada({
-      estudio: study, htmlRenderizado: htmlDelInforme, valores,
+      estudio: estudioParaDiagnostico, htmlRenderizado: htmlDelInforme, valores,
     });
     const veredicto = evaluarRadicacion({ diagnostico: d, fugasReferencia, avisosTablas, camposVacios });
     /* `avisosDeMercado` da avisos que dependen de estado en vivo (si el sector se está
        generando en este momento, cuántos días tiene la última corrida del cron) que
        `diagnosticarCobertura` no calcula por sí solo — se agregan aparte, como
        advertencias, no como bloqueantes: ninguno implica un dato de otro cliente. */
-    veredicto.advertencias = veredicto.advertencias.concat(avisosDeMercado(htmlDelInforme));
+    veredicto.advertencias = veredicto.advertencias.concat(avisosDeMercado(htmlDelInforme, estudioOverride));
     setVeredictoRadicacion(veredicto);
   };
 
@@ -536,12 +540,13 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      plantilla marcada— y las tres deben avisar exactamente igual.
 
      `huecos` es cuántos huecos de anexo dejó el extractor en esta plantilla. */
-  const renderizarYAvisar = (htmlMarcado, recursos, huecos = 0) => {
+  const renderizarYAvisar = (htmlMarcado, recursos, huecos = 0, estudioOverride) => {
+    const estudioParaRenderizar = estudioOverride || study;
     /* `analisisMercado` alimenta las ocho tablas y la prosa de tendencias de la economía
        (III.A/III.B). La ruta .docx ya los recibía (`construirDocxDelEstudio`); esta se
        quedaba sin ellos y esas tablas salían con las series del informe del que se tomó
        la plantilla. `analisisSector` hace lo mismo para III.C. */
-    const r = renderizar(htmlMarcado, study, recursos, { datosMacro: analisisMercado, analisisSector });
+    const r = renderizar(htmlMarcado, estudioParaRenderizar, recursos, { datosMacro: analisisMercado, analisisSector });
     /* Los valores que traía el informe de referencia salen del propio HTML
        marcado: el marcado envuelve el texto original sin alterarlo, así que el
        contenido de una marca `data-campo="nit"` es literalmente el NIT del
@@ -565,7 +570,7 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
     /* La cobertura se mide sobre el render CORREGIDO, no sobre la plantilla en crudo ni
        sobre el render sin corregir: es el documento que se va a radicar, y contar como
        fuga algo que se acaba de arreglar es lo que enseña a ignorar el banner. */
-    revisarCobertura(htmlFinal, { valores, avisosTablas: r.avisosTablas, camposVacios: r.vacios });
+    revisarCobertura(htmlFinal, { valores, avisosTablas: r.avisosTablas, camposVacios: r.vacios }, estudioOverride);
     /* Las tablas del motor que la plantilla no trae. Mismo aviso que en la ruta .docx:
        una tabla que no se regenera se queda con los datos del informe del que salió la
        plantilla, y sin decirlo el fallo llega hasta la radicación. */
@@ -1231,9 +1236,9 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      estudio no trae conserve el texto que la plantilla publicaba, en vez de salir como «—»
      (`restaurarCamposSinDato`, en `docxPlantilla.js`). Se lee de IndexedDB, donde
      `guardarDocx` lo dejó al subirlo; si no está, el relleno se comporta como antes. */
-  const construirDocxDelEstudio = (binarioMarcado, tipoSalida = 'blob', binarioOriginal = null) => rellenarDocx({
+  const construirDocxDelEstudio = (binarioMarcado, tipoSalida = 'blob', binarioOriginal = null, estudioOverride) => rellenarDocx({
     binario: binarioMarcado,
-    estudio: study,
+    estudio: estudioOverride || study,
     datosMacro: analisisMercado,
     analisisSector: analisisSector,
     colecciones: coleccionesDelEstudio(study),
@@ -1249,10 +1254,10 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      datos que de verdad va a llevar el archivo. Pierde el formato —mammoth lo
      descarta—, pero el .docx que se descarga sale del original intacto, que es lo
      que importa. */
-  const previsualizarDocx = async (binarioMarcado, binarioOriginal = null) => {
+  const previsualizarDocx = async (binarioMarcado, binarioOriginal = null, estudioOverride) => {
     try {
       const { salida, camposVacios, avisosTablas } = construirDocxDelEstudio(
-        binarioMarcado, 'uint8array', binarioOriginal);
+        binarioMarcado, 'uint8array', binarioOriginal, estudioOverride);
       const { value } = await mammoth.convertToHtml({ arrayBuffer: salida.buffer.slice(
         salida.byteOffset, salida.byteOffset + salida.byteLength) });
       setHtmlContent(value);
@@ -1264,7 +1269,7 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
          `data-campo`, así que `revisarSalidaRenderizada` no tiene con qué comparar
          todavía — queda pendiente el mismo barrido de fugas que ya existe para la
          ruta de plantilla marcada. */
-      revisarCobertura(value, { avisosTablas, camposVacios });
+      revisarCobertura(value, { avisosTablas, camposVacios }, estudioOverride);
       const avisos = revisarAntesDeGenerar({
         estudio: study,
         tieneAnexo: true,
@@ -1461,6 +1466,26 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
         if (sector) setAnalisisSector(sector);
       }
 
+      /* La matriz de rechazo (Tabla 16 / ANEXO C) contra la muestra final ACTUAL. Es la misma
+         clase de desactualización que el comentario de más abajo describe para el rango, pero
+         esta no se corrige sola con un re-render: `matrizRechazo` es una foto que solo se
+         recalcula de verdad en el paso 3 (Motor de Comparables), con el universo de Capital IQ
+         cargado —que no se persiste con el estudio—. Sin este botón, la única forma de
+         refrescarla era volver a ese paso y reejecutar la selección; con esto, «Actualizar
+         información» la reconcilia con lo único que esta pantalla sí tiene a mano: la muestra
+         final tal como está guardada (`study.comparables`). Caso real: ACO SOLUCIONES DE DRENAJE
+         (2026-09-21). */
+      let estudioActualizado = study;
+      const matrizReconciliada = sincronizarMatrizConMuestra(study.matrizRechazo, study.comparables);
+      if (matrizReconciliada !== study.matrizRechazo) {
+        updateStudy({ matrizRechazo: matrizReconciliada });
+        /* `updateStudy` no cambia el `study` ya capturado en esta ejecución —closures de
+           React—, así que para que el MISMO clic también corrija la vista previa y el banner (no
+           solo lo que queda guardado para la próxima acción) hay que pasar esta copia explícita
+           a las funciones de render de más abajo, que la reciben en su último parámetro. */
+        estudioActualizado = { ...study, matrizRechazo: matrizReconciliada };
+      }
+
       /* Y la vista previa, que es donde se comprueba si el documento quedó completo: se
          rehace con la plantilla marcada del estudio, igual que la descarga.
 
@@ -1478,11 +1503,11 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
          comenta salieran coherentes entre sí y desactualizadas las dos: mismo render viejo. */
       if (plantillaActiva && plantillaActiva.tipo === 'docx' && plantillaActiva.marcada) {
         const marcado = await leerDocxMarcado(plantillaActiva.id);
-        if (marcado) await previsualizarDocx(marcado, await leerDocx(plantillaActiva.id));
+        if (marcado) await previsualizarDocx(marcado, await leerDocx(plantillaActiva.id), estudioActualizado);
       } else if (plantillaActiva && plantillaActiva.marcada) {
         const marcado = await leerMarcado(plantillaActiva.id);
         if (marcado) {
-          renderizarYAvisar(marcado, recursosCargados, plantillaActiva.huecos || 0);
+          renderizarYAvisar(marcado, recursosCargados, plantillaActiva.huecos || 0, estudioActualizado);
         }
       }
     } catch (err) {

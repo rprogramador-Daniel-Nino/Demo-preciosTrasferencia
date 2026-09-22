@@ -124,7 +124,7 @@ const ANCLAS_MUESTRA = [
  */
 export function actualizarProsaMuestra(texto, estudio, avisos, opciones = {}) {
   const study = estudio || {};
-  const rechazo = filasRazonesRechazo(study.embudoSeleccion);
+  const rechazo = filasRazonesRechazo(study.embudoSeleccion, study.matrizRechazo);
   /* Las aceptadas se toman de la muestra final —las comparables que el informe LISTA y que
      sostienen el rango— y no del contador del embudo. Si los dos no coinciden, el informe ya se
      contradice entre sus propias tablas, y de eso avisa `razonesRechazoDescuadradas`; la frase

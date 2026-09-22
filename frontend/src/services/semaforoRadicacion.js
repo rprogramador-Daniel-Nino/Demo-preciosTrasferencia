@@ -53,8 +53,33 @@ export function evaluarRadicacion({ diagnostico, fugasReferencia, avisosTablas, 
   if (!d.narrativaCubierta) {
     advertencias.push('La narrativa de III.A/III.B todavía no está disponible.');
   }
+  /* BLOQUEANTE y no advertencia desde el 2026-09-21: un embudo descuadrado no es un hueco
+     visible como un marcador de "falta esto" —es la Tabla 16 contradiciendo al ANEXO C, o a la
+     propia muestra final, sin decirlo—. Caso real: ACO SOLUCIONES DE DRENAJE se radicó dos veces
+     con la Tabla 16 declarando 0 comparables aceptadas mientras la muestra tenía 14, y esta
+     comprobación ya lo detectaba (`suma` no daba `evaluadas`) pero como advertencia se quedaba
+     enterrada en la lista y no impedía nada visualmente distinto de un hueco menor. Vuelve a
+     ejecutar la selección del motor de comparables antes de radicar: lo dice el propio texto. */
   if (d.razonesRechazoDescuadradas) {
-    advertencias.push('Los conteos de la tabla de razones de rechazo no cuadran con el universo evaluado.');
+    bloqueantes.push(
+      'Los conteos de la tabla de razones de rechazo no cuadran con el universo evaluado: el '
+      + 'estudio cambió después de la última selección. Abre el paso 3 (Motor de Comparables) y '
+      + 'ejecuta la selección de nuevo —conserva las comparables agregadas o retiradas a mano— '
+      + 'antes de generar el informe.'
+    );
+  }
+  /* BLOQUEANTE: aunque la Tabla 16 y el ANEXO C ya lean la misma matriz y por eso coincidan
+     entre sí (desde el 2026-09-21), esa matriz puede seguir siendo una foto vieja de una muestra
+     que ya no es la actual —se guardó la última vez que el paso 3 tuvo el cribado cargado, y
+     nada la refresca sola mientras tanto—. `razonesRechazoDescuadradas` no lo detecta porque la
+     foto puede sumar perfectamente el universo que ella misma declara. Este sí compara contra la
+     muestra que de verdad se va a radicar (Tabla 17). */
+  if (d.matrizRechazoDesactualizada) {
+    bloqueantes.push(
+      'La tabla de razones de rechazo y el ANEXO C no reflejan la muestra final de comparables '
+      + 'actual. Abre el paso 4 (Motor de Comparables) con el cribado cargado antes de generar '
+      + 'el informe, para que se recalculen.'
+    );
   }
   if (d.comparablesSinCifras) {
     advertencias.push(d.comparablesSinCifras + ' comparable(s) sin estados financieros cargados.');

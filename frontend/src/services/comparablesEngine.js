@@ -1792,12 +1792,21 @@ export function enriquecerUniverso(universo, comparables = [], auditoria = null)
     const ev = buscar(idxEvaluadas, cand);
     const seleccionada = Boolean(buscar(idxSeleccionadas, cand));
     const esReserva = !seleccionada && Boolean(buscar(idxReserva, cand));
+    /* Una compañía seleccionada no puede arrastrar el motivo de una corrida anterior que
+       la rechazó: `idxEvaluadas` indexa `rechazadas` antes que `comparables` —porque ahí
+       es donde vive el motivo real de cada candidata que sigue rechazada— y con eso una
+       candidata que el analista rescató a mano, agregando su EEFF después de esa corrida,
+       queda marcada `seleccionada: true` y con el `motivoClave` viejo pegado a la vez.
+       Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21): la misma compañía
+       aparecía aceptada en la muestra final y rechazada por diferencias funcionales en el
+       ANEXO C, y la hoja «Selección comparables» del Excel la contaba en los dos bandos de
+       su propia «Matriz de rechazo». Sin motivo, no hay ambigüedad posible. */
     return {
       ...cand,
       seleccionada,
-      motivoClave: (ev && ev.motivoClave) || (esReserva ? CLAVE_RESERVA : ''),
-      motivoRechazo: (ev && ev.motivoRechazo) || (esReserva ? MOTIVO_RESERVA : ''),
-      categoriaRechazo: (ev && ev.categoriaRechazo) || (esReserva ? 'rigor' : ''),
+      motivoClave: seleccionada ? '' : ((ev && ev.motivoClave) || (esReserva ? CLAVE_RESERVA : '')),
+      motivoRechazo: seleccionada ? '' : ((ev && ev.motivoRechazo) || (esReserva ? MOTIVO_RESERVA : '')),
+      categoriaRechazo: seleccionada ? '' : ((ev && ev.categoriaRechazo) || (esReserva ? 'rigor' : '')),
       perfilFuncional: (ev && ev.perfilFuncional) || cand.perfilFuncional || '',
     };
   });

@@ -80,7 +80,7 @@ function fichaVinculado(e) {
  *  ('Razones de rechazo', ...)`), para que el borrador declare lo mismo que la ruta
  *  con plantilla ante el mismo estudio. */
 function tablaRazonesRechazo(e) {
-  const { filas, total } = filasRazonesRechazo(e.embudoSeleccion);
+  const { filas, total } = filasRazonesRechazo(e.embudoSeleccion, e.matrizRechazo);
   if (!filas.length) return '';
   const filasTabla = filas.map((f) => [f.etiqueta, f.letra, String(f.cuantas)]);
   filasTabla.push(['TOTAL, UNIVERSO', '', String(total)]);
