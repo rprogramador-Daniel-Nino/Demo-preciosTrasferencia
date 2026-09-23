@@ -440,6 +440,17 @@ export default function App() {
     setActiveTab(tabCanonica(tab));
   };
 
+  /* Inverso de `abrirEstudio`: lo que dispara el botón "Salir" de la barra de
+     estado. No cierra sesión, vuelve al Dashboard sin sidebar. El efecto que
+     vigila `activeStudyId` se encarga de borrar el recuerdo de sesión UI y de
+     desmontar las pantallas del estudio. */
+  const cerrarEstudio = () => {
+    setEstudioAjeno(null);
+    setActiveStudyId(null);
+    setStudy({});
+    setActiveTab('dashboard');
+  };
+
   const selectStudy = async (id, { tabInicial = 'contribuyente' } = {}) => {
     try {
       const datos = await leerEstudio(id, usuario);
@@ -711,7 +722,7 @@ export default function App() {
 
   return (
     <>
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} cerrarSesion={cerrarSesion} mostrarSidebar={!!activeStudyId}>
       {/* Barra de estado de la sesión y del guardado. Con la base compartida importa
           saber con qué cuenta se está trabajando y si lo último quedó guardado. */}
       <div className="flex items-center gap-3 mb-4 text-[11px] text-zinc-500">
@@ -769,12 +780,14 @@ export default function App() {
               : estadoGuardado === 'guardando' ? textoGuardando(etapaGuardado) : 'guardado'}
           </span>
         )}
-        <button
-          onClick={() => cerrarSesion()}
-          className="ml-auto px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          Salir
-        </button>
+        {activeStudyId && (
+          <button
+            onClick={() => cerrarEstudio()}
+            className="ml-auto px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Salir
+          </button>
+        )}
       </div>
 
       {avisoSesion && (
