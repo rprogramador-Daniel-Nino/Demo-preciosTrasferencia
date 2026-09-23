@@ -234,6 +234,10 @@ function filaIndice(id, datos) {
        documento, y sin este respaldo desaparecerían de las bandejas del tablero. */
     tipoEstudio: datos.tipoEstudio || 'estandar',
     estado: datos.estado || 'borrador',
+    /* Mismo criterio de respaldo que en `docEstudio` (firestoreModelo.js): un estudio sin
+       `etapaMaxima` es uno guardado antes de que existiera el candado por etapas, no uno
+       bloqueado en la etapa 1. */
+    etapaMaxima: Number.isInteger(datos.etapaMaxima) ? datos.etapaMaxima : 6,
     actualizadoPorNombre: datos.actualizadoPorNombre || '',
     /* El monto de operaciones con vinculados, que es lo que anuncia la columna del
        tablero. Se lee de `datos`, que ya viene en la respuesta —Firestore cobra por

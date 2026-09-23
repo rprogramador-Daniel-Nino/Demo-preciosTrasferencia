@@ -174,7 +174,7 @@ service cloud.firestore {
       return soloEstosCampos(['ent', 'nit', 'anio', 'clienteNit', 'datos', 'compartidoCon',
                               'editores', 'creadoPor', 'creadoPorNombre', 'creadoEn',
                               'actualizadoPor', 'actualizadoPorNombre', 'actualizadoEn',
-                              'tipoEstudio', 'estado'])
+                              'tipoEstudio', 'estado', 'etapaMaxima'])
         && tieneTodos(['ent', 'anio', 'datos', 'creadoPor', 'creadoEn', 'actualizadoEn'])
         && editoresHabilitados(d)
         && texto(d.ent, 1, 200)
@@ -188,7 +188,8 @@ service cloud.firestore {
         && nombreCoherente(d, 'creadoPorNombre')
         && nombreCoherente(d, 'actualizadoPorNombre')
         && enumOpcional(d, 'tipoEstudio', ['estandar', 'prestamo', 'segmentacion'])
-        && enumOpcional(d, 'estado', ['borrador', 'en_progreso', 'finalizado']);
+        && enumOpcional(d, 'estado', ['borrador', 'en_progreso', 'finalizado'])
+        && numeroOpcional(d, 'etapaMaxima', 0, 6);
     }
 
     /* ── compartición de un estudio ──

@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sun, Moon, FileText, BarChart3, ShieldAlert, FileDown, Menu, X, BookOpen, LogOut
+  Sun, Moon, FileText, BarChart3, ShieldAlert, FileDown, Menu, X, BookOpen, LogOut, Lock
 } from 'lucide-react';
+import { etapaAlcanzable } from '../services/flujoEstudio';
 
-export default function Layout({ children, activeTab, setActiveTab, cerrarSesion, mostrarSidebar }) {
+export default function Layout({
+  children, activeTab, setActiveTab, cerrarSesion, mostrarSidebar,
+  etapaMaxima = 6, mostrarFinalizar = false, finalizado = false, onFinalizar,
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
 
@@ -59,17 +63,26 @@ export default function Layout({ children, activeTab, setActiveTab, cerrarSesion
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
+              /* Bloqueada = todavía no se llegó a la etapa anterior a esta. Ver
+                 `etapaAlcanzable`/`etapaMaxima` — se desbloquea sola en cuanto el usuario
+                 confirma la etapa previa con el botón "Confirmar etapa". */
+              const alcanzable = etapaAlcanzable(item.id, etapaMaxima);
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
-                      ? 'bg-[#0FA3A1]/15 text-[#0FA3A1] dark:bg-[#0FA3A1]/10'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  onClick={() => alcanzable && setActiveTab(item.id)}
+                  disabled={!alcanzable}
+                  title={alcanzable ? undefined : 'Confirma la etapa anterior para desbloquear esta'}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${!alcanzable
+                      ? 'text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                      : isActive
+                        ? 'bg-[#0FA3A1]/15 text-[#0FA3A1] dark:bg-[#0FA3A1]/10'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200'
                     }`}
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" />
                   {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  {sidebarOpen && !alcanzable && <Lock className="w-3.5 h-3.5 flex-shrink-0 ml-auto" />}
                 </button>
               );
             })}
@@ -103,6 +116,19 @@ export default function Layout({ children, activeTab, setActiveTab, cerrarSesion
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Finalizar estudio: solo en la última etapa del wizard. Es una etiqueta, no
+                un bloqueo — el estudio sigue editable después de marcarlo. */}
+            {mostrarFinalizar && (
+              <button
+                onClick={onFinalizar}
+                disabled={finalizado}
+                className={finalizado
+                  ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 cursor-default'
+                  : 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors'}
+              >
+                {finalizado ? '✓ Finalizado' : 'Finalizar estudio'}
+              </button>
+            )}
             {/* Theme Toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}

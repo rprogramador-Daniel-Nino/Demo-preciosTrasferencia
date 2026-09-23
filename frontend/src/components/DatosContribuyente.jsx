@@ -119,7 +119,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Tipo de Estudio</label>
+              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Tipo de Estudio*</label>
               <select
                 value={study.tipo_estudio || 'estandar'}
                 onChange={(e) => handleFieldChange('tipo_estudio', e.target.value)}
@@ -132,7 +132,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
             </div>
 
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Razón Social</label>
+              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Razón Social*</label>
               <input
                 type="text"
                 value={study.ent || ''}
@@ -143,7 +143,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
             </div>
 
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">NIT (con dígito de verificación)</label>
+              <label className="text-xs font-semibold text-zinc-500 mb-1.5">NIT (con dígito de verificación)*</label>
               <input
                 type="text"
                 value={study.nit || ''}
@@ -154,7 +154,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
             </div>
 
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Año Gravable</label>
+              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Año Gravable*</label>
               <input
                 type="number"
                 value={study.anio || ''}
@@ -165,7 +165,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
             </div>
 
             <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Actividad Económica (CIIU)</label>
+              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Actividad Económica (CIIU)*</label>
               <input
                 type="text"
                 value={study.ciiu || ''}

@@ -384,6 +384,11 @@ export function docEstudio({ study, usuario, previo = null, marcaDeTiempo, compa
        valor corrupto, no debe desaparecer de ninguna bandeja. */
     tipoEstudio: TIPOS_ESTUDIO_VALIDOS.includes(nube.tipo_estudio) ? nube.tipo_estudio : 'estandar',
     estado: ESTADOS_ESTUDIO_VALIDOS.includes(nube.estado) ? nube.estado : 'borrador',
+    /* Candado por etapas del wizard (1-6). Fallback a 6 (desbloqueado) y no a 0: un
+       estudio guardado antes de que existiera este campo no debe aparecer bloqueado en la
+       etapa 1 en la bandeja. Solo `estudioEnBlanco()` (frontend) fija un 0 explícito para
+       estudios realmente nuevos, y ese si se respeta aquí. */
+    etapaMaxima: Number.isInteger(nube.etapaMaxima) ? Math.min(Math.max(nube.etapaMaxima, 0), 6) : 6,
     datos: nube,
     creadoPor: previo ? previo.creadoPor : usuario.uid,
     creadoEn: previo ? previo.creadoEn : marcaDeTiempo,

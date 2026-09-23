@@ -22,6 +22,9 @@ import {
 } from './services/firestoreRepo';
 import { separarEstudio, SELLO_ESTUDIO, sonDelEstudio, ROL_EDITOR } from './services/firestoreModelo';
 import {
+  NUMERO_ETAPA, contribuyenteCompleto, estadoDesdeEtapa, etapaMaximaEfectiva,
+} from './services/flujoEstudio';
+import {
   guardarAnexoEeff, leerAnexoEeff, guardarAnexoBImagenes, guardarAnexosDelEstudio,
   borrarRecursosDelEstudio,
 } from './services/plantillaStore';
@@ -436,7 +439,13 @@ export default function App() {
     cargando.current = true;
     setEstudioAjeno(ajeno);
     setActiveStudyId(id);
-    setStudy(datos);
+    /* Estudios guardados antes de que existiera el candado por etapas no traen
+       `etapaMaxima`: sin este respaldo amanecerían con el sidebar bloqueado en la etapa 1
+       aunque ya estén completos o finalizados. Los estudios nuevos ya traen `etapaMaxima: 0`
+       explícito desde `estudioEnBlanco()`, así que esto no los toca. */
+    setStudy(Number.isInteger(datos?.etapaMaxima)
+      ? datos
+      : { ...datos, etapaMaxima: 6, finalizado: datos?.estado === 'finalizado' });
     setActiveTab(tabCanonica(tab));
   };
 
@@ -578,6 +587,11 @@ export default function App() {
        estudio: Estándar/Borrador. `estado` lo cambia más adelante otra feature (acciones
        de confirmación), no un selector manual en este formulario. */
     tipo_estudio: 'estandar', estado: 'borrador',
+    /* Candado por etapas: nace en 0, bloqueado hasta más allá de la etapa 1. Es la única vía
+       por la que un estudio arranca explícitamente bloqueado — cualquier estudio que no pase
+       por aquí (uno guardado antes de que existiera este campo) se asume desbloqueado, ver
+       `etapaMaximaEfectiva` en flujoEstudio.js. */
+    etapaMaxima: 0, finalizado: false,
     ciiu: '', objeto: '', representante: '', vinc: '', pais_vinc: '', vinc_id: '',
     vinc_tipo: '',
     /* Los quince rubros de la parte examinada, los mismos y en el mismo orden que
@@ -673,29 +687,63 @@ export default function App() {
      estaba escribiendo.
 
      La solución no depende de adivinar cuándo puede llegar tarde un efecto —esa lista
-     nunca se termina de completar—: `updateStudyPara` recibe el id para el que CADA
-     pantalla lo invoca (capturado en el cierre que arma el JSX de abajo, en el render en
-     que esa pantalla se montó) y lo compara, dentro del propio actualizador funcional de
-     `setStudy`, contra el sello del estudio que sea el verdadero activo en ese instante
-     —`prev` ahí nunca es viejo, es la garantía que da React—. Si no coinciden, la
-     escritura se descarta entera: un efecto tardío de un estudio cerrado no tiene forma
-     de tocar el que esté abierto ahora. */
-  const updateStudyPara = (paraEstudioId, fields) => {
+     nunca se termina de completar—: cada pantalla del wizard invoca esto con la etapa para
+     la que se montó (capturada en el cierre que arma el JSX de abajo), y se compara, dentro
+     del propio actualizador funcional de `setStudy`, el `activeStudyId` contra el sello del
+     estudio que sea el verdadero activo en ese instante —`prev` ahí nunca es viejo, es la
+     garantía que da React—. Si no coinciden, la escritura se descarta entera: un efecto
+     tardío de un estudio cerrado no tiene forma de tocar el que esté abierto ahora.
+
+     Atarlo a la etapa (y no solo al estudio) hace falta porque las 6 pantallas del wizard
+     quedan montadas para siempre una vez visitadas (`vistasMontadas`, más abajo): cuál está
+     activa en pantalla no dice nada sobre cuál disparó este cambio. Y porque editar una
+     etapa que ya estaba confirmada revierte esa confirmación y las de las etapas
+     siguientes —así lo pidió el usuario—, lo que exige saber de qué etapa viene cada
+     escritura. */
+  const updateStudyDeEtapa = (etapaId, fields) => {
     setStudy(prev => {
-      if (paraEstudioId && prev[SELLO_ESTUDIO] && paraEstudioId !== prev[SELLO_ESTUDIO]) {
-        console.error('[estudios] updateStudy descartado: era para ' + paraEstudioId +
+      if (activeStudyId && prev[SELLO_ESTUDIO] && activeStudyId !== prev[SELLO_ESTUDIO]) {
+        console.error('[estudios] updateStudy descartado: era para ' + activeStudyId +
           ' pero el estudio activo es ' + prev[SELLO_ESTUDIO]);
         return prev;
       }
-      return { ...prev, ...fields };
+      const next = { ...prev, ...fields };
+      const numero = NUMERO_ETAPA[etapaId];
+      const etapaMaxima = etapaMaximaEfectiva(prev);
+      if (numero && numero <= etapaMaxima) {
+        /* Solo revertir si `fields` de verdad cambia algo respecto al estudio actual. Sin
+           este filtro, el `useEffect` de MotorComparables que republica sus valores locales
+           en cada montaje —incluido el primero— revertiría el candado con solo abrir la
+           pestaña de comparables a mirar un estudio ya confirmado. */
+        const cambioReal = Object.keys(fields).some(k => JSON.stringify(prev[k]) !== JSON.stringify(fields[k]));
+        if (cambioReal) {
+          next.etapaMaxima = numero - 1;
+          next.estado = estadoDesdeEtapa(next.etapaMaxima, next.finalizado);
+        }
+      }
+      return next;
     });
   };
 
-  /* La pantalla que reciba esto en cada render queda con el `activeStudyId` de ESE
-     render capturado en el cierre: si su efecto llega tarde, tras haberse abierto otro
-     estudio, sigue comparando contra el estudio para el que de verdad se montó, no
-     contra uno nuevo que no conoce. */
-  const updateStudy = (fields) => updateStudyPara(activeStudyId, fields);
+  /* Confirma la etapa en la que está parado el usuario y desbloquea la siguiente. Llamar
+     esto con la propia `activeTab` es seguro: como aquí `numero` es siempre la etapa
+     frontera (`etapaMaxima + 1`), la reversión de `updateStudyDeEtapa` nunca se dispara. */
+  const confirmarEtapaActual = () => {
+    const numero = NUMERO_ETAPA[activeTab];
+    if (!numero) return;
+    updateStudyDeEtapa(activeTab, {
+      etapaMaxima: numero,
+      estado: estadoDesdeEtapa(numero, study.finalizado),
+    });
+  };
+
+  const finalizarEstudio = () => {
+    /* `etapaMaxima: 6` explícito: no hay una "etapa 7" que desbloquear, pero así Finalizar
+       participa del mismo mecanismo genérico — si luego se edita la etapa 6, se revierte
+       como cualquier otra, aunque el badge "Finalizado" de la bandeja no se mueva (ver
+       `estadoDesdeEtapa`). */
+    updateStudyDeEtapa('informe', { etapaMaxima: 6, finalizado: true, estado: 'finalizado' });
+  };
 
   /* Copia el identificador al portapapeles. `navigator.clipboard` no existe en
      contextos sin HTTPS ni con el permiso denegado, y ahí se deja el texto
@@ -722,7 +770,16 @@ export default function App() {
 
   return (
     <>
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} cerrarSesion={cerrarSesion} mostrarSidebar={!!activeStudyId}>
+    <Layout
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      cerrarSesion={cerrarSesion}
+      mostrarSidebar={!!activeStudyId}
+      etapaMaxima={etapaMaximaEfectiva(study)}
+      mostrarFinalizar={activeTab === 'informe' && !!activeStudyId && (!estudioAjeno || estudioAjeno.rol === ROL_EDITOR)}
+      finalizado={!!study.finalizado}
+      onFinalizar={finalizarEstudio}
+    >
       {/* Barra de estado de la sesión y del guardado. Con la base compartida importa
           saber con qué cuenta se está trabajando y si lo último quedó guardado. */}
       <div className="flex items-center gap-3 mb-4 text-[11px] text-zinc-500">
@@ -780,6 +837,34 @@ export default function App() {
               : estadoGuardado === 'guardando' ? textoGuardando(etapaGuardado) : 'guardado'}
           </span>
         )}
+        {/* Confirma la etapa activa y desbloquea la siguiente en el sidebar. Solo el dueño
+            o un editor compartido pueden mover el candado — con solo lectura no hay nada
+            que confirmar. En la etapa 1 exige los 5 campos obligatorios; de la 2 en
+            adelante se habilita siempre, todavía sin validar campos propios. La etapa 6
+            (informe) no pasa por aquí: tiene su botón "Finalizar" en el header. */}
+        {activeStudyId && (!estudioAjeno || estudioAjeno.rol === ROL_EDITOR) && (() => {
+          const numero = NUMERO_ETAPA[activeTab];
+          if (!numero || numero >= 6) return null;
+          const etapaMaxima = etapaMaximaEfectiva(study);
+          if (numero <= etapaMaxima) {
+            return <span className="text-emerald-600 dark:text-emerald-500 font-semibold">✓ Etapa confirmada</span>;
+          }
+          const habilitada = numero === 1 ? contribuyenteCompleto(study) : true;
+          return (
+            <button
+              onClick={confirmarEtapaActual}
+              disabled={!habilitada}
+              title={habilitada
+                ? 'Confirmar esta etapa y desbloquear la siguiente'
+                : 'Completa los campos obligatorios (*) para continuar'}
+              className={habilitada
+                ? 'px-2 py-0.5 rounded border border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'
+                : 'px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-zinc-400 cursor-not-allowed'}
+            >
+              Confirmar etapa
+            </button>
+          );
+        })()}
         {activeStudyId && (
           <button
             onClick={() => cerrarEstudio()}
@@ -862,16 +947,16 @@ export default function App() {
             && vistasMontadas.tabs.map(tab => (
             <div key={tab} style={{ display: tab === tabCanonica(activeTab) ? undefined : 'none' }}>
               {tab === 'contribuyente' && (
-                <DatosContribuyente study={study} updateStudy={updateStudy} />
+                <DatosContribuyente study={study} updateStudy={(f) => updateStudyDeEtapa('contribuyente', f)} />
               )}
               {tab === 'Operaciones' && (
-                <IngestaOperaciones study={study} updateStudy={updateStudy} />
+                <IngestaOperaciones study={study} updateStudy={(f) => updateStudyDeEtapa('Operaciones', f)} />
               )}
               {tab === 'Estados financieros' && (
-                <IngestaCifras study={study} updateStudy={updateStudy} />
+                <IngestaCifras study={study} updateStudy={(f) => updateStudyDeEtapa('Estados financieros', f)} />
               )}
               {tab === 'comparables' && (
-                <MotorComparables study={study} updateStudy={updateStudy} estudioId={activeStudyId} usuario={usuario} />
+                <MotorComparables study={study} updateStudy={(f) => updateStudyDeEtapa('comparables', f)} estudioId={activeStudyId} usuario={usuario} />
               )}
               {tab === 'auditoria' && (
                 <AuditoriaNorma study={study} />
@@ -879,7 +964,7 @@ export default function App() {
               {tab === 'informe' && (
                 /* `usuario` hace falta para guardar la plantilla del informe en la nube:
                    la ruta de Storage cuelga de su uid. */
-                <ReporteGenerador study={study} updateStudy={updateStudy} estudioId={activeStudyId} usuario={usuario} />
+                <ReporteGenerador study={study} updateStudy={(f) => updateStudyDeEtapa('informe', f)} estudioId={activeStudyId} usuario={usuario} />
               )}
             </div>
           ))}

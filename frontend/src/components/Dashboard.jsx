@@ -111,8 +111,8 @@ export default function Dashboard({ indice = [], compartidos = [], abrirComparti
         duplicateStudy={duplicateStudy}
         onEliminar={setPendingDelete}
       />
-
       <BandejaEstudios
+
         titulo="Segmentación"
         estudios={segmentacionStudies}
         abiertoPorDefecto={false}

@@ -91,7 +91,14 @@ export default function BandejaEstudios({
                       <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 font-mono text-xs">{study.nit}</td>
                       <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400">{study.anio}</td>
                       <td className="py-3 px-4"><Badge info={tipo} /></td>
-                      <td className="py-3 px-4"><Badge info={estado} /></td>
+                      <td className="py-3 px-4">
+                        <Badge info={estado} />
+                        {study.estado === 'en_progreso' && (
+                          <span className="ml-1.5 text-[10px] text-zinc-400">
+                            Etapa {Math.min((study.etapaMaxima ?? 6) + 1, 6)} de 6
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right font-mono text-xs text-zinc-700 dark:text-zinc-300">
                         {study.monto ? fmt(study.monto) : '0'}
                       </td>
