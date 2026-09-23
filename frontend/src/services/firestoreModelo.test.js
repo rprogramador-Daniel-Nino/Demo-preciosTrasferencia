@@ -180,6 +180,34 @@ test('docEstudio sin año usable cae en el año en curso en lugar de escribir ba
   assert.strictEqual(doc.anio, new Date().getFullYear());
 });
 
+test('docEstudio promueve tipo_estudio y estado a nivel raíz del documento', () => {
+  /* Tienen que vivir fuera de `datos` (que es un blob opaco) para que el tablero pueda
+     agrupar y filtrar por estos campos sin cargar el estudio completo. */
+  const doc = docEstudio({
+    study: { ent: 'Acme', anio: 2024, tipo_estudio: 'prestamo', estado: 'en_progreso' },
+    usuario: USUARIO, marcaDeTiempo: AHORA,
+  });
+  assert.strictEqual(doc.tipoEstudio, 'prestamo');
+  assert.strictEqual(doc.estado, 'en_progreso');
+});
+
+test('docEstudio sin tipo_estudio ni estado cae en los valores por defecto', () => {
+  /* Estudios creados antes de que existieran estos campos no deben desaparecer de
+     ninguna bandeja: se tratan como estándar/borrador. */
+  const doc = docEstudio({ study: { ent: 'Acme', anio: 2024 }, usuario: USUARIO, marcaDeTiempo: AHORA });
+  assert.strictEqual(doc.tipoEstudio, 'estandar');
+  assert.strictEqual(doc.estado, 'borrador');
+});
+
+test('docEstudio con tipo_estudio o estado fuera del catálogo cae en el valor por defecto', () => {
+  const doc = docEstudio({
+    study: { ent: 'Acme', anio: 2024, tipo_estudio: 'valor-inventado', estado: 'valor-inventado' },
+    usuario: USUARIO, marcaDeTiempo: AHORA,
+  });
+  assert.strictEqual(doc.tipoEstudio, 'estandar');
+  assert.strictEqual(doc.estado, 'borrador');
+});
+
 /* ══════ tope de tamaño del documento ══════
    Un caso real fallo con 3,4 MB: las paginas del PDF de estados financieros se
    guardaban como PNG en base64 dentro del estudio. Firestore rechazaba la escritura

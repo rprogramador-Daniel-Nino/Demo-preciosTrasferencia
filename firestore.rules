@@ -94,6 +94,11 @@ service cloud.firestore {
       return !(campo in datos) || (datos[campo] is list && datos[campo].size() <= maximo);
     }
 
+    function enumOpcional(datos, campo, valores) {
+      return !(campo in datos) || datos[campo] == null
+        || (datos[campo] is string && datos[campo] in valores);
+    }
+
     // Nombre propio denormalizado: no puede ser el de otra persona. Si el proveedor
     // trae `name` en el token —Google sí lo trae—, el valor guardado debe coincidir.
     function nombrePropio(datos, campo) {
@@ -168,7 +173,8 @@ service cloud.firestore {
     function estudioValido(d) {
       return soloEstosCampos(['ent', 'nit', 'anio', 'clienteNit', 'datos', 'compartidoCon',
                               'editores', 'creadoPor', 'creadoPorNombre', 'creadoEn',
-                              'actualizadoPor', 'actualizadoPorNombre', 'actualizadoEn'])
+                              'actualizadoPor', 'actualizadoPorNombre', 'actualizadoEn',
+                              'tipoEstudio', 'estado'])
         && tieneTodos(['ent', 'anio', 'datos', 'creadoPor', 'creadoEn', 'actualizadoEn'])
         && editoresHabilitados(d)
         && texto(d.ent, 1, 200)
@@ -180,7 +186,9 @@ service cloud.firestore {
         && listaOpcional(d, 'editores', 25)
         && texto(d.creadoPor, 1, 128)
         && nombreCoherente(d, 'creadoPorNombre')
-        && nombreCoherente(d, 'actualizadoPorNombre');
+        && nombreCoherente(d, 'actualizadoPorNombre')
+        && enumOpcional(d, 'tipoEstudio', ['estandar', 'prestamo', 'segmentacion'])
+        && enumOpcional(d, 'estado', ['borrador', 'en_progreso', 'finalizado']);
     }
 
     /* ── compartición de un estudio ──

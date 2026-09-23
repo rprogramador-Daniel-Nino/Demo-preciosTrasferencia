@@ -217,6 +217,35 @@ export async function leerEstudio(id, usuario) {
   return datos.datos || {};
 }
 
+/* Misma forma que usa el tablero para pintar una fila, ya sea de una lista completa
+   (`listarEstudios`) o de un solo documento recién guardado (`leerFilaIndice`). Un único
+   lugar donde se decide qué campos importan evita que una lectura y la otra diverjan —eso
+   fue lo que le pasó al parche a mano que hacía `App.jsx` tras cada autoguardado: copiaba
+   solo `ent`/`nit`/`anio`, y `tipoEstudio`/`estado` se quedaban con el valor viejo hasta el
+   siguiente `listarEstudios()`. */
+function filaIndice(id, datos) {
+  return {
+    id,
+    ent: datos.ent || 'Sin razón social',
+    nit: datos.nit || '—',
+    anio: datos.anio || '—',
+    /* Fallback aquí también (y no solo al escribir en `docEstudio`): estudios creados
+       antes de que existieran estos campos no tienen `tipoEstudio`/`estado` en el
+       documento, y sin este respaldo desaparecerían de las bandejas del tablero. */
+    tipoEstudio: datos.tipoEstudio || 'estandar',
+    estado: datos.estado || 'borrador',
+    actualizadoPorNombre: datos.actualizadoPorNombre || '',
+    /* El monto de operaciones con vinculados, que es lo que anuncia la columna del
+       tablero. Se lee de `datos`, que ya viene en la respuesta —Firestore cobra por
+       documento leído, no por campo—, en vez de duplicar la cifra en un campo propio. */
+    monto: montoOperacion(datos.datos) || 0,
+    /* Timestamp de Firestore -> milisegundos, que es lo que ya consumía el tablero.
+       Puede venir null si se lee justo después de escribir, antes de que el
+       servidor resuelva el centinela. */
+    updated: datos.actualizadoEn ? datos.actualizadoEn.toMillis() : 0,
+  };
+}
+
 /** Índice para el tablero: solo los estudios del consultor en sesión. */
 export async function listarEstudios(usuario, tope = 200) {
   const consulta = query(coleccion(usuario, ESTUDIOS), orderBy('actualizadoEn', 'desc'), limit(tope));
@@ -225,22 +254,22 @@ export async function listarEstudios(usuario, tope = 200) {
   return instantanea.docs.map(d => {
     const datos = d.data();
     recordarMeta(uid, ESTUDIOS, d.id, datos);
-    return {
-      id: d.id,
-      ent: datos.ent || 'Sin razón social',
-      nit: datos.nit || '—',
-      anio: datos.anio || '—',
-      actualizadoPorNombre: datos.actualizadoPorNombre || '',
-      /* El monto de operaciones con vinculados, que es lo que anuncia la columna del
-         tablero. Se lee de `datos`, que ya viene en la respuesta —Firestore cobra por
-         documento leído, no por campo—, en vez de duplicar la cifra en un campo propio. */
-      monto: montoOperacion(datos.datos) || 0,
-      /* Timestamp de Firestore -> milisegundos, que es lo que ya consumía el tablero.
-         Puede venir null si se lee justo después de escribir, antes de que el
-         servidor resuelva el centinela. */
-      updated: datos.actualizadoEn ? datos.actualizadoEn.toMillis() : 0,
-    };
+    return filaIndice(d.id, datos);
   });
+}
+
+/**
+ * Fila del índice de un solo estudio, releída después de guardarlo. Se usa para
+ * mantener el tablero al día tras el autoguardado sin tener que acordarse a mano de
+ * qué campos cambiaron (la causa del bug de `tipoEstudio`/`estado` desincronizados) ni
+ * repetir la consulta completa de `listarEstudios` en cada guardado.
+ */
+export async function leerFilaIndice(id, usuario) {
+  const instantanea = await getDoc(documento(usuario, ESTUDIOS, id));
+  if (!instantanea.exists()) return null;
+  const datos = instantanea.data();
+  recordarMeta(uidDe(usuario), ESTUDIOS, id, datos);
+  return filaIndice(id, datos);
 }
 
 export async function borrarEstudio(id, usuario) {

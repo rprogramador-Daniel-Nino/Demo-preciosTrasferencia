@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Search, Plus, Trash2, Copy, FileText, Calendar, Sparkles, AlertTriangle } from 'lucide-react';
+import { Search, Plus, FileText, Calendar, Sparkles, AlertTriangle } from 'lucide-react';
 import { fmt } from '../utils/calculations';
 import { ROL_EDITOR } from '../services/firestoreModelo';
+import BandejaEstudios from './BandejaEstudios';
 
 /* El índice de estudios llega por props desde App: ahora vive en Firestore y lo
    comparte el equipo, así que el tablero ya no lo arma leyendo localStorage. La
@@ -19,6 +20,11 @@ export default function Dashboard({ indice = [], compartidos = [], abrirComparti
     String(s.anio || '').includes(search)
   );
 
+  /* La bandeja general no filtra por tipo: un estudio de préstamo o segmentación
+     aparece ahí Y en su propia bandeja, no en una sola. */
+  const prestamoStudies = filteredStudies.filter(s => (s.tipoEstudio || 'estandar') === 'prestamo');
+  const segmentacionStudies = filteredStudies.filter(s => (s.tipoEstudio || 'estandar') === 'segmentacion');
+
   const totalMonto = studies.reduce((acc, curr) => acc + (curr.monto || 0), 0);
 
   return (
@@ -26,8 +32,8 @@ export default function Dashboard({ indice = [], compartidos = [], abrirComparti
       {/* Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">Gestor de Informes de Precios de Transferencia</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Seleccione un estudio existente o cree uno nuevo para comenzar.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">Bandeja de estudios</h1>
+
         </div>
         <button
           onClick={() => newStudy()}
@@ -74,92 +80,46 @@ export default function Dashboard({ indice = [], compartidos = [], abrirComparti
         </div>
       </div>
 
-      {/* Main Table Card */}
-      <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Buscar por Empresa, NIT o Año..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] pl-9 pr-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-[#0f0f13] text-zinc-500 dark:text-zinc-400 text-xs font-semibold uppercase tracking-wider">
-                <th className="py-3 px-4 border-b border-zinc-200 dark:border-zinc-800">Empresa (Contribuyente)</th>
-                <th className="py-3 px-4 border-b border-zinc-200 dark:border-zinc-800">NIT</th>
-                <th className="py-3 px-4 border-b border-zinc-200 dark:border-zinc-800">Año Fiscal</th>
-                <th className="py-3 px-4 border-b border-zinc-200 dark:border-zinc-800 text-right">Monto Analizado (COP)</th>
-                <th className="py-3 px-4 border-b border-zinc-200 dark:border-zinc-800 text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-sm">
-              {filteredStudies.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-zinc-500 dark:text-zinc-400">
-                    No se encontraron estudios registrados.
-                  </td>
-                </tr>
-              ) : (
-                filteredStudies.map((study) => (
-                  <tr 
-                    key={study.id}
-                    onClick={() => selectStudy(study.id)}
-                    className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 cursor-pointer transition-colors"
-                  >
-                    <td className="py-3 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                      {study.ent}
-                      {/* El identificador del documento, visible: los errores de la base
-                          lo nombran («no se pudo guardar … estudios/study_1785772970844»)
-                          y sin verlo en ninguna parte no hay forma de saber de qué
-                          estudio hablan. También sirve para buscarlo en la consola de
-                          Firestore. */}
-                      <span
-                        className="block font-mono text-[10px] text-zinc-400 dark:text-zinc-500 select-all"
-                        title="Identificador del estudio en la base de datos"
-                      >
-                        {study.id}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 font-mono text-xs">{study.nit}</td>
-                    <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400">{study.anio}</td>
-                    <td className="py-3 px-4 text-right font-mono text-xs text-zinc-700 dark:text-zinc-300">
-                      {study.monto ? fmt(study.monto) : '0'}
-                    </td>
-                    <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => duplicateStudy(study.id)}
-                          title="Duplicar"
-                          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-zinc-700 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setPendingDelete(study)}
-                          title="Eliminar"
-                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-zinc-500 hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* Buscador único: filtra las 3 bandejas de abajo a la vez. */}
+      <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Buscar por Empresa, NIT o Año..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] pl-9 pr-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100 transition-all"
+          />
         </div>
       </div>
+
+      <BandejaEstudios
+        titulo="Todos los estudios"
+        estudios={filteredStudies}
+        abiertoPorDefecto={true}
+        selectStudy={selectStudy}
+        duplicateStudy={duplicateStudy}
+        onEliminar={setPendingDelete}
+      />
+
+      <BandejaEstudios
+        titulo="Préstamo"
+        estudios={prestamoStudies}
+        abiertoPorDefecto={false}
+        selectStudy={selectStudy}
+        duplicateStudy={duplicateStudy}
+        onEliminar={setPendingDelete}
+      />
+
+      <BandejaEstudios
+        titulo="Segmentación"
+        estudios={segmentacionStudies}
+        abiertoPorDefecto={false}
+        selectStudy={selectStudy}
+        duplicateStudy={duplicateStudy}
+        onEliminar={setPendingDelete}
+      />
 
       {/* Estudios que otras personas compartieron. Van en su propia tabla y no
           mezclados con los propios: no son suyos, no se pueden borrar, y algunos solo

@@ -369,12 +369,21 @@ export function aplicarAcceso(accesos, correo, { rol = ROL_LECTOR, quitar = fals
  * que un editor guarde: reescribe el documento entero conservando ambas listas, que es
  * justo lo que las reglas le exigen dejar intacto.
  */
+const TIPOS_ESTUDIO_VALIDOS = ['estandar', 'prestamo', 'segmentacion'];
+const ESTADOS_ESTUDIO_VALIDOS = ['borrador', 'en_progreso', 'finalizado'];
+
 export function docEstudio({ study, usuario, previo = null, marcaDeTiempo, compartidoCon, editores }) {
   const { nube } = separarEstudio(study);
   const nit = String(nube.nit || '').trim();
   const doc = {
     ent: String(nube.ent || 'Sin razón social').slice(0, 200),
     anio: anioValido(nube.anio) ?? new Date().getFullYear(),
+    /* Promovidos a nivel raíz (y no solo dentro de `datos`) para que el tablero pueda
+       agrupar y filtrar por estos campos sin cargar el estudio completo. Con default
+       válido siempre: un estudio creado antes de que existieran estos campos, o con un
+       valor corrupto, no debe desaparecer de ninguna bandeja. */
+    tipoEstudio: TIPOS_ESTUDIO_VALIDOS.includes(nube.tipo_estudio) ? nube.tipo_estudio : 'estandar',
+    estado: ESTADOS_ESTUDIO_VALIDOS.includes(nube.estado) ? nube.estado : 'borrador',
     datos: nube,
     creadoPor: previo ? previo.creadoPor : usuario.uid,
     creadoEn: previo ? previo.creadoEn : marcaDeTiempo,

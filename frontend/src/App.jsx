@@ -18,6 +18,7 @@ import {
   usuarioDeSesion, guardarEstudio, leerEstudio, listarEstudios, borrarEstudio,
   guardarCliente, migrarDesdeLocalStorage, migrarDesdeRaiz,
   listarEstudiosCompartidosConmigo, leerEstudioCompartido, guardarEstudioCompartido,
+  leerFilaIndice,
 } from './services/firestoreRepo';
 import { separarEstudio, SELLO_ESTUDIO, sonDelEstudio, ROL_EDITOR } from './services/firestoreModelo';
 import {
@@ -336,9 +337,20 @@ export default function App() {
             + 'son las páginas que se adjuntan al informe. Vuelva a cargar esos PDF, o libere '
             + 'espacio del sitio en el navegador.'
           : '');
-        setIndice(prev => prev.map(e => e.id === activeStudyId
-          ? { ...e, ent: study.ent || e.ent, nit: study.nit || e.nit, anio: study.anio || e.anio, updated: Date.now() }
-          : e));
+        /* Un estudio ajeno compartido con edición vive en `usuarios/{duenoUid}/…`, no en
+           el espacio propio: nunca estuvo en `indice` (ese es el índice del consultor en
+           sesión) y no hay nada que releer aquí para él. */
+        if (!estudioAjeno) {
+          const fila = await leerFilaIndice(activeStudyId, usuario);
+          if (fila) {
+            /* `updated` puede llegar en 0 si el centinela del servidor no se resolvió
+               todavía (ver comentario de `leerFilaIndice`/`listarEstudios`); se usa la
+               hora local en ese caso para no romper el orden "más reciente primero". */
+            setIndice(prev => prev.map(e => e.id === activeStudyId
+              ? { ...fila, updated: fila.updated || Date.now() }
+              : e));
+          }
+        }
       } catch (err) {
         console.error('[estudios] no se pudo guardar (etapa: ' + (etapaRef.current || '?') + ')', err);
         marcarEtapa('');
@@ -551,6 +563,10 @@ export default function App() {
        diligenciado y llegaba al informe si nadie lo cambiaba. Vacío, el tablero muestra
        «Sin razón social» y las guardas del generador lo cuentan como campo sin dato. */
     ent: '', nit: '', anio: 2025,
+    /* `tipo_estudio` y `estado` parten en los valores por defecto del ciclo de vida del
+       estudio: Estándar/Borrador. `estado` lo cambia más adelante otra feature (acciones
+       de confirmación), no un selector manual en este formulario. */
+    tipo_estudio: 'estandar', estado: 'borrador',
     ciiu: '', objeto: '', representante: '', vinc: '', pais_vinc: '', vinc_id: '',
     vinc_tipo: '',
     /* Los quince rubros de la parte examinada, los mismos y en el mismo orden que
