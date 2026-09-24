@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   NUMERO_ETAPA, TOTAL_ETAPAS, CAMPOS_OBLIGATORIOS_CONTRIBUYENTE,
-  contribuyenteCompleto, estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
+  contribuyenteCompleto, CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, motorComparableCompleto,
+  estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
 } from './flujoEstudio.js';
 
 test('NUMERO_ETAPA enumera las 6 etapas del sidebar en el mismo orden en que aparecen', () => {
@@ -43,6 +44,18 @@ test('contribuyenteCompleto ignora espacios en blanco disfrazando un campo vací
 test('contribuyenteCompleto es falso sin estudio', () => {
   assert.strictEqual(contribuyenteCompleto(null), false);
   assert.strictEqual(contribuyenteCompleto(undefined), false);
+});
+
+test('motorComparableCompleto exige la actividad económica específica', () => {
+  assert.deepStrictEqual(CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, ['actividad_especifica']);
+  assert.strictEqual(motorComparableCompleto({ actividad_especifica: 'Desarrollo de software' }), true);
+});
+
+test('motorComparableCompleto falla sin actividad económica específica, con espacios o sin estudio', () => {
+  assert.strictEqual(motorComparableCompleto({ actividad_especifica: '' }), false);
+  assert.strictEqual(motorComparableCompleto({ actividad_especifica: '   ' }), false);
+  assert.strictEqual(motorComparableCompleto({}), false);
+  assert.strictEqual(motorComparableCompleto(null), false);
 });
 
 test('estadoDesdeEtapa: sin ninguna etapa confirmada el estudio es un borrador', () => {

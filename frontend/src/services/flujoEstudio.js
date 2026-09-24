@@ -29,6 +29,19 @@ export function contribuyenteCompleto(study) {
   });
 }
 
+/* La actividad económica específica que detecta (o que edita a mano) el Motor de
+   Comparables — es el campo del que depende la ponderación por actividad al puntuar
+   candidatas, ver MotorComparables.jsx. */
+export const CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES = ['actividad_especifica'];
+
+export function motorComparableCompleto(study) {
+  if (!study) return false;
+  return CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES.every((campo) => {
+    const valor = study[campo];
+    return typeof valor === 'string' && valor.trim().length > 0;
+  });
+}
+
 /* `finalizado` es una etiqueta manual y pegajosa (la pone el botón "Finalizar estudio"):
    una vez puesta, no se revierte aunque después se edite una etapa anterior y eso baje
    `etapaMaxima` — así lo pidió el usuario explícitamente. */
