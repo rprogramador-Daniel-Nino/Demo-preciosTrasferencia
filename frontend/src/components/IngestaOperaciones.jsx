@@ -119,6 +119,19 @@ export default function IngestaOperaciones({ study, updateStudy }) {
         const aviso = avisos.length ? ' · ' + avisos.join(' · ') : '';
         const concepto = res.vinc_tipo || 'sin tipo de operación';
         setExcelMsg(`✅ Operaciones procesadas con éxito: ${concepto} por COP $ ${fmt(valMonto)}${aviso}`);
+      } else if (study.tipo_estudio === 'prestamo' && res && res.prestamos && res.prestamos.length) {
+        /* Excel de un estudio préstamo con solo la hoja de desembolsos, sin una operación de
+           vinculados en la hoja genérica (p. ej. los intereses del préstamo todavía no se
+           registraron ahí). Desde que la Tarea 4 excluyó las hojas de préstamo del barrido
+           genérico, este archivo nunca va a llenar `res.vinc`/`res.monto` y cae aquí en vez
+           de en el `if` de arriba. Los préstamos sí se guardan —no caen en el mensaje
+           genérico de "no se encontraron las hojas", que sería falso: sí se encontraron. */
+        updateStudy({ prestamos: res.prestamos });
+        setExcelMsg(
+          `✅ Se detectaron ${res.prestamos.length} ${res.prestamos.length === 1 ? 'operación' : 'operaciones'} de préstamo ` +
+          `con ${res.prestamos[0].otorga || res.prestamos[0].recibe || 'el vinculado'}. ` +
+          'No se encontró una operación de vinculados en la hoja genérica del Excel — verifique si el archivo debía traer también los intereses.'
+        );
       } else {
         setExcelMsg('⚠ No se encontraron las hojas u operaciones esperadas en este Excel. Verifique la estructura o ingrese los datos manualmente.');
       }

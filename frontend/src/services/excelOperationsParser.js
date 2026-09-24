@@ -77,7 +77,8 @@ export async function parseExcelOperations(file) {
        el literal dejaba la hoja entera sin leer, sin ningún aviso de por qué. Se reconoce
        por palabra clave sobre el nombre sin tildes y en mayúsculas: 'VINC' cubre tanto
        «VINCULADOS» como su truncado por el límite de 31 caracteres de Excel («...CON
-       VINC»), y 'PARAISO' las de paraísos fiscales, con o sin préstamos. */
+       VINC»), y 'PARAISO' las de paraísos fiscales — de ambas se excluyen las hojas de
+       préstamo, que se filtran aparte más abajo con `esHojaDePrestamos`. */
     const normalizarNombreHoja = (s) => String(s || '')
       .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     // Las hojas de préstamo ("Op. Prestamos Vinculados Econom", "Op. Prestamos Paraisos
