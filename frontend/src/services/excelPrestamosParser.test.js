@@ -10,12 +10,14 @@ test('fechaDeSerialExcel convierte un serial real de Excel a la fecha correcta',
   assert.strictEqual(fecha.getDate(), 27);
 });
 
-test('fechaDeSerialExcel devuelve null para vacío, texto de plantilla o cero', () => {
+test('fechaDeSerialExcel devuelve null para vacío, texto de plantilla, cero u out-of-range', () => {
   assert.strictEqual(fechaDeSerialExcel(''), null);
   assert.strictEqual(fechaDeSerialExcel('DD/MM/AAAA'), null);
   assert.strictEqual(fechaDeSerialExcel(0), null);
   assert.strictEqual(fechaDeSerialExcel(null), null);
   assert.strictEqual(fechaDeSerialExcel(undefined), null);
+  assert.strictEqual(fechaDeSerialExcel(99999999), null);
+  assert.strictEqual(fechaDeSerialExcel(2958466), null);
 });
 
 test('fechaDeSerialExcel deja pasar un Date ya construido', () => {

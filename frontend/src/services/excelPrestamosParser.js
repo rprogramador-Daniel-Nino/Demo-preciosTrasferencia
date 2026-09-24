@@ -9,7 +9,9 @@ export function fechaDeSerialExcel(valor) {
   if (valor instanceof Date) return valor;
   const n = Number(valor);
   if (!Number.isFinite(n) || n <= 0) return null;
-  const { y, m, d } = XLSX.SSF.parse_date_code(n);
+  const parsed = XLSX.SSF.parse_date_code(n);
+  if (!parsed) return null;
+  const { y, m, d } = parsed;
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
 }
