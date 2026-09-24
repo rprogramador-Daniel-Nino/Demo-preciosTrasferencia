@@ -118,16 +118,19 @@ test('una hoja titulada distinto al literal de referencia igual se reconoce por 
   assert.strictEqual(res.monto, 380899599);
 });
 
-test('una hoja de préstamos truncada a 31 caracteres ("...CON VINC") también se reconoce', async () => {
-  /* El límite de 31 caracteres de Excel trunca "Operaciones Prestamos Con Vinculados" hasta
-     dejar solo "VINC" del final, sin llegar a "VINCULADOS". */
-  const wb = conEncabezadoEnHoja('OPERACIONES PRESTAMOS CON VINC', [
-    ['ACME PRESTAMOS SAS', '900123456', 'MEXICO', '', 'INTERESES', '', '', '1007', '4001', '', 700000],
+test('una hoja truncada a 31 caracteres ("...CON VINC") también se reconoce', async () => {
+  /* El límite de 31 caracteres de Excel trunca "Operaciones Economicas Con Vinculados" hasta
+     dejar solo "VINC" del final, sin llegar a "VINCULADOS". (Antes esta prueba usaba un
+     nombre de hoja con "PRESTAMOS" — desde que esas hojas se excluyen del barrido genérico y
+     se leen con su propio formato (`excelPrestamosParser.js`), ese nombre ya no probaba lo
+     que el título dice.) */
+  const wb = conEncabezadoEnHoja('OPERACIONES ECONOMICAS CON VINC', [
+    ['ACME ECONOMICA SAS', '900123456', 'MEXICO', '', 'INTERESES', '', '', '1007', '4001', '', 700000],
   ]);
 
   const res = await parseExcelOperations(workbookToFakeFile(wb));
 
-  assert.strictEqual(res.vinc, 'ACME PRESTAMOS SAS');
+  assert.strictEqual(res.vinc, 'ACME ECONOMICA SAS');
   assert.strictEqual(res.monto, 700000);
 });
 
@@ -189,7 +192,7 @@ test('el filtro por Cod se decide por hoja, no por el archivo entero', async () 
   for (let i = 0; i < 9; i++) sinCod.push(['(portada)']);
   sinCod.push(ENCABEZADO);
   sinCod.push(['SIN CODIGO SAS', '222', 'PANAMA', '', 'PRESTAMO', '', '', '1007', '4001', '', 2000]);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sinCod), 'Op. Prestamos Vinculados Econom');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sinCod), 'Op. Paraisos Fiscales');
 
   const res = await parseExcelOperations(workbookToFakeFile(wb));
 
@@ -495,4 +498,74 @@ test('las filas de la sección adicional sin monto no cuentan', async () => {
     workbookToFakeFile(hojaConSeccionAdicional([PRESTAMO, vacia])));
   assert.strictEqual(res.operacionAdicional.filas.length, 1);
   assert.strictEqual(res.operacionAdicional.monto, 1800000000);
+});
+
+/* ══════════════ Hojas de préstamo (excelPrestamosParser.js) ══════════════ */
+
+test('una hoja de préstamos con formato genérico (no el propio de 18 columnas) no se lee como vinculados ni como préstamos', async () => {
+  // Antes de este cambio, esta hoja se leía con el formato genérico por contener "Vinculados"
+  // en el nombre. Ahora se enruta a parseHojaPrestamos, que no encuentra su fila de
+  // encabezados ("crédito" + "razón social") en este formato y devuelve nada.
+  const wb = conEncabezadoEnHoja('Op. Prestamos Vinculados Econom', [
+    ['ACME PRESTAMOS SAS', '900123456', 'MEXICO', '', 'INTERESES', '', '', '1007', '4001', '', 700000],
+  ]);
+
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+
+  assert.strictEqual(res.vinc, null, 'ya no debe leerse con el formato genérico de vinculados');
+  assert.strictEqual(res.prestamos, null, 'el formato de esta hoja no es el de préstamos, así que tampoco hay filas de préstamo');
+});
+
+test('una hoja real de préstamos alimenta res.prestamos y no res.vinc/res.monto', async () => {
+  const filas = [];
+  for (let i = 0; i < 6; i++) filas.push(['']);
+  filas.push([
+    'Crédito', 'Razón Social de quien otorga el préstamo', 'Razón Social de quien recibe el préstamo',
+    'Fuente de los recursos', 'Fecha original en la que se pactó', 'Valor del desembolso en la moneda pactada',
+    'Moneda pactada', 'No. de desembolsos', 'Fecha de desembolso', 'Valor en COP en la fecha de desembolso',
+    'Valor en COP del saldo al 31 de diciembre de 2025',
+    'Monto de intereses causados o recibidos durante el FY 2025 (Moneda pactada)',
+    'Monto de intereses causados o recibidos durante el FY 2025 (COP)', 'Plazo',
+    'El préstamo fue renovado', 'El préstamo fue cancelado', 'Tasa de interés EFECTIVA ANUAL',
+    'Tasa de interés pactada', 'Periodicidad',
+  ]);
+  filas.push([1, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44131, 3000000, 'USD', 1, 44131, 10431000000, 13227449999.999998, 138470, 579346941, 'No definido', '', '', '4,540% Efectivo Anual', '', '']);
+  const wb = workbookConHoja('Op. Prestamos Vinculados Econom', filas);
+
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+
+  assert.strictEqual(res.prestamos.length, 1);
+  assert.strictEqual(res.prestamos[0].otorga, 'Inversiones San Jeronimo SpA');
+  assert.strictEqual(res.prestamos[0].fechaPacto, '2020-10-27');
+  assert.strictEqual(res.prestamos[0].esParaisoFiscal, false);
+  assert.strictEqual(res.vinc, null, 'los préstamos no alimentan el vinculado del formato genérico');
+  assert.strictEqual(res.monto, null, 'los préstamos no alimentan el monto de operación del formato genérico');
+});
+
+test('una hoja "Op. Prestamos Paraisos Fiscales" marca esParaisoFiscal en sus filas', async () => {
+  const filas = [];
+  for (let i = 0; i < 6; i++) filas.push(['']);
+  filas.push([
+    'Crédito', 'Razón Social de quien otorga el préstamo', 'Razón Social de quien recibe el préstamo',
+    'Fuente de los recursos', 'Fecha original en la que se pactó', 'Valor del desembolso en la moneda pactada',
+    'Moneda pactada', 'No. de desembolsos', 'Fecha de desembolso', 'Valor en COP en la fecha de desembolso',
+    'Valor en COP del saldo al 31 de diciembre de 2025',
+    'Monto de intereses causados o recibidos durante el FY 2025 (Moneda pactada)',
+    'Monto de intereses causados o recibidos durante el FY 2025 (COP)', 'Plazo',
+    'El préstamo fue renovado', 'El préstamo fue cancelado', 'Tasa de interés EFECTIVA ANUAL',
+    'Tasa de interés pactada', 'Periodicidad',
+  ]);
+  filas.push([1, 'Offshore Holdings Ltd', 'Autoland SAS', '', 44131, 1000000, 'USD', 1, 44131, 3477000000, 3477000000, 10000, 34770000, 'No definido', '', '', '5,000% Efectivo Anual', '', '']);
+  const wb = workbookConHoja('Op. Prestamos Paraisos Fiscales', filas);
+
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+
+  assert.strictEqual(res.prestamos.length, 1);
+  assert.strictEqual(res.prestamos[0].esParaisoFiscal, true);
+});
+
+test('sin ninguna hoja de préstamos, res.prestamos es null', async () => {
+  const wb = workbookConHoja('Hoja1', [['nada aquí']]);
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+  assert.strictEqual(res.prestamos, null);
 });

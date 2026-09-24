@@ -1,5 +1,6 @@
 import XLSX from 'xlsx-js-style';
 import { PAIS_DIAN } from '../utils/calculations.js';
+import { parseHojaPrestamos } from './excelPrestamosParser.js';
 
 /* El concepto que el informe declara es «nombre (código)» —«Otros servicios (07)»—. El
    nombre viene de la columna «Tipo de operación», que admite texto libre, y el código de la
@@ -79,10 +80,16 @@ export async function parseExcelOperations(file) {
        VINC»), y 'PARAISO' las de paraísos fiscales, con o sin préstamos. */
     const normalizarNombreHoja = (s) => String(s || '')
       .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    // Las hojas de préstamo ("Op. Prestamos Vinculados Econom", "Op. Prestamos Paraisos
+    // Fiscales") contienen "Vinculados"/"Paraisos" en el nombre y por eso caían en este
+    // barrido genérico, leyéndose con el formato de columnas equivocado. Se excluyen aquí y
+    // se leen aparte, más abajo, con `parseHojaPrestamos`.
+    const esHojaDePrestamos = (nombre) => normalizarNombreHoja(nombre).includes('PREST');
     const hojasAEscanear = (wb.SheetNames || []).filter((nombre) => {
       const n = normalizarNombreHoja(nombre);
-      return n.includes('VINC') || n.includes('PARAISO');
+      return (n.includes('VINC') || n.includes('PARAISO')) && !esHojaDePrestamos(nombre);
     });
+    const hojasPrestamos = (wb.SheetNames || []).filter(esHojaDePrestamos);
 
     const rowsParsedIngreso = [];
     const rowsParsedEgreso = [];
@@ -284,6 +291,17 @@ export async function parseExcelOperations(file) {
       filasAdicionales.push(...candidatasAdicional);
     });
 
+    // Las hojas de préstamo se leen aparte: su formato (18 columnas propias) no tiene nada
+    // en común con el genérico de vinculados/paraísos fiscales de arriba.
+    const filasPrestamos = [];
+    hojasPrestamos.forEach(nombreHoja => {
+      const sh = wb.Sheets[nombreHoja];
+      if (!sh) return;
+      const d = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' });
+      const esParaisoFiscal = normalizarNombreHoja(nombreHoja).includes('PARAISO');
+      filasPrestamos.push(...parseHojaPrestamos(d, { esParaisoFiscal }));
+    });
+
     let rowsParsed = [];
     let esEgreso = false;
 
@@ -377,7 +395,11 @@ export async function parseExcelOperations(file) {
         }
         : null,
       rows: rowsParsed,
-      egreso: esEgreso
+      egreso: esEgreso,
+      // `null` y no un arreglo vacío cuando ninguna hoja de préstamo trajo filas válidas:
+      // mismo criterio que `operacionAdicional`, para distinguir "no hay hoja de préstamos"
+      // de "la hoja existe pero está vacía".
+      prestamos: filasPrestamos.length ? filasPrestamos : null,
     };
   } catch (err) {
     console.error("Error parsing Excel operations file:", err);
