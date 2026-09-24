@@ -37,6 +37,12 @@ export default function IngestaOperaciones({ study, updateStudy }) {
              Se escribe siempre —también cuando es `null`— para que cargar un archivo sin la
              sección borre la del archivo anterior en vez de dejarla pegada al estudio. */
           operacionAdicional: res.operacionAdicional || null,
+          /* Solo para estudios de tipo préstamo: el parser lee la hoja de préstamos sin
+             importar el tipo de estudio, pero guardarla siempre expondría datos de
+             préstamo en un estudio estándar que nunca los va a usar. `res.prestamos || null`
+             y no condicionar el spread entero: así un Excel nuevo sin la hoja borra los
+             préstamos de una carga anterior, igual que ya hace `operacionAdicional`. */
+          ...(study.tipo_estudio === 'prestamo' ? { prestamos: res.prestamos || null } : {}),
         });
         const avisos = [];
         /* Con varias contrapartes el total es la suma de todas y el estudio se queda
@@ -93,6 +99,22 @@ export default function IngestaOperaciones({ study, updateStudy }) {
             `ℹ el archivo trae información adicional por COP $ ${fmt(ad.monto)}, que no supera ` +
             `los COP $ ${fmt(umbralOperacionAdicional(study.anio))}: no se publica en el informe`
           );
+        }
+        /* Aviso propio de estudios de préstamo: el parser ya leyó la hoja (o no la
+           encontró) sin importar el tipo de estudio; aquí es donde se le dice al analista
+           qué significa eso para SU estudio. */
+        if (study.tipo_estudio === 'prestamo') {
+          if (res.prestamos && res.prestamos.length) {
+            avisos.push(
+              `ℹ se detectaron ${res.prestamos.length} ${res.prestamos.length === 1 ? 'operación' : 'operaciones'} ` +
+              `de préstamo con ${res.prestamos[0].otorga || res.prestamos[0].recibe || 'el vinculado'}`
+            );
+          } else {
+            avisos.push(
+              '⚠ no se encontró la hoja de préstamos en este Excel (se esperaba un nombre que ' +
+              'contenga «préstamo»): verifique el archivo o ingrese los datos manualmente'
+            );
+          }
         }
         const aviso = avisos.length ? ' · ' + avisos.join(' · ') : '';
         const concepto = res.vinc_tipo || 'sin tipo de operación';
@@ -305,6 +327,49 @@ export default function IngestaOperaciones({ study, updateStudy }) {
             No se suma al monto total transaccionado: son operaciones que no afectan el Estado
             de Resultados, así que no sustentan el rango ni la operación analizada.
           </p>
+        </div>
+      )}
+
+      {/* Resumen de préstamos con vinculados — solo para estudios de tipo préstamo. Muestra
+          las 5 columnas que alimentan la Tabla "Préstamo con su vinculado" del informe
+          (fase futura, ver docs/superpowers/specs/2026-09-24-estudios-prestamo-design.md);
+          el resto de columnas que trae la hoja (saldo, intereses, plazo...) ya quedaron
+          guardadas en el estudio para cuando esa fase se construya, pero no hace falta
+          mostrarlas aquí todavía. */}
+      {study.tipo_estudio === 'prestamo' && study.prestamos && (
+        <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
+          <h3 className="text-md font-bold text-zinc-900 dark:text-zinc-50 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+            Operaciones de Préstamo Detectadas
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-zinc-500 uppercase tracking-wider text-left">
+                  <th className="py-2 pr-4 font-semibold">Fecha original en la que se pactó</th>
+                  <th className="py-2 pr-4 font-semibold text-right">Valor del desembolso</th>
+                  <th className="py-2 pr-4 font-semibold">Moneda pactada</th>
+                  <th className="py-2 pr-4 font-semibold text-right">Valor en COP en la fecha de desembolso</th>
+                  <th className="py-2 font-semibold text-right">Tasa EA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {study.prestamos.map((p, i) => (
+                  <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+                    {/* Se reconstruye el Date a mediodía local y no a medianoche UTC: un
+                        string ISO de solo fecha ("2020-10-27") se interpreta como medianoche
+                        UTC, y en Colombia (UTC-5) eso muestra el día anterior. */}
+                    <td className="py-2 pr-4 text-zinc-900 dark:text-zinc-100">
+                      {p.fechaPacto ? new Date(p.fechaPacto + 'T12:00:00').toLocaleDateString('es-CO') : '—'}
+                    </td>
+                    <td className="py-2 pr-4 text-right font-mono text-zinc-900 dark:text-zinc-100">{fmt(p.valorDesembolsoMoneda)}</td>
+                    <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">{p.moneda || '—'}</td>
+                    <td className="py-2 pr-4 text-right font-mono text-zinc-900 dark:text-zinc-100">{fmt(p.valorCOPDesembolso)}</td>
+                    <td className="py-2 text-right font-mono text-zinc-900 dark:text-zinc-100">{p.tasaEA || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
