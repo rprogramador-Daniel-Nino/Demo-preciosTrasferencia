@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import {
   NUMERO_ETAPA, TOTAL_ETAPAS, CAMPOS_OBLIGATORIOS_CONTRIBUYENTE,
   contribuyenteCompleto, CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, motorComparableCompleto,
+  operacionesPrestamoCompleto,
   estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
 } from './flujoEstudio.js';
 
@@ -56,6 +57,17 @@ test('motorComparableCompleto falla sin actividad económica específica, con es
   assert.strictEqual(motorComparableCompleto({ actividad_especifica: '   ' }), false);
   assert.strictEqual(motorComparableCompleto({}), false);
   assert.strictEqual(motorComparableCompleto(null), false);
+});
+
+test('operacionesPrestamoCompleto exige al menos una fila de préstamo detectada', () => {
+  assert.strictEqual(operacionesPrestamoCompleto({ prestamos: [{ otorga: 'Acme' }] }), true);
+});
+
+test('operacionesPrestamoCompleto falla sin préstamos, con arreglo vacío, null o sin estudio', () => {
+  assert.strictEqual(operacionesPrestamoCompleto({ prestamos: [] }), false);
+  assert.strictEqual(operacionesPrestamoCompleto({ prestamos: null }), false);
+  assert.strictEqual(operacionesPrestamoCompleto({}), false);
+  assert.strictEqual(operacionesPrestamoCompleto(null), false);
 });
 
 test('estadoDesdeEtapa: sin ninguna etapa confirmada el estudio es un borrador', () => {

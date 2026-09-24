@@ -6,6 +6,7 @@ import { avisoIdentificacionVinculado } from '../services/cotejoVinculado';
 import {
   umbralOperacionAdicional, tieneOperacionAdicional, montoOperacionAdicional,
 } from '../services/tablasOperaciones';
+import { operacionesPrestamoCompleto } from '../services/flujoEstudio';
 
 export default function IngestaOperaciones({ study, updateStudy }) {
   const [loadingExcel, setLoadingExcel] = useState(false);
@@ -150,6 +151,19 @@ export default function IngestaOperaciones({ study, updateStudy }) {
         <div>
           <h2 className="text-lg font-bold text-zinc-950 dark:text-zinc-50">2. Ingesta de Cifras y Operaciones con Vinculados</h2>
           <p className="text-xs text-zinc-500">Cargue el archivo Excel de operaciones del año gravable para extraer montos y contrapartes.</p>
+          {/* Solo en estudios de tipo préstamo esta etapa exige la hoja de préstamos para
+              poder confirmarla y avanzar (ver `operacionesPrestamoCompleto` en
+              flujoEstudio.js y el botón "Confirmar etapa" en App.jsx). En estándar y
+              segmentación esta etapa nunca exigió nada, así que aquí no se muestra nada. */}
+          {study.tipo_estudio === 'prestamo' && (
+            <p className={`text-xs font-semibold mt-1 ${
+              operacionesPrestamoCompleto(study)
+                ? 'text-emerald-600 dark:text-emerald-500'
+                : 'text-amber-600 dark:text-amber-500'
+            }`}>
+              Datos de préstamo* — obligatorios para avanzar a la siguiente etapa
+            </p>
+          )}
         </div>
         {fileName && (
           <span className="text-xs bg-[#0FA3A1]/10 text-[#0FA3A1] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">

@@ -22,7 +22,8 @@ import {
 } from './services/firestoreRepo';
 import { separarEstudio, SELLO_ESTUDIO, sonDelEstudio, ROL_EDITOR } from './services/firestoreModelo';
 import {
-  NUMERO_ETAPA, contribuyenteCompleto, motorComparableCompleto, estadoDesdeEtapa, etapaMaximaEfectiva,
+  NUMERO_ETAPA, contribuyenteCompleto, motorComparableCompleto, operacionesPrestamoCompleto,
+  estadoDesdeEtapa, etapaMaximaEfectiva,
 } from './services/flujoEstudio';
 import {
   guardarAnexoEeff, leerAnexoEeff, guardarAnexoBImagenes, guardarAnexosDelEstudio,
@@ -840,9 +841,11 @@ export default function App() {
         {/* Confirma la etapa activa y desbloquea la siguiente en el sidebar. Solo el dueño
             o un editor compartido pueden mover el candado — con solo lectura no hay nada
             que confirmar. La etapa 1 exige los 5 campos obligatorios de Contribuyente y la
-            4 la actividad económica específica del Motor de Comparables; las demás se
-            habilitan siempre, todavía sin validar campos propios. La etapa 6 (informe) no
-            pasa por aquí: tiene su botón "Finalizar" en el header. */}
+            4 la actividad económica específica del Motor de Comparables; la 2 exige además
+            la hoja de préstamos, pero solo en estudios de tipo préstamo — en estándar y
+            segmentación nunca exigió nada. Las demás se habilitan siempre, todavía sin
+            validar campos propios. La etapa 6 (informe) no pasa por aquí: tiene su botón
+            "Finalizar" en el header. */}
         {activeStudyId && (!estudioAjeno || estudioAjeno.rol === ROL_EDITOR) && (() => {
           const numero = NUMERO_ETAPA[activeTab];
           if (!numero || numero >= 6) return null;
@@ -851,6 +854,7 @@ export default function App() {
             return <span className="text-emerald-600 dark:text-emerald-500 font-semibold">✓ Etapa confirmada</span>;
           }
           const habilitada = numero === 1 ? contribuyenteCompleto(study)
+            : numero === 2 && study.tipo_estudio === 'prestamo' ? operacionesPrestamoCompleto(study)
             : numero === 4 ? motorComparableCompleto(study)
             : true;
           return (

@@ -42,6 +42,15 @@ export function motorComparableCompleto(study) {
   });
 }
 
+/* En un estudio de tipo préstamo, la etapa de Ingesta de Operaciones no se puede confirmar
+   sin haber cargado la hoja de préstamos del Excel — es el único dato que sostiene la
+   tabla "Préstamo con su vinculado" del informe. No aplica a estudios estándar/segmentación,
+   donde esta etapa nunca exigió nada (ver el `numero === 2 && ...` en App.jsx). */
+export function operacionesPrestamoCompleto(study) {
+  if (!study) return false;
+  return Array.isArray(study.prestamos) && study.prestamos.length > 0;
+}
+
 /* `finalizado` es una etiqueta manual y pegajosa (la pone el botón "Finalizar estudio"):
    una vez puesta, no se revierte aunque después se edite una etapa anterior y eso baje
    `etapaMaxima` — así lo pidió el usuario explícitamente. */
