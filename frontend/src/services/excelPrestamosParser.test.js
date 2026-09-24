@@ -97,3 +97,75 @@ test('indicesColumnasPrestamo devuelve -1 para columnas ausentes', () => {
   assert.strictEqual(idx.iRecibe, -1);
   assert.strictEqual(idx.iTasaEA, -1);
 });
+
+import { parseHojaPrestamos } from './excelPrestamosParser.js';
+
+const FILAS_PRESTAMOS_AUTOLAND = [
+  [1, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44131, 3000000, 'USD', 1, 44131, 10431000000, 13227449999.999998, 138470.00000000003, 579346941, 'No definido', 'DD/MM/AAAA', 'DD/MM/AAAA', '4,540% Efectivo Anual', '', ''],
+  [2, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44749, 2000000, 'USD', 1, 44749, 8822000000, 8818300000, 122001, 510441906, 'No definido', 'DD/MM/AAAA', 'DD/MM/AAAA', '6,000% Efectivo Anual', '', ''],
+  [3, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44858, 1300000, 'USD', 1, 44858, 6194500000, 5731895000, 79300, 331784592, 'No definido', 'DD/MM/AAAA', 'DD/MM/AAAA', '6,000% Efectivo Anual', '', ''],
+  [3, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44994, 4300000, 'USD', 1, 44994, 20657200000, 18959345000, 262301, 1097445415, 'No definido', 'DD/MM/AAAA', 'DD/MM/AAAA', '6,000% Efectivo Anual', '', ''],
+];
+
+function hojaPrestamosCompleta(filasDeDatos) {
+  const datos = [];
+  for (let i = 0; i < 6; i++) datos.push([]); // portada/instrucciones, como en el archivo real
+  datos.push(ENCABEZADO_PRESTAMOS);
+  filasDeDatos.forEach(f => datos.push(f));
+  return datos;
+}
+
+test('parseHojaPrestamos lee las 4 filas reales de Autoland con sus valores correctos', () => {
+  const filas = parseHojaPrestamos(hojaPrestamosCompleta(FILAS_PRESTAMOS_AUTOLAND));
+
+  assert.strictEqual(filas.length, 4);
+  assert.deepStrictEqual(filas[0], {
+    credito: '1',
+    otorga: 'Inversiones San Jeronimo SpA',
+    recibe: 'Autoland SAS',
+    fuente: '',
+    fechaPacto: '2020-10-27',
+    valorDesembolsoMoneda: 3000000,
+    moneda: 'USD',
+    numDesembolsos: '1',
+    fechaDesembolso: '2020-10-27',
+    valorCOPDesembolso: 10431000000,
+    saldoCOP: 13227449999.999998,
+    interesesMoneda: 138470.00000000003,
+    interesesCOP: 579346941,
+    plazo: 'No definido',
+    renovado: 'DD/MM/AAAA',
+    cancelado: 'DD/MM/AAAA',
+    tasaEA: '4,540% Efectivo Anual',
+    tasaPactada: '',
+    periodicidad: '',
+    esParaisoFiscal: false,
+  });
+  assert.strictEqual(filas[3].fechaPacto, '2023-03-09', 'último desembolso: 9/03/2023');
+  assert.strictEqual(filas[3].valorDesembolsoMoneda, 4300000);
+  assert.strictEqual(filas[3].tasaEA, '6,000% Efectivo Anual');
+});
+
+test('parseHojaPrestamos marca esParaisoFiscal según la opción recibida', () => {
+  const filas = parseHojaPrestamos(hojaPrestamosCompleta(FILAS_PRESTAMOS_AUTOLAND.slice(0, 1)), { esParaisoFiscal: true });
+  assert.strictEqual(filas[0].esParaisoFiscal, true);
+});
+
+test('parseHojaPrestamos descarta las filas de plantilla sin otorgante ni receptor', () => {
+  // Igual a las filas vacías de "Op. Prestamos Paraisos Fiscales" en el archivo real: el
+  // formato trae varias filas en blanco por si el contribuyente tiene más préstamos.
+  const filaPlantillaVacia = [1, '', '', '', '', '', '', 1, 'DD/MM/AAAA', '', '', 0, 0, '', 'DD/MM/AAAA', 'DD/MM/AAAA', '', '', ''];
+  const filas = parseHojaPrestamos(hojaPrestamosCompleta([FILAS_PRESTAMOS_AUTOLAND[0], filaPlantillaVacia]));
+  assert.strictEqual(filas.length, 1, 'la fila en blanco no debe colarse como operación');
+});
+
+test('parseHojaPrestamos devuelve [] si no encuentra la fila de encabezados', () => {
+  const datos = [['nada aquí'], ['tampoco esto']];
+  assert.deepStrictEqual(parseHojaPrestamos(datos), []);
+});
+
+test('parseHojaPrestamos devuelve [] con datos vacíos o ausentes', () => {
+  assert.deepStrictEqual(parseHojaPrestamos([]), []);
+  assert.deepStrictEqual(parseHojaPrestamos(null), []);
+  assert.deepStrictEqual(parseHojaPrestamos(undefined), []);
+});

@@ -80,3 +80,68 @@ export function fechaISODeSerialExcel(valor) {
   const d = String(fecha.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+function numero(valor) {
+  const n = parseFloat(String(valor ?? '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function texto(valor) {
+  return String(valor ?? '').trim();
+}
+
+/**
+ * Lee las filas de una hoja de préstamos ya convertida a arreglo de arreglos
+ * (`XLSX.utils.sheet_to_json(sh, {header:1, defval:''})`). Devuelve `[]` si no encuentra la
+ * fila de encabezados en las primeras 25 filas, o si no hay ninguna fila de datos válida.
+ *
+ * @param {Array<Array>} datos
+ * @param {{esParaisoFiscal?: boolean}} [opciones]
+ */
+export function parseHojaPrestamos(datos, { esParaisoFiscal = false } = {}) {
+  if (!datos || !datos.length) return [];
+
+  let encIdx = -1;
+  for (let i = 0; i < Math.min(datos.length, 25); i++) {
+    if (esFilaEncabezadoPrestamo(datos[i])) { encIdx = i; break; }
+  }
+  if (encIdx === -1) return [];
+
+  const idx = indicesColumnasPrestamo(datos[encIdx]);
+  const col = (f, i) => (i > -1 ? f[i] : '');
+  const filas = [];
+
+  for (let i = encIdx + 1; i < datos.length; i++) {
+    const f = datos[i] || [];
+    const otorga = texto(col(f, idx.iOtorga));
+    const recibe = texto(col(f, idx.iRecibe));
+    // Filas de plantilla sin diligenciar (el formato trae varias en blanco por si el
+    // contribuyente tiene más préstamos que filas de ejemplo) no son operaciones reales.
+    if (!otorga || !recibe) continue;
+
+    filas.push({
+      credito: texto(col(f, idx.iCredito)),
+      otorga,
+      recibe,
+      fuente: texto(col(f, idx.iFuente)),
+      fechaPacto: fechaISODeSerialExcel(col(f, idx.iFechaPacto)),
+      valorDesembolsoMoneda: numero(col(f, idx.iValorMoneda)),
+      moneda: texto(col(f, idx.iMoneda)),
+      numDesembolsos: texto(col(f, idx.iNumDesembolsos)),
+      fechaDesembolso: fechaISODeSerialExcel(col(f, idx.iFechaDesembolso)),
+      valorCOPDesembolso: numero(col(f, idx.iValorCOP)),
+      saldoCOP: numero(col(f, idx.iSaldoCOP)),
+      interesesMoneda: numero(col(f, idx.iInteresesMoneda)),
+      interesesCOP: numero(col(f, idx.iInteresesCOP)),
+      plazo: texto(col(f, idx.iPlazo)),
+      renovado: texto(col(f, idx.iRenovado)),
+      cancelado: texto(col(f, idx.iCancelado)),
+      tasaEA: texto(col(f, idx.iTasaEA)),
+      tasaPactada: texto(col(f, idx.iTasaPactada)),
+      periodicidad: texto(col(f, idx.iPeriodicidad)),
+      esParaisoFiscal,
+    });
+  }
+
+  return filas;
+}
