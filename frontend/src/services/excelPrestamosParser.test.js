@@ -87,6 +87,9 @@ test('indicesColumnasPrestamo ubica cada columna de la fila real, sin colisiones
   assert.strictEqual(idx.iTasaEA, 16);
   assert.strictEqual(idx.iTasaPactada, 17);
   assert.strictEqual(idx.iPeriodicidad, 18);
+  // Verificar que no hay dos campos que resuelvan al mismo índice (no hay colisiones)
+  const valores = Object.values(idx);
+  assert.strictEqual(new Set(valores).size, valores.length, 'ningún campo debe resolver al mismo índice que otro');
 });
 
 test('indicesColumnasPrestamo devuelve -1 para columnas ausentes', () => {

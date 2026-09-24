@@ -31,11 +31,11 @@ export function indicesColumnasPrestamo(encabezado) {
     // en la fecha de desembolso" no colisionan porque ninguna contiene el texto de la otra;
     // el filtro real que hace falta es el de iValorCOP, más abajo.
     iValorMoneda: encuentra(s => s.includes('valor del desembolso')),
-    iMoneda: encuentra(s => s.includes('moneda pactada') && !s.includes('valor del desembolso')),
+    iMoneda: encuentra(s => s === 'moneda pactada'),
     // "No. de desembolsos" es la única columna en plural; las otras tres que mencionan
     // "desembolso" lo hacen en singular.
     iNumDesembolsos: encuentra(s => s.includes('desembolsos')),
-    iFechaDesembolso: encuentra(s => s.includes('fecha de desembolso')),
+    iFechaDesembolso: encuentra(s => s === 'fecha de desembolso'),
     // Necesita las dos palabras: "valor en cop" sola también calza con el saldo al 31 de
     // diciembre, que es una columna distinta.
     iValorCOP: encuentra(s => s.includes('valor en cop') && s.includes('desembolso')),
