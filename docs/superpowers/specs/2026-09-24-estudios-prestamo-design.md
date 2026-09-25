@@ -1,9 +1,9 @@
 # Estudios de tipo préstamo: nuevo flujo cuando `tipo_estudio === 'prestamo'`
 
 **Fecha:** 2026-09-24 (Fase 1), actualizado 2026-09-25 (Fase 2)
-**Estado:** Fase 1 implementada y desplegada en pruebas. Fase 2 (tabla del informe) diseñada
-en este documento, en revisión — lista para plan de implementación. Fases 3-4 siguen
-documentadas como mapa de trabajo futuro, sin diseño detallado.
+**Estado:** Fases 1 y 2 implementadas (Fase 2 en las tres rutas de generación del informe:
+.docx propio, PDF marcado y "Crear sin plantilla"), revisadas con subagentes y listas para
+desplegar. Fases 3-4 siguen documentadas como mapa de trabajo futuro, sin diseño detallado.
 
 ## Problema
 
