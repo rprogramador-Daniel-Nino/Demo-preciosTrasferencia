@@ -1,8 +1,9 @@
 # Estudios de tipo préstamo: nuevo flujo cuando `tipo_estudio === 'prestamo'`
 
-**Fecha:** 2026-09-24
-**Estado:** diseño en revisión — Fase 1 (ingesta) lista para plan de implementación.
-Fases 2-4 quedan documentadas como mapa de trabajo futuro, sin diseño detallado.
+**Fecha:** 2026-09-24 (Fase 1), actualizado 2026-09-25 (Fase 2)
+**Estado:** Fase 1 implementada y desplegada en pruebas. Fase 2 (tabla del informe) diseñada
+en este documento, en revisión — lista para plan de implementación. Fases 3-4 siguen
+documentadas como mapa de trabajo futuro, sin diseño detallado.
 
 ## Problema
 
@@ -67,19 +68,10 @@ de trabajo para specs futuros, con las decisiones ya tomadas por el usuario que 
 
 | Fase | Qué hace | Precedente en el código | Estado |
 |---|---|---|---|
-| **1. Ingesta** | Leer la hoja de préstamos del Excel de Operaciones y guardar los datos en el estudio | Parcial (ver Diseño) | **Diseñada en este documento** |
-| 2. Tabla del informe | Tabla "Préstamo con su vinculado", dos apariciones, en el informe Word | Sí — casi idéntico al patrón de "Operación adicional" (DIAN 61-63), ver `docs/superpowers/specs/2026-08-19-operacion-adicional-informacion-adicional-design.md` | Documentada, sin diseño detallado |
+| **1. Ingesta** | Leer la hoja de préstamos del Excel de Operaciones y guardar los datos en el estudio | Parcial (ver Diseño) | **Implementada y desplegada en pruebas** |
+| **2. Tabla del informe** | Tabla "Préstamo con su vinculado", dos apariciones, en el informe Word | Sí — casi idéntico al patrón de "Operación adicional" (DIAN 61-63), ver `docs/superpowers/specs/2026-08-19-operacion-adicional-informacion-adicional-design.md` | **Diseñada en este documento** |
 | 3. Histórico de la deuda | Segunda tabla, préstamos como columnas | Ninguno | Sin diseñar |
 | 4. Comparabilidad de tasas | Tasa pactada vs. tasa Prime, método PC, percentiles | Ninguno — motor de rango nuevo, paralelo a `rangoIntercuartil.js` | Sin diseñar |
-
-Decisiones ya confirmadas por el usuario que aplican a la Fase 2 cuando se diseñe:
-- Debe funcionar con los dos botones existentes de generación en `ReporteGenerador.jsx`: el
-  de subir la plantilla `.docx` propia del cliente (ruta `docxRelleno.js`, sección
-  reemplazada donde la IA la encuentre) y el de "Crear sin plantilla" (la tabla se arma
-  solo con los datos ingestados, sin depender de una plantilla marcada).
-- La tabla puede faltar en la plantilla del cliente (primer año como estudio de préstamo), así
-  que hace falta la lógica de inserción-si-falta, igual que en el patrón de "Operación
-  adicional" (`docxRelleno.js:2561-2584`).
 
 ## Fase 1 — Ingesta del Excel de préstamo
 
@@ -207,7 +199,7 @@ diligenciados), y la forma completa del objeto devuelto.
 - Edición manual de los datos de préstamo desde la UI si el Excel no trae la hoja (hoy solo
   se avisa que falta; diligenciar a mano queda para cuando se sepa si hace falta).
 
-## Verificación
+### Verificación (Fase 1)
 
 1. `npm test` — la suite completa, incluida la actualización de
    `excelOperationsParser.test.js`, debe quedar en verde.
@@ -218,3 +210,248 @@ diligenciados), y la forma completa del objeto devuelto.
    las 4 filas de desembolsos con sus fechas, montos y tasas correctas. Repetir con un estudio
    `tipo_estudio = 'estandar'` y el mismo archivo, y confirmar que NO aparece la tarjeta de
    préstamos (aunque el parser sí haya leído la hoja).
+
+**Nota (2026-09-25): la Fase 1 ya se implementó, se revisó con subagentes y se desplegó al
+entorno de pruebas.** El candado por etapas también se extendió: la etapa "Ingesta de
+Operaciones" no se puede confirmar en un estudio de préstamo sin datos de `study.prestamos`
+(`flujoEstudio.js: operacionesPrestamoCompleto`, `App.jsx`).
+
+## Fase 2 — Tabla "Préstamo con su vinculado" en el informe
+
+### Evidencia real de la tabla a reproducir
+
+```
+Tabla 1. Préstamo con su vinculado.
++-------------------------------------------------------------------------------------+
+|                          INVERSIONES SAN JERONIMO SPA.                              |
++------------------+-----------------+----------+---------------------------+--------+
+| Fecha original   | Valor del       | Moneda   | Valor en COP en la fecha  | E. A   |
+| en la que se     | desembolso en   | pactada  | de desembolso             |        |
+| pactó            | USD             |          |                           |        |
++------------------+-----------------+----------+---------------------------+--------+
+| 27/10/2020       | 3.000.000       | USD      | 10.431.000.000            | 4,540% |
+| 07/07/2022       | 2.000.000       | USD      | 8.822.000.000             | 6,000% |
+| 24/10/2022       | 1.300.000       | USD      | 6.194.500.000             | 6,000% |
+| 9/03/2023        | 4.300.000       | USD      | 20.657.200.000            | 6,000% |
++------------------+-----------------+----------+---------------------------+--------+
+Fuente: Información suministrada por AUTOLAND S.A.S.
+```
+
+Diferencia clave frente al precedente más cercano (la tabla "Operación adicional
+Transacciones Intercompañía", DIAN 61-63): esta tabla trae el **nombre del vinculado como
+fila de encabezado fusionada** (una sola celda que ocupa las 5 columnas) por encima de los
+títulos de columna — algo que `generarTablaOoxml()` (`docxRelleno.js:271-334`) no soporta
+hoy, porque ninguna tabla existente del informe lo necesita.
+
+Aparece **dos veces** en el documento entregado (descripción de la operación y análisis de
+comparabilidad), igual que la Tabla 3 "Transacciones Inter compañía".
+
+### Origen de los datos
+
+`study.prestamos` (poblado por la Fase 1, `excelPrestamosParser.js:122-143`): un arreglo de
+filas, una por desembolso, con `otorga`/`recibe` (nombres de las partes), `fechaPacto` (string
+ISO `"AAAA-MM-DD"` o `null`), `valorDesembolsoMoneda` (number), `moneda` (string),
+`valorCOPDesembolso` (number), `tasaEA` (string tal cual del Excel, ej. `"4,540% Efectivo
+Anual"`), y más columnas que esta fase no usa todavía (se guardaron pensando en las Fases 3-4).
+
+**Quién es "el vinculado" de la fila de encabezado**: ni `otorga` ni `recibe` son
+inherentemente "el vinculado" — depende de si el contribuyente prestó o recibió el préstamo.
+Se determina comparando cada nombre (normalizado: mayúsculas, espacios colapsados) contra
+`study.ent` (la razón social del contribuyente) y tomando el que NO coincide.
+
+**Si hay más de un vinculado distinto** entre las filas de `study.prestamos` (no ocurre en el
+archivo de referencia, que solo tiene uno): por decisión de alcance, todas las filas se listan
+bajo el nombre del vinculado de la PRIMERA fila. No hay precedente en el código de cómo
+separar una tabla en varias por vinculado, y el único caso real disponible no lo necesita —
+se revisita si aparece un caso real con varios vinculados.
+
+### Diseño
+
+**1. Nuevo archivo de datos `frontend/src/services/tablasPrestamos.js`** (mismo rol que
+`tablasContribuyente.js`: datos de tablas específicas de un dominio, compartidos entre las dos
+rutas de generación):
+
+```js
+import { fmt, num } from '../utils/calculations.js';
+
+export const NOMBRES_TABLA_PRESTAMO = [
+  'Préstamo con su vinculado',
+  'Préstamos con su vinculado',
+];
+
+const normalizarNombreCompania = (s) =>
+  String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+function vinculadoDePrestamo(fila, ent) {
+  const entNorm = normalizarNombreCompania(ent);
+  if (normalizarNombreCompania(fila.recibe) === entNorm) return fila.otorga;
+  if (normalizarNombreCompania(fila.otorga) === entNorm) return fila.recibe;
+  return fila.otorga || fila.recibe || 'el vinculado';
+}
+
+function fechaTexto(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = String(iso).split('-');
+  return `${d}/${m}/${y}`;
+}
+
+const montoTexto = (v) => {
+  const n = num(v);
+  return n === null ? '—' : fmt(n);
+};
+
+export function tienePrestamos(estudio) {
+  return !!estudio && Array.isArray(estudio.prestamos) && estudio.prestamos.length > 0;
+}
+
+export function filasPrestamoConVinculado(estudio) {
+  if (!tienePrestamos(estudio)) return null;
+  const e = estudio;
+  const vinculado = vinculadoDePrestamo(e.prestamos[0], e.ent);
+  const moneda = e.prestamos[0].moneda || 'moneda pactada';
+  return {
+    nombre: 'Préstamo con su vinculado',
+    vinculado,
+    encabezados: [
+      'Fecha original en la que se pactó',
+      `Valor del desembolso en ${moneda}`,
+      'Moneda pactada',
+      'Valor en COP en la fecha de desembolso',
+      'E. A',
+    ],
+    filas: e.prestamos.map((p) => [
+      fechaTexto(p.fechaPacto),
+      montoTexto(p.valorDesembolsoMoneda),
+      p.moneda || '—',
+      montoTexto(p.valorCOPDesembolso),
+      p.tasaEA || '—',
+    ]),
+    fuente: 'Información suministrada por ' + (e.ent || 'la Compañía') + '.',
+  };
+}
+```
+
+**2. Ruta OOXML (`docxRelleno.js`)** — nueva función `generarTablaOoxmlConVinculado(titulo,
+vinculado, cabeceras, filas, fuente)`, junto a `generarTablaOoxml` (línea 271-334): mismo
+código (anchos de columna, bordes, fuente de letra, celdas) más una fila adicional ANTES de
+la fila de encabezados, con una sola celda fusionada (`<w:gridSpan w:val="{colCount}"/>`) del
+ancho completo de la tabla, centrada y en negrita, con el nombre del vinculado. Se duplica el
+código de las celdas en vez de parametrizar `generarTablaOoxml` porque cada función de este
+archivo ya arma su propia tabla de punta a punta (es el patrón que siguen `generarTabla19` y
+las demás) — mantiene cada una legible de una sola pasada, a costa de un poco de repetición
+que el propio archivo ya acepta en otras tablas.
+
+En `actualizarTablasOperacionesOoxml` (`docxRelleno.js:2434-3037`), agregar un bloque nuevo
+junto al de "3-bis. Operación adicional" (línea 2524-2590), siguiendo el MISMO patrón:
+
+```js
+if (tienePrestamos(estudio)) {
+  const t = filasPrestamoConVinculado(estudio);
+  const emitirPrestamo = (b) => generarTablaOoxmlConVinculado(
+    tituloDe(b, t.nombre), t.vinculado, t.encabezados, t.filas, t.fuente
+  );
+
+  const bloques = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
+  if (bloques.length) {
+    /* Aparece hasta dos veces en la plantilla (descripción + análisis). Se refrescan TODAS
+       las que la plantilla ya traiga, de atrás hacia adelante, igual que Transacciones Inter
+       compañía — conservando la forma que cada una ya tenía ahí. */
+    for (let idx = bloques.length - 1; idx >= 0; idx--) {
+      reemplazar(NOMBRES_TABLA_PRESTAMO, emitirPrestamo, { ocurrencia: idx });
+    }
+  } else {
+    /* La plantilla no la trae (primer año como estudio de préstamo): se inserta UNA vez,
+       junto a «Transacciones Inter compañía», igual que «Operación adicional». La segunda
+       aparición (dentro del análisis de comparabilidad) depende de esa sección, que no existe
+       todavía — se construye cuando se diseñe la Fase 4. */
+    const insertada = doc.insertar(
+      NOMBRES_TABLA_TRANSACCIONES,
+      (ancla) => {
+        const titulo = ancla.numero != null ? 'Tabla ' + (ancla.numero + 1) + '. ' + t.nombre : t.nombre;
+        return generarTablaOoxmlConVinculado(titulo, t.vinculado, t.encabezados, t.filas, t.fuente);
+      },
+      { excluir: NOMBRES_TABLA_PRESTAMO }
+    );
+    if (Array.isArray(avisos)) {
+      avisos.push(insertada
+        ? 'se insertó la tabla «' + t.nombre + '» después de «Transacciones Inter compañía» ' +
+          'porque la plantilla no la traía: revise la numeración de las tablas siguientes'
+        : NOMBRES_TABLA_PRESTAMO[0]);
+    }
+  }
+} else {
+  /* No aplica a este estudio (no es de tipo préstamo, o no tiene datos de préstamo): si la
+     plantilla trae la tabla —heredada de un informe de otro tipo de estudio—, se borra. */
+  const bloques = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
+  for (let idx = bloques.length - 1; idx >= 0; idx--) {
+    doc.borrar(NOMBRES_TABLA_PRESTAMO, { ocurrencia: idx });
+  }
+}
+```
+
+**3. Ruta HTML — plantilla marcada (`tablasOperacionesHtml.js`)**: agregar una entrada al
+array `OBJETIVOS` cuando la tabla YA está en la plantilla (mismo mecanismo que usa
+`localizarTablasHtml`/`reescribirFilasHtml`, que conserva la fila fusionada del vinculado tal
+cual la trae la plantilla — solo se reescriben las filas de datos, nunca el encabezado). Para
+el caso "la plantilla no la trae", replicar el bloque de `NOMBRES_TABLA_ADICIONAL` (líneas
+233-290 de ese archivo) adaptado a `NOMBRES_TABLA_PRESTAMO`/`tienePrestamos`, con una
+diferencia deliberada: `insertarTablaHtml` clona la forma del ancla, y el ancla
+("Transacciones Inter compañía") no tiene la fila fusionada del vinculado — en vez de
+intentar fabricar esa fusión en HTML (arriesgando que `docxWriter.js` no traduzca bien un
+`colspan`, algo que no está probado en este código), el vinculado se agrega como un párrafo
+en negrita ANTES de la tabla insertada, usando el mismo título. Es una diferencia menor y solo
+aplica al caso "insertar por primera vez"; una tabla que la plantilla ya trae conserva su
+fusión real sin tocarla.
+
+**4. Ruta HTML — sin plantilla (`informeSinPlantilla.js`)**: agregar una sección nueva al
+array `partes` de `construirHtmlSinPlantilla`, siguiendo el patrón `tablaDesde`:
+
+```js
+seccion(
+  t.vinculado ? `Préstamo con su vinculado — ${t.vinculado}` : 'Préstamo con su vinculado',
+  tablaDesde(filasPrestamoConVinculado(e)),
+),
+```
+
+donde `t = filasPrestamoConVinculado(e)` se calcula una vez antes del array (patrón ya usado
+para otras secciones condicionales de ese archivo). Como este documento es explícitamente un
+borrador de trabajo (no lleva prosa legal ni membrete), el nombre del vinculado va en el
+título de la sección en vez de una fila fusionada — coherente con que el resto de tablas de
+esta ruta tampoco llevan esa clase de adorno.
+
+**5. Alcance de "aparece dos veces"**: cubierto completamente cuando la plantilla YA trae las
+dos apariciones (se refrescan ambas). Cuando falta, solo se inserta UNA vez (junto a
+Transacciones Inter compañía) — la segunda aparición vive dentro del análisis de
+comparabilidad de tasas, que es la Fase 4 y no existe todavía; intentar insertarla ahí sin esa
+sección construida no tiene un ancla real a la cual anclarse.
+
+### Lo que entra en la Fase 2
+
+1. `tablasPrestamos.js` con `filasPrestamoConVinculado`/`tienePrestamos`/`NOMBRES_TABLA_PRESTAMO`.
+2. `generarTablaOoxmlConVinculado` y su bloque en `actualizarTablasOperacionesOoxml` (ruta
+   .docx marcado): refresca hasta dos apariciones si la plantilla las trae; inserta una si no
+   las trae; borra la tabla si el estudio no aplica.
+3. Bloque equivalente en `tablasOperacionesHtml.js` (ruta plantilla marcada por IA desde PDF).
+4. Sección nueva en `informeSinPlantilla.js` (ruta "Crear sin plantilla").
+5. Pruebas unitarias de `filasPrestamoConVinculado`/`vinculadoDePrestamo` con los datos reales
+   de Autoland, y de `generarTablaOoxmlConVinculado` (que el XML resultante sea válido y
+   contenga el `gridSpan` y el nombre del vinculado).
+
+### Lo que NO entra en la Fase 2, por decisión explícita
+
+- Separar la tabla en varias cuando hay más de un vinculado distinto (sin precedente, sin
+  caso real que lo exija todavía).
+- La segunda aparición de la tabla cuando la plantilla no la trae (depende del análisis de
+  comparabilidad, Fase 4).
+- La tabla "Histórico de la deuda" (Fase 3) y el análisis de comparabilidad de tasas (Fase 4).
+
+### Verificación (Fase 2)
+
+1. `npm test` en verde, incluidas las pruebas nuevas de `tablasPrestamos.js` y de
+   `generarTablaOoxmlConVinculado`.
+2. `npm run lint --prefix frontend`.
+3. Manual: generar el informe (las tres rutas — subir plantilla .docx, plantilla PDF marcada,
+   y "Crear sin plantilla") para un estudio de préstamo con los datos de Autoland, y confirmar
+   que la tabla aparece con el nombre del vinculado, las 4 filas y los valores correctos.
+   Repetir con un estudio estándar y confirmar que la tabla no aparece (y que se borra si la
+   plantilla la traía de un informe anterior de otro tipo).
