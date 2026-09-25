@@ -19,7 +19,7 @@ import {
   aplicarLetraMacroOoxml,
   actualizarFormulasMatematicasOoxml,
   localizarAnexosOoxml, anexosDelDocumento, problemaDeIntegridadOoxml,
-  generarTablaOoxml, medidaDeImagenAnexoB,
+  generarTablaOoxml, medidaDeImagenAnexoB, generarTablaOoxmlConVinculado,
 } from './docxRelleno.js';
 import { codificarPNG, aBase64, deBase64 } from './png.js';
 import { FUENTE_TABLA, PUNTOS_TABLA } from './estiloDocumento.js';
@@ -4750,4 +4750,61 @@ test('rellenarDocx propaga el .docx sin marcar hasta la restauración', async ()
   });
   assert.deepStrictEqual(camposConservados, ['pais_vinc'],
     'el parámetro tiene que llegar desde la firma pública, no solo desde renderizarDocx');
+});
+
+test('generarTablaOoxmlConVinculado incluye una fila fusionada con el nombre del vinculado', () => {
+  const xml = generarTablaOoxmlConVinculado(
+    'Tabla 1. Préstamo con su vinculado', 'INVERSIONES SAN JERONIMO SPA',
+    ['Fecha', 'Valor'], [['27/10/2020', '3.000.000']], 'Información de Autoland.'
+  );
+  assert.match(xml, /<w:gridSpan w:val="2"\/>/, 'la fila del vinculado debe fusionar las 2 columnas');
+  assert.match(xml, /INVERSIONES SAN JERONIMO SPA/);
+  assert.match(xml, /Fecha/);
+  assert.match(xml, /27\/10\/2020/);
+  assert.match(xml, /FUENTE: Información de Autoland\./);
+});
+
+test('generarTablaOoxmlConVinculado sin fuente no emite la línea FUENTE', () => {
+  const xml = generarTablaOoxmlConVinculado('T', 'VINC', ['a'], [['b']], '');
+  assert.ok(!xml.includes('FUENTE:'));
+});
+
+test('actualizarTablasOperacionesOoxml refresca la tabla de préstamo si la plantilla ya la trae', () => {
+  const xml =
+    '<w:p><w:t>Tabla 1. Préstamo con su vinculado</w:t></w:p>' +
+    '<w:tbl><w:tr><w:tc><w:p><w:t>viejo</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS', anio: 2025,
+    prestamos: [{ otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS', fechaPacto: '2020-10-27', valorDesembolsoMoneda: 3000000, moneda: 'USD', valorCOPDesembolso: 10431000000, tasaEA: '4,540% Efectivo Anual' }],
+  };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(salida.includes('27/10/2020'));
+  assert.ok(!salida.includes('viejo'));
+});
+
+test('actualizarTablasOperacionesOoxml inserta la tabla de préstamo junto a Transacciones Inter compañía si falta', () => {
+  const xml =
+    '<w:p><w:t>Tabla 3. Transacciones Inter compañía</w:t></w:p>' +
+    '<w:tbl><w:tr><w:tc><w:p><w:t>Razón social</w:t></w:p></w:tc><w:tc><w:p><w:t>ANTERIOR</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS', anio: 2025,
+    prestamos: [{ otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS', fechaPacto: '2020-10-27', valorDesembolsoMoneda: 3000000, moneda: 'USD', valorCOPDesembolso: 10431000000, tasaEA: '4,540% Efectivo Anual' }],
+  };
+  const avisos = [];
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, avisos);
+  assert.ok(salida.includes('Préstamo con su vinculado'));
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(avisos.some((a) => a.includes('se insertó la tabla «Préstamo con su vinculado»')));
+});
+
+test('actualizarTablasOperacionesOoxml borra la tabla de préstamo si el estudio no aplica', () => {
+  const xml =
+    '<w:p><w:t>Tabla 1. Préstamo con su vinculado</w:t></w:p>' +
+    '<w:tbl><w:tr><w:tc><w:p><w:t>viejo</w:t></w:p></w:tc></w:tr></w:tbl>' +
+    '<w:p><w:t>Prosa que sigue.</w:t></w:p>';
+  const estudio = { tipo_estudio: 'estandar', ent: 'Otra Empresa SAS', anio: 2025 };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  assert.ok(!salida.includes('Préstamo con su vinculado'));
+  assert.ok(salida.includes('Prosa que sigue.'), 'no debe borrar lo que sigue en el documento');
 });

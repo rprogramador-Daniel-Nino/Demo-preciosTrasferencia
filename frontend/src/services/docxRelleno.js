@@ -62,6 +62,7 @@ import {
   filasOperacionAdicional, filasOperacionAdicionalFicha, tieneOperacionAdicional,
   NOMBRES_TABLA_ADICIONAL, NOMBRES_TABLA_TRANSACCIONES,
 } from './tablasOperaciones.js';
+import { tienePrestamos, filasPrestamoConVinculado, NOMBRES_TABLA_PRESTAMO } from './tablasPrestamos.js';
 /* `verticalSobreActivos` se reexporta al final: vivía aquí y hay quien la importa de
    este módulo. Su definición se mudó con la Tabla 10, que es quien la usa. */
 import {
@@ -318,6 +319,67 @@ export function generarTablaOoxml(titulo, cabeceras, filas, fuente) {
   xml += `</w:tr>`;
 
   // Rows
+  filas.forEach((f) => {
+    xml += `<w:tr>`;
+    f.forEach((c, i) => { xml += celda(c, false, i); });
+    xml += `</w:tr>`;
+  });
+
+  xml += `</w:tbl>`;
+
+  if (fuente) {
+    xml += `<w:p><w:pPr><w:pStyle w:val="Normal"/><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/><w:b/></w:rPr><w:t>FUENTE: ${escaparXml(fuente)}</w:t></w:r></w:p>`;
+  }
+
+  return xml;
+}
+
+/** Como `generarTablaOoxml`, pero con una fila adicional fusionada (todas las columnas en
+ *  una sola celda) antes de los encabezados, con el nombre del vinculado — es la forma real
+ *  de la tabla "Préstamo con su vinculado" en el informe entregado a un cliente. Se duplica
+ *  el armado de celdas de `generarTablaOoxml` en vez de parametrizarla: cada función de este
+ *  archivo arma su tabla de punta a punta, y es el patrón que ya siguen las demás. */
+export function generarTablaOoxmlConVinculado(titulo, vinculado, cabeceras, filas, fuente) {
+  const colCount = cabeceras.length;
+  const anchoColumna = Math.floor(ANCHO_TABLA_PCT / colCount);
+  const anchoDe = (i) => (i === colCount - 1
+    ? ANCHO_TABLA_PCT - anchoColumna * (colCount - 1)
+    : anchoColumna);
+
+  const letra = `<w:rFonts w:ascii="${FUENTE_TABLA}" w:hAnsi="${FUENTE_TABLA}"/>`
+    + `<w:sz w:val="${PUNTOS_TABLA * 2}"/>`;
+  const borde = (lado, sz) => `<w:${lado} w:val="single" w:sz="${sz}" w:space="0" w:color="000000"/>`;
+  const celda = (texto, cabecera, i) =>
+    `<w:tc><w:tcPr><w:tcW w:w="${anchoDe(i)}" w:type="pct"/>`
+    + (cabecera ? `<w:shd w:val="clear" w:color="auto" w:fill="999999"/>` : '')
+    + `<w:vAlign w:val="center"/></w:tcPr>`
+    + `<w:p><w:pPr><w:jc w:val="${!cabecera && esProsaLarga(texto) ? 'both' : 'center'}"/></w:pPr>`
+    + `<w:r><w:rPr>${letra}`
+    + (cabecera ? `<w:color w:val="000000"/><w:b/>` : '')
+    + `</w:rPr><w:t>${escaparXml(texto)}</w:t></w:r></w:p></w:tc>`;
+
+  let xml = `<w:p><w:pPr><w:keepNext/><w:outlineLvl w:val="9"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>${escaparXml(titulo)}</w:t></w:r></w:p>`;
+  xml += `<w:tbl>`;
+  xml += `<w:tblPr><w:tblStyle w:val="TableGrid"/>`
+    + `<w:tblW w:w="${ANCHO_TABLA_PCT}" w:type="pct"/><w:tblLayout w:type="fixed"/><w:tblBorders>`
+    + borde('top', 12) + borde('bottom', 12) + borde('left', 12) + borde('right', 12)
+    + borde('insideH', 6) + borde('insideV', 6)
+    + `</w:tblBorders>`
+    + `<w:tblCellMar><w:top w:w="75" w:type="dxa"/><w:left w:w="90" w:type="dxa"/>`
+    + `<w:bottom w:w="75" w:type="dxa"/><w:right w:w="90" w:type="dxa"/></w:tblCellMar>`
+    + `</w:tblPr>`;
+
+  // Fila fusionada con el nombre del vinculado, ocupando las colCount columnas.
+  xml += `<w:tr><w:tc><w:tcPr><w:tcW w:w="${ANCHO_TABLA_PCT}" w:type="pct"/>`
+    + `<w:gridSpan w:val="${colCount}"/><w:shd w:val="clear" w:color="auto" w:fill="999999"/>`
+    + `<w:vAlign w:val="center"/></w:tcPr>`
+    + `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${letra}<w:color w:val="000000"/><w:b/></w:rPr>`
+    + `<w:t>${escaparXml(vinculado)}</w:t></w:r></w:p></w:tc></w:tr>`;
+
+  xml += `<w:tr><w:trPr><w:tblHeader/></w:trPr>`;
+  cabeceras.forEach((h, i) => { xml += celda(h, true, i); });
+  xml += `</w:tr>`;
+
   filas.forEach((f) => {
     xml += `<w:tr>`;
     f.forEach((c, i) => { xml += celda(c, false, i); });
@@ -2586,6 +2648,46 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
     const bloques = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_ADICIONAL);
     for (let idx = bloques.length - 1; idx >= 0; idx--) {
       doc.borrar(NOMBRES_TABLA_ADICIONAL, { ocurrencia: idx });
+    }
+  }
+
+  /* 3-ter. Préstamo con su vinculado — el desembolso a desembolso del Excel de préstamos
+     (Fase 1 de esta feature). Mismo criterio que "Operación adicional": se publica solo si
+     aplica (`tienePrestamos`) y se borra si la plantilla la trae mientras no aplica. Puede
+     aparecer hasta dos veces (descripción + análisis); si falta, se inserta solo una vez —
+     la segunda aparición vive en el análisis de comparabilidad de tasas, que todavía no
+     existe (Fase 4). */
+  if (tienePrestamos(estudio)) {
+    const t = filasPrestamoConVinculado(estudio);
+    const emitirPrestamo = (b) => generarTablaOoxmlConVinculado(
+      tituloDe(b, t.nombre), t.vinculado, t.encabezados, t.filas, t.fuente
+    );
+
+    const bloquesPrestamo = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
+    if (bloquesPrestamo.length) {
+      for (let idx = bloquesPrestamo.length - 1; idx >= 0; idx--) {
+        reemplazar(NOMBRES_TABLA_PRESTAMO, emitirPrestamo, { ocurrencia: idx });
+      }
+    } else {
+      const insertadaPrestamo = doc.insertar(
+        NOMBRES_TABLA_TRANSACCIONES,
+        (ancla) => {
+          const titulo = ancla.numero != null ? 'Tabla ' + (ancla.numero + 1) + '. ' + t.nombre : t.nombre;
+          return generarTablaOoxmlConVinculado(titulo, t.vinculado, t.encabezados, t.filas, t.fuente);
+        },
+        { excluir: NOMBRES_TABLA_PRESTAMO }
+      );
+      if (Array.isArray(avisos)) {
+        avisos.push(insertadaPrestamo
+          ? 'se insertó la tabla «' + t.nombre + '» después de «Transacciones Inter compañía» ' +
+            'porque la plantilla no la traía: revise la numeración de las tablas siguientes'
+          : NOMBRES_TABLA_PRESTAMO[0]);
+      }
+    }
+  } else {
+    const bloquesPrestamo = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
+    for (let idx = bloquesPrestamo.length - 1; idx >= 0; idx--) {
+      doc.borrar(NOMBRES_TABLA_PRESTAMO, { ocurrencia: idx });
     }
   }
 
