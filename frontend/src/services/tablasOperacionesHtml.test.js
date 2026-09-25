@@ -826,3 +826,48 @@ test('sin línea FUENTE en la plantilla no se inventa una', () => {
   assert.ok(!salida.includes('FUENTE:'), 'se inventó una línea de fuente');
   assert.match(salida, /Prosa que sigue/);
 });
+
+/* El título ya trae el vinculado en el sufijo «— Inversiones San Jeronimo SpA»: así es como
+   queda una plantilla real, generada un año antes por esta misma ruta (ver el título que
+   fabrica la inserción, más abajo). El refresco no reescribe el rótulo (`conRotulo` es
+   `false` en la llamada a `sustituir`), así que ese nombre sobrevive intacto —lo que se prueba
+   aquí es que el refresco no lo pierde, no que lo reescriba. */
+const TABLA_PRESTAMO_EN_PLANTILLA =
+  '<p><strong> Tabla 1. Préstamo con su vinculado — Inversiones San Jeronimo SpA</strong></p>' +
+  '<table>' +
+  '<tr><th><p><strong> Fecha</strong></p></th><th><p><strong> Valor</strong></p></th></tr>' +
+  '<tr><td><p> 01/01/2019</p></td><td><p> 999</p></td></tr>' +
+  '</table>';
+
+const ESTUDIO_PRESTAMO = {
+  tipo_estudio: 'prestamo', ent: 'Autoland SAS', anio: 2025,
+  prestamos: [{
+    otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+    fechaPacto: '2020-10-27', valorDesembolsoMoneda: 3000000, moneda: 'USD',
+    valorCOPDesembolso: 10431000000, tasaEA: '4,540% Efectivo Anual',
+  }],
+};
+
+test('actualizarTablasOperacionesHtml refresca la tabla de préstamo si la plantilla ya la trae', () => {
+  const salida = actualizarTablasOperacionesHtml(TABLA_PRESTAMO_EN_PLANTILLA, ESTUDIO_PRESTAMO);
+  assert.ok(salida.includes('27/10/2020'));
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(!salida.includes('01/01/2019'), 'no debe sobrevivir la fila vieja de la plantilla');
+});
+
+test('actualizarTablasOperacionesHtml inserta la tabla de préstamo si falta, con el vinculado en el título', () => {
+  const conAncla =
+    '<p><strong> Tabla 3. Transacciones Inter compañía</strong></p>' +
+    '<table><tr><th><p><strong> Razón social</strong></p></th></tr>' +
+    '<tr><td><p> ANTERIOR</p></td></tr></table>';
+  const avisos = [];
+  const salida = actualizarTablasOperacionesHtml(conAncla, ESTUDIO_PRESTAMO, avisos);
+  assert.ok(salida.includes('Préstamo con su vinculado'));
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'), 'el vinculado debe quedar visible en el título de la tabla insertada');
+});
+
+test('actualizarTablasOperacionesHtml borra la tabla de préstamo si el estudio no es de ese tipo', () => {
+  const estudioEstandar = { tipo_estudio: 'estandar', ent: 'Otra Empresa SAS' };
+  const salida = actualizarTablasOperacionesHtml(TABLA_PRESTAMO_EN_PLANTILLA, estudioEstandar);
+  assert.ok(!salida.includes('Préstamo con su vinculado'));
+});

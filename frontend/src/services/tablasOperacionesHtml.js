@@ -32,6 +32,7 @@ import {
 } from './tablasOperaciones.js';
 import { filasComposicionAccionaria, filasActivos } from './tablasContribuyente.js';
 import { tablaSinDatos } from './datosDeTabla.js';
+import { tienePrestamos, filasPrestamoConVinculado, NOMBRES_TABLA_PRESTAMO } from './tablasPrestamos.js';
 
 /* La tabla de operaciones se llama de ingreso o de egreso según el sentido de la operación
    del contribuyente, y la plantilla trae el rótulo que le corresponde: se buscan los dos. */
@@ -285,6 +286,47 @@ export function actualizarTablasOperacionesHtml(html, estudio, avisos) {
   } else {
     const bloques = localizarTablasHtml(out, NOMBRES_TABLA_ADICIONAL);
     for (const bloque of [...bloques].reverse()) {
+      out = borrarTablaHtml(out, bloque);
+    }
+  }
+
+  /* «Préstamo con su vinculado» (Fase 2 de la feature de préstamos) — mismo criterio que
+     «Operación adicional»: se publica solo si aplica (`tienePrestamos`) y se borra si la
+     plantilla la trae mientras no aplica. Puede aparecer hasta dos veces (descripción +
+     análisis): se refrescan todas las que la plantilla ya traiga, conservando su fila
+     fusionada del vinculado tal cual (`reescribirFilasHtml` solo toca las filas de datos).
+     Si falta, se inserta una sola vez junto a «Transacciones Inter compañía» — el ancla no
+     tiene esa fila fusionada y fabricar un `colspan` en HTML no está probado en este código,
+     así que el nombre del vinculado va en el propio título de la tabla insertada. */
+  if (tienePrestamos(estudio)) {
+    const bloquesPrestamo = localizarTablasHtml(out, NOMBRES_TABLA_PRESTAMO);
+    if (bloquesPrestamo.length) {
+      for (const bloque of [...bloquesPrestamo].reverse()) {
+        out = sustituir(out, bloque, filasPrestamoConVinculado(estudio), false, 0);
+      }
+    } else {
+      const anclaPrestamo = localizarTablaHtml(out, NOMBRES_TABLA_TRANSACCIONES, {
+        excluir: NOMBRES_TABLA_ADICIONAL.concat(NOMBRES_TABLA_PRESTAMO),
+      });
+      const tPrestamo = filasPrestamoConVinculado(estudio);
+      if (anclaPrestamo && tPrestamo) {
+        const numeroAncla = numeroDeTabla(anclaPrestamo.titulo);
+        const titulo = (numeroAncla != null ? 'Tabla ' + (numeroAncla + 1) + '. ' : '')
+          + tPrestamo.nombre + ' — ' + tPrestamo.vinculado;
+        out = insertarTablaHtml(out, anclaPrestamo, tPrestamo, titulo);
+        if (Array.isArray(avisos)) {
+          avisos.push(
+            'se insertó la tabla «' + tPrestamo.nombre + '» después de «' + anclaPrestamo.titulo
+            + '» porque la plantilla no la traía: revise la numeración de las tablas siguientes'
+          );
+        }
+      } else if (Array.isArray(avisos)) {
+        avisos.push(NOMBRES_TABLA_PRESTAMO[0]);
+      }
+    }
+  } else {
+    const bloquesPrestamo = localizarTablasHtml(out, NOMBRES_TABLA_PRESTAMO);
+    for (const bloque of [...bloquesPrestamo].reverse()) {
       out = borrarTablaHtml(out, bloque);
     }
   }
