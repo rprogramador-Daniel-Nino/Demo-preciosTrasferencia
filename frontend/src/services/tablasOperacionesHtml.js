@@ -110,9 +110,9 @@ const RX_ANIO_ENCABEZADO = /\b2(\.?)0\d{2}\b/g;
    rótulo. El orden importa —el rótulo está antes en el documento, así que reescribirlo primero
    movería los offsets del bloque que ya se localizó—; es el mismo orden que sigue
    `actualizarTablasMacroHtml`. */
-function sustituir(html, bloque, tabla, conRotulo, anioEnEncabezado) {
+function sustituir(html, bloque, tabla, conRotulo, anioEnEncabezado, filasEncabezado) {
   let out = html.slice(0, bloque.inicio)
-    + reescribirFilasHtml(html.slice(bloque.inicio, bloque.fin), tabla.filas)
+    + reescribirFilasHtml(html.slice(bloque.inicio, bloque.fin), tabla.filas, { filasEncabezado })
     + html.slice(bloque.fin);
 
   /* El año del encabezado, sobre la tabla ya reescrita. Se busca dentro del bloque de la
@@ -302,26 +302,51 @@ export function actualizarTablasOperacionesHtml(html, estudio, avisos) {
     const bloquesPrestamo = localizarTablasHtml(out, NOMBRES_TABLA_PRESTAMO);
     if (bloquesPrestamo.length) {
       for (const bloque of [...bloquesPrestamo].reverse()) {
-        out = sustituir(out, bloque, filasPrestamoConVinculado(estudio), false, 0);
+        /* Si la plantilla ya trae la fila fusionada del vinculado (una sola celda en su
+           primera fila — la forma que produce la ruta .docx, `generarTablaOoxmlConVinculado`
+           en docxRelleno.js), esa fila cuenta como encabezado ADEMÁS de la real: sin esto,
+           `reescribirFilasHtml` (que por defecto solo respeta 1 fila de encabezado) confunde
+           la fila real de "Fecha"/"Valor"/... con una fila de datos y la sobrescribe. */
+        const filasEncabezado = bloque.columnas === 1 ? 2 : 1;
+        out = sustituir(out, bloque, filasPrestamoConVinculado(estudio), false, 0, filasEncabezado);
       }
     } else {
       const anclaPrestamo = localizarTablaHtml(out, NOMBRES_TABLA_TRANSACCIONES, {
         excluir: NOMBRES_TABLA_ADICIONAL.concat(NOMBRES_TABLA_PRESTAMO),
       });
       const tPrestamo = filasPrestamoConVinculado(estudio);
-      if (anclaPrestamo && tPrestamo) {
+      /* `insertarTablaHtml` clona la FORMA del ancla (sus columnas, su encabezado) y solo
+         reescribe las filas de datos — no fabrica columnas nuevas. La ficha de
+         "Transacciones Inter compañía" tiene 2 columnas; esta tabla tiene 5. Insertar ahí
+         encima produciría una tabla rota (el encabezado real de "Fecha"/"Valor"/... nunca se
+         usaría). Sin una tabla de la misma forma para clonar, se avisa en vez de insertar
+         algo mal formado — es peor una tabla rota en un documento que se radica ante la DIAN
+         que un aviso pidiendo agregarla a mano. */
+      const formaCompatible = anclaPrestamo && tPrestamo
+        && anclaPrestamo.columnas === tPrestamo.encabezados.length;
+      if (formaCompatible) {
         const numeroAncla = numeroDeTabla(anclaPrestamo.titulo);
         const titulo = (numeroAncla != null ? 'Tabla ' + (numeroAncla + 1) + '. ' : '')
           + tPrestamo.nombre + ' — ' + tPrestamo.vinculado;
-        out = insertarTablaHtml(out, anclaPrestamo, tPrestamo, titulo);
-        if (Array.isArray(avisos)) {
-          avisos.push(
-            'se insertó la tabla «' + tPrestamo.nombre + '» después de «' + anclaPrestamo.titulo
-            + '» porque la plantilla no la traía: revise la numeración de las tablas siguientes'
-          );
+        const conTabla = insertarTablaHtml(out, anclaPrestamo, tPrestamo, titulo);
+        if (conTabla !== out) {
+          out = conTabla;
+          if (Array.isArray(avisos)) {
+            avisos.push(
+              'se insertó la tabla «' + tPrestamo.nombre + '» después de «' + anclaPrestamo.titulo
+              + '» porque la plantilla no la traía: revise la numeración de las tablas siguientes'
+            );
+          }
+        } else if (Array.isArray(avisos)) {
+          avisos.push(NOMBRES_TABLA_PRESTAMO[0]);
         }
       } else if (Array.isArray(avisos)) {
-        avisos.push(NOMBRES_TABLA_PRESTAMO[0]);
+        avisos.push(anclaPrestamo && tPrestamo
+          ? 'no se pudo insertar la tabla «' + tPrestamo.nombre + '»: la tabla de «Transacciones ' +
+            'Inter compañía» de esta plantilla no tiene la misma forma (' + anclaPrestamo.columnas +
+            ' columna(s)) que la tabla de préstamo (' + tPrestamo.encabezados.length + ' columnas). ' +
+            'Agréguela a mano.'
+          : NOMBRES_TABLA_PRESTAMO[0]);
       }
     }
   } else {

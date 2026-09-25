@@ -855,15 +855,116 @@ test('actualizarTablasOperacionesHtml refresca la tabla de préstamo si la plant
   assert.ok(!salida.includes('01/01/2019'), 'no debe sobrevivir la fila vieja de la plantilla');
 });
 
-test('actualizarTablasOperacionesHtml inserta la tabla de préstamo si falta, con el vinculado en el título', () => {
-  const conAncla =
-    '<p><strong> Tabla 3. Transacciones Inter compañía</strong></p>' +
-    '<table><tr><th><p><strong> Razón social</strong></p></th></tr>' +
-    '<tr><td><p> ANTERIOR</p></td></tr></table>';
+/* Forma real de una plantilla que ya pasó por la ruta .docx de este mismo sistema
+   (`generarTablaOoxmlConVinculado`, docxRelleno.js): la primera fila es una sola celda
+   fusionada con el nombre del vinculado, y la fila de encabezados REAL —con las cinco
+   etiquetas de columna— va SEGUNDA, no primera. Ver el ejemplo real en
+   docs/superpowers/specs/2026-09-24-estudios-prestamo-design.md (líneas ~221-244). */
+const TABLA_PRESTAMO_DOS_FILAS_ENCABEZADO =
+  '<p><strong> Tabla 1. Préstamo con su vinculado — Inversiones San Jeronimo SpA</strong></p>' +
+  '<table>' +
+  '<tr><th colspan="5"><p><strong> Inversiones San Jeronimo SpA</strong></p></th></tr>' +
+  '<tr>' +
+  '<th><p><strong> Fecha original en la que se pactó</strong></p></th>' +
+  '<th><p><strong> Valor del desembolso en USD</strong></p></th>' +
+  '<th><p><strong> Moneda pactada</strong></p></th>' +
+  '<th><p><strong> Valor en COP en la fecha de desembolso</strong></p></th>' +
+  '<th><p><strong> E. A</strong></p></th>' +
+  '</tr>' +
+  '<tr>' +
+  '<td><p> 01/01/2000</p></td><td><p> 111</p></td><td><p> EUR</p></td>' +
+  '<td><p> 222.222</p></td><td><p> 9% Efectivo Anual</p></td>' +
+  '</tr>' +
+  '</table>';
+
+test('actualizarTablasOperacionesHtml respeta las DOS filas de encabezado al refrescar (fila fusionada + encabezado real)', () => {
+  /* Sin `filasEncabezado: 2`, `reescribirFilasHtml` trata la fila real de "Fecha"/"Valor"/…
+     como una fila de DATOS y la sobrescribe con la primera fila de `tabla.filas`: las
+     etiquetas de columna desaparecen del documento. */
+  const salida = actualizarTablasOperacionesHtml(TABLA_PRESTAMO_DOS_FILAS_ENCABEZADO, ESTUDIO_PRESTAMO);
+
+  assert.match(salida, /Fecha original en la que se pactó/, 'se perdió el encabezado real');
+  assert.match(salida, /Valor del desembolso en USD/, 'se perdió el encabezado real');
+  assert.match(salida, /Moneda pactada/, 'se perdió el encabezado real');
+  assert.match(salida, /Valor en COP en la fecha de desembolso/, 'se perdió el encabezado real');
+  assert.match(salida, /E\. A/, 'se perdió el encabezado real');
+
+  assert.ok(!salida.includes('01/01/2000'), 'sobrevivió la fila vieja de datos');
+  assert.ok(!salida.includes('222.222'), 'sobrevivió la fila vieja de datos');
+  assert.ok(!salida.includes('9% Efectivo Anual'), 'sobrevivió la fila vieja de datos');
+
+  assert.ok(salida.includes('27/10/2020'), 'no se publicó la fila nueva');
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'), 'se perdió el vinculado de la fila fusionada');
+});
+
+/* Ancla de «Transacciones Inter compañía» con la forma real de una ficha: su primera fila
+   —la que cuenta como `.columnas`— trae 2 celdas. La tabla de préstamo necesita 5. */
+const ANCLA_FICHA_2_COLUMNAS =
+  '<p><strong> Tabla 3. Transacciones Inter compañía</strong></p>' +
+  '<table><tr><th><p><strong> Compañía vinculada</strong></p></th><th><p></p></th></tr>' +
+  '<tr><th><p> Razón social</p></th><td><p> ANTERIOR</p></td></tr>' +
+  '</table>';
+
+test('actualizarTablasOperacionesHtml NO inserta la tabla de préstamo si el único ancla no tiene su forma (5 columnas)', () => {
   const avisos = [];
-  const salida = actualizarTablasOperacionesHtml(conAncla, ESTUDIO_PRESTAMO, avisos);
+  const salida = actualizarTablasOperacionesHtml(ANCLA_FICHA_2_COLUMNAS, ESTUDIO_PRESTAMO, avisos);
+
+  assert.ok(!salida.includes('Préstamo con su vinculado'), 'se insertó una tabla de forma incompatible');
+  /* El ancla queda intacta: no se pega nada encima. */
+  assert.match(salida, /Tabla 3\. Transacciones Inter compañía/);
+  assert.match(salida, /ANTERIOR/);
+
+  assert.ok(
+    avisos.some((a) => String(a).startsWith('no se pudo insertar')),
+    'falta el aviso de que no se pudo insertar'
+  );
+});
+
+/* Ancla con la misma forma que la tabla de préstamo (5 columnas en su primera fila), para
+   probar que el chequeo de forma no bloquea el caso bueno. `insertarTablaHtml` clona el
+   marcado del ancla y solo reescribe las filas de CUERPO —su fila de encabezado sobrevive
+   tal cual—, así que para comprobar que los 5 encabezados reales quedan en la tabla
+   insertada, el ancla ya los trae (no es representativa de una ficha real de
+   «Transacciones Inter compañía» —esas van a 1 o 2 columnas—, pero prueba la rama de
+   inserción exitosa con el chequeo de forma ya activo). */
+const ANCLA_5_COLUMNAS =
+  '<p><strong> Tabla 3. Transacciones Inter compañía</strong></p>' +
+  '<table>' +
+  '<tr>' +
+  '<th><p><strong> Fecha original en la que se pactó</strong></p></th>' +
+  '<th><p><strong> Valor del desembolso en USD</strong></p></th>' +
+  '<th><p><strong> Moneda pactada</strong></p></th>' +
+  '<th><p><strong> Valor en COP en la fecha de desembolso</strong></p></th>' +
+  '<th><p><strong> E. A</strong></p></th>' +
+  '</tr>' +
+  '<tr><td><p> viejo</p></td><td><p> 111</p></td><td><p> EUR</p></td>' +
+  '<td><p> 222</p></td><td><p> 9%</p></td></tr>' +
+  '</table>';
+
+test('actualizarTablasOperacionesHtml inserta la tabla de préstamo si falta y el ancla SÍ tiene su forma, con el vinculado en el título', () => {
+  const avisos = [];
+  const salida = actualizarTablasOperacionesHtml(ANCLA_5_COLUMNAS, ESTUDIO_PRESTAMO, avisos);
+
   assert.ok(salida.includes('Préstamo con su vinculado'));
   assert.ok(salida.includes('Inversiones San Jeronimo SpA'), 'el vinculado debe quedar visible en el título de la tabla insertada');
+  assert.match(salida, /Fecha original en la que se pactó/, 'faltan los encabezados reales');
+  assert.match(salida, /Valor del desembolso en USD/);
+  assert.match(salida, /Moneda pactada/);
+  assert.match(salida, /Valor en COP en la fecha de desembolso/);
+  assert.match(salida, /E\. A/);
+  assert.ok(salida.includes('27/10/2020'), 'no se publicaron los datos nuevos');
+
+  /* El «viejo» que trae el ancla original sobrevive EN EL ANCLA —insertar no la borra, la
+     tabla nueva va al lado—; lo que no puede pasar es que esa fila vieja aparezca DENTRO de
+     la tabla insertada. Se aísla lo insertado por su título, que solo aparece una vez. */
+  const iInsertada = salida.indexOf('Préstamo con su vinculado — Inversiones San Jeronimo SpA');
+  assert.ok(iInsertada > -1, 'no se encontró el título de la tabla insertada');
+  assert.ok(!salida.slice(iInsertada).includes('viejo'), 'sobrevivió la fila vieja del ancla dentro de la tabla insertada');
+
+  assert.ok(
+    avisos.some((a) => /se insertó la tabla/.test(String(a))),
+    'falta el aviso de inserción'
+  );
 });
 
 test('actualizarTablasOperacionesHtml borra la tabla de préstamo si el estudio no es de ese tipo', () => {

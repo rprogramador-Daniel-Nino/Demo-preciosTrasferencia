@@ -370,7 +370,7 @@ export function generarTablaOoxmlConVinculado(titulo, vinculado, cabeceras, fila
     + `</w:tblPr>`;
 
   // Fila fusionada con el nombre del vinculado, ocupando las colCount columnas.
-  xml += `<w:tr><w:tc><w:tcPr><w:tcW w:w="${ANCHO_TABLA_PCT}" w:type="pct"/>`
+  xml += `<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${ANCHO_TABLA_PCT}" w:type="pct"/>`
     + `<w:gridSpan w:val="${colCount}"/><w:shd w:val="clear" w:color="auto" w:fill="999999"/>`
     + `<w:vAlign w:val="center"/></w:tcPr>`
     + `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${letra}<w:color w:val="000000"/><w:b/></w:rPr>`
@@ -2660,7 +2660,7 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
   if (tienePrestamos(estudio)) {
     const t = filasPrestamoConVinculado(estudio);
     const emitirPrestamo = (b) => generarTablaOoxmlConVinculado(
-      tituloDe(b, t.nombre), t.vinculado, t.encabezados, t.filas, t.fuente
+      tituloDe(b, nombreSegunPlantilla(b, NOMBRES_TABLA_PRESTAMO)), t.vinculado, t.encabezados, t.filas, t.fuente
     );
 
     const bloquesPrestamo = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
@@ -2675,7 +2675,7 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
           const titulo = ancla.numero != null ? 'Tabla ' + (ancla.numero + 1) + '. ' + t.nombre : t.nombre;
           return generarTablaOoxmlConVinculado(titulo, t.vinculado, t.encabezados, t.filas, t.fuente);
         },
-        { excluir: NOMBRES_TABLA_PRESTAMO }
+        { excluir: NOMBRES_TABLA_ADICIONAL.concat(NOMBRES_TABLA_PRESTAMO) }
       );
       if (Array.isArray(avisos)) {
         avisos.push(insertadaPrestamo
