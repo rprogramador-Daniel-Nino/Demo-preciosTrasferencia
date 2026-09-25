@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle2, Loader2, FileCheck, ArrowRight, Building2, Globe, DollarSign, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, Loader2, FileCheck, ArrowRight, Building2, Globe, DollarSign, AlertTriangle, Trash2 } from 'lucide-react';
 import { fmt, montoOperacion } from '../utils/calculations';
 import { parseExcelOperations } from '../services/excelOperationsParser';
 import { avisoIdentificacionVinculado } from '../services/cotejoVinculado';
@@ -12,6 +12,26 @@ export default function IngestaOperaciones({ study, updateStudy }) {
   const [loadingExcel, setLoadingExcel] = useState(false);
   const [excelMsg, setExcelMsg] = useState('');
   const [fileName, setFileName] = useState('');
+
+  const actualizarPrestamo = (indice, campo, valor) => {
+    const prestamos = study.prestamos.map((p, i) => (i === indice ? { ...p, [campo]: valor } : p));
+    updateStudy({ prestamos });
+  };
+
+  const agregarPrestamo = () => {
+    const nuevo = {
+      credito: '', otorga: study.vinc || '', recibe: study.ent || '', fuente: '',
+      fechaPacto: '', valorDesembolsoMoneda: 0, moneda: '', numDesembolsos: '',
+      fechaDesembolso: '', valorCOPDesembolso: 0, saldoCOP: 0,
+      interesesMoneda: 0, interesesCOP: 0, plazo: '', renovado: '', cancelado: '',
+      tasaEA: '', tasaPactada: '', periodicidad: '', esParaisoFiscal: false,
+    };
+    updateStudy({ prestamos: [...(study.prestamos || []), nuevo] });
+  };
+
+  const eliminarPrestamo = (indice) => {
+    updateStudy({ prestamos: study.prestamos.filter((_, i) => i !== indice) });
+  };
 
   const handleExcelUpload = async (file) => {
     if (!file) return;
@@ -358,45 +378,120 @@ export default function IngestaOperaciones({ study, updateStudy }) {
       )}
 
       {/* Resumen de préstamos con vinculados — solo para estudios de tipo préstamo. Muestra
-          las 5 columnas que alimentan la Tabla "Préstamo con su vinculado" del informe
-          (fase futura, ver docs/superpowers/specs/2026-09-24-estudios-prestamo-design.md);
-          el resto de columnas que trae la hoja (saldo, intereses, plazo...) ya quedaron
-          guardadas en el estudio para cuando esa fase se construya, pero no hace falta
-          mostrarlas aquí todavía. */}
-      {study.tipo_estudio === 'prestamo' && study.prestamos && (
+          las columnas que alimentan la Tabla "Préstamo con su vinculado" del informe
+          (ver docs/superpowers/specs/2026-09-24-estudios-prestamo-design.md); el resto de
+          columnas que trae la hoja (saldo, intereses, plazo...) ya quedaron guardadas en el
+          estudio, pero no hace falta mostrarlas aquí todavía. "Otorga"/"Recibe" son editables
+          porque tablasPrestamos.js las usa para identificar el vinculado en el informe: una
+          fila agregada a mano sin ellas no podría clasificarse. */}
+      {study.tipo_estudio === 'prestamo' && (
         <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
-          <h3 className="text-md font-bold text-zinc-900 dark:text-zinc-50 border-b border-zinc-100 dark:border-zinc-800 pb-2">
-            Operaciones de Préstamo Detectadas
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-zinc-500 uppercase tracking-wider text-left">
-                  <th className="py-2 pr-4 font-semibold">Fecha original en la que se pactó</th>
-                  <th className="py-2 pr-4 font-semibold text-right">Valor del desembolso</th>
-                  <th className="py-2 pr-4 font-semibold">Moneda pactada</th>
-                  <th className="py-2 pr-4 font-semibold text-right">Valor en COP en la fecha de desembolso</th>
-                  <th className="py-2 font-semibold text-right">Tasa EA</th>
-                </tr>
-              </thead>
-              <tbody>
-                {study.prestamos.map((p, i) => (
-                  <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                    {/* Se reconstruye el Date a mediodía local y no a medianoche UTC: un
-                        string ISO de solo fecha ("2020-10-27") se interpreta como medianoche
-                        UTC, y en Colombia (UTC-5) eso muestra el día anterior. */}
-                    <td className="py-2 pr-4 text-zinc-900 dark:text-zinc-100">
-                      {p.fechaPacto ? new Date(p.fechaPacto + 'T12:00:00').toLocaleDateString('es-CO') : '—'}
-                    </td>
-                    <td className="py-2 pr-4 text-right font-mono text-zinc-900 dark:text-zinc-100">{fmt(p.valorDesembolsoMoneda)}</td>
-                    <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">{p.moneda || '—'}</td>
-                    <td className="py-2 pr-4 text-right font-mono text-zinc-900 dark:text-zinc-100">{fmt(p.valorCOPDesembolso)}</td>
-                    <td className="py-2 text-right font-mono text-zinc-900 dark:text-zinc-100">{p.tasaEA || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+            <h3 className="text-md font-bold text-zinc-900 dark:text-zinc-50">
+              Operaciones de Préstamo Detectadas
+            </h3>
+            <button
+              type="button"
+              onClick={agregarPrestamo}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#0FA3A1]/10 text-[#0FA3A1] hover:bg-[#0FA3A1]/20 transition-colors"
+            >
+              + Agregar préstamo
+            </button>
           </div>
+          {!study.prestamos || !study.prestamos.length ? (
+            <p className="text-xs text-zinc-500">
+              No hay operaciones de préstamo cargadas todavía. Suba el Excel de operaciones o agregue una fila a mano.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-zinc-500 uppercase tracking-wider text-left">
+                    <th className="py-2 pr-2 font-semibold">Otorga</th>
+                    <th className="py-2 pr-2 font-semibold">Recibe</th>
+                    <th className="py-2 pr-2 font-semibold">Fecha original en la que se pactó</th>
+                    <th className="py-2 pr-2 font-semibold text-right">Valor del desembolso</th>
+                    <th className="py-2 pr-2 font-semibold">Moneda pactada</th>
+                    <th className="py-2 pr-2 font-semibold text-right">Valor en COP en la fecha de desembolso</th>
+                    <th className="py-2 pr-2 font-semibold">Tasa EA</th>
+                    <th className="py-2 font-semibold text-center">Quitar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {study.prestamos.map((p, i) => (
+                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={p.otorga || ''}
+                          onChange={(e) => actualizarPrestamo(i, 'otorga', e.target.value)}
+                          className="w-32 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={p.recibe || ''}
+                          onChange={(e) => actualizarPrestamo(i, 'recibe', e.target.value)}
+                          className="w-32 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="date"
+                          value={p.fechaPacto || ''}
+                          onChange={(e) => actualizarPrestamo(i, 'fechaPacto', e.target.value)}
+                          className="bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="number"
+                          value={p.valorDesembolsoMoneda ?? ''}
+                          onChange={(e) => actualizarPrestamo(i, 'valorDesembolsoMoneda', e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-32 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-right font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={p.moneda || ''}
+                          onChange={(e) => actualizarPrestamo(i, 'moneda', e.target.value)}
+                          className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="number"
+                          value={p.valorCOPDesembolso ?? ''}
+                          onChange={(e) => actualizarPrestamo(i, 'valorCOPDesembolso', e.target.value === '' ? 0 : Number(e.target.value))}
+                          className="w-36 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-right font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={p.tasaEA || ''}
+                          onChange={(e) => actualizarPrestamo(i, 'tasaEA', e.target.value)}
+                          className="w-28 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                        />
+                      </td>
+                      <td className="py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => eliminarPrestamo(i)}
+                          title="Quitar esta operación"
+                          className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
