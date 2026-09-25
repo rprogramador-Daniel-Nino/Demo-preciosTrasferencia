@@ -27,6 +27,7 @@ import { filasMuestraComparables, filasRazonesRechazo } from './tablasInforme.js
 import { gruposDelAnexoC, filasResumenAnexoC, tituloDeGrupoAnexoC } from './anexoCHtml.js';
 import { RUBROS_RESULTADOS, RUBROS_BALANCE, cifraDeRubro, rubrosConDato } from './anexoBRubros.js';
 import { citaBaseDatos } from './prosaBaseDatos.js';
+import { filasPrestamoConVinculado } from './tablasPrestamos.js';
 import {
   tablaHTML, generarApartadoMundial, generarApartadoColombia, generarApartadoSectorial,
   tituloSectorial,
@@ -186,6 +187,7 @@ function anexoEeff(e) {
 export function construirHtmlSinPlantilla(estudio, analisisMercado, analisisSector) {
   const e = estudio || {};
   const year = Number(e.anio) || new Date().getFullYear();
+  const tPrestamo = filasPrestamoConVinculado(e);
 
   const partes = [
     '<h1>Informe Local de Precios de Transferencia — Borrador sin plantilla</h1>',
@@ -197,6 +199,10 @@ export function construirHtmlSinPlantilla(estudio, analisisMercado, analisisSect
     seccion('Composición accionaria', tablaDesde(filasComposicionAccionaria(e))),
     seccion('Operación analizada', tablaDesde(filasOperacionAnalizar(e))),
     seccion('Operaciones con el vinculado', tablaDesde(filasOperacionesDeIngreso(e))),
+    seccion(
+      tPrestamo ? 'Préstamo con su vinculado — ' + tPrestamo.vinculado : 'Préstamo con su vinculado',
+      tablaDesde(tPrestamo),
+    ),
     seccion('Estados financieros', tablaDesde(filasActivos(e))),
     seccion('Muestra de comparables seleccionadas', tablaDesde({
       nombre: 'Muestra de comparables seleccionadas',

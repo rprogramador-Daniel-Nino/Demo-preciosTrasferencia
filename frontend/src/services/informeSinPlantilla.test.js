@@ -183,3 +183,31 @@ test('sin eeffDatos de la comparable, avisa que falta el estado financiero en ve
   const html = construirHtmlSinPlantilla(estudio, null, null);
   assert.ok(html.includes('[PENDIENTE] Falta el estado financiero de SIN EEFF INC'));
 });
+
+/* ── Préstamo con su vinculado ── */
+
+const CONTRIBUYENTE_PRESTAMO = {
+  ent: 'Autoland SAS', nit: '900123456-7', anio: 2025, tipo_estudio: 'prestamo',
+  prestamos: [{
+    otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+    fechaPacto: '2020-10-27', valorDesembolsoMoneda: 3000000, moneda: 'USD',
+    valorCOPDesembolso: 10431000000, tasaEA: '4,540% Efectivo Anual',
+  }],
+};
+
+test('incluye la tabla de préstamo cuando el estudio es de ese tipo y trae datos', () => {
+  const html = construirHtmlSinPlantilla(CONTRIBUYENTE_PRESTAMO, null, null);
+  assert.ok(html.includes('Préstamo con su vinculado'));
+  assert.ok(html.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(html.includes('27/10/2020'));
+});
+
+test('no incluye la tabla de préstamo en un estudio estándar', () => {
+  const html = construirHtmlSinPlantilla({ ...CONTRIBUYENTE_PRESTAMO, tipo_estudio: 'estandar' }, null, null);
+  assert.ok(!html.includes('Préstamo con su vinculado'));
+});
+
+test('no incluye la tabla de préstamo en un estudio préstamo sin datos cargados', () => {
+  const html = construirHtmlSinPlantilla({ ...CONTRIBUYENTE_PRESTAMO, prestamos: [] }, null, null);
+  assert.ok(!html.includes('Préstamo con su vinculado'));
+});
