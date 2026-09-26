@@ -33,6 +33,16 @@ export default function IngestaOperaciones({ study, updateStudy }) {
     updateStudy({ prestamos: study.prestamos.filter((_, i) => i !== indice) });
   };
 
+  const actualizarMontoOperacion = (valor) => {
+    updateStudy({ monto_operacion: valor === '' ? null : Number(valor) });
+  };
+
+  const actualizarMontoOperacionAdicional = (valor) => {
+    updateStudy({
+      operacionAdicional: { ...study.operacionAdicional, monto: valor === '' ? 0 : Number(valor) },
+    });
+  };
+
   const handleExcelUpload = async (file) => {
     if (!file) return;
     setLoadingExcel(true);
@@ -261,7 +271,12 @@ export default function IngestaOperaciones({ study, updateStudy }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-1">
               <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block">Concepto de Operación</span>
-              <span className="text-base font-bold text-zinc-900 dark:text-zinc-100">{study.vinc_tipo || '—'}</span>
+              <input
+                type="text"
+                value={study.vinc_tipo || ''}
+                onChange={(e) => updateStudy({ vinc_tipo: e.target.value })}
+                className="w-full bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+              />
             </div>
 
             <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-200 dark:border-emerald-900/30 space-y-1">
@@ -269,20 +284,47 @@ export default function IngestaOperaciones({ study, updateStudy }) {
               {/* El monto de la operación, no `t_s`: este paso escribe `monto` y
                   `monto_operacion`, y `t_s` son los ingresos operacionales que llegan
                   del estado financiero. Leer t_s aquí mostraba «COP $ 0» justo al lado
-                  del mensaje de éxito que sí traía la cifra. */}
-              <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                {montoOperacion(study) === null ? '—' : 'COP $ ' + fmt(montoOperacion(study))}
-              </span>
+                  del mensaje de éxito que sí traía la cifra. Al editar se escribe siempre
+                  en `monto_operacion`, que es el campo con prioridad en `montoOperacion()`. */}
+              <div className="flex items-center gap-1">
+                <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">COP $</span>
+                <input
+                  type="number"
+                  value={montoOperacion(study) ?? ''}
+                  onChange={(e) => actualizarMontoOperacion(e.target.value)}
+                  className="w-full bg-transparent border border-emerald-200 dark:border-emerald-900/40 rounded px-2 py-1 text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
             </div>
 
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-1">
               <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block">Compañía Vinculada</span>
-              <span className="text-base font-bold text-zinc-900 dark:text-zinc-100">{study.vinc || '—'}</span>
+              <input
+                type="text"
+                value={study.vinc || ''}
+                onChange={(e) => updateStudy({ vinc: e.target.value })}
+                className="w-full bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+              />
             </div>
 
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 space-y-1">
               <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block">País e ID Fiscal</span>
-              <span className="text-base font-bold text-zinc-900 dark:text-zinc-100">{study.pais_vinc || '—'} ({study.vinc_id || '—'})</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={study.pais_vinc || ''}
+                  onChange={(e) => updateStudy({ pais_vinc: e.target.value })}
+                  placeholder="País"
+                  className="w-1/2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                />
+                <input
+                  type="text"
+                  value={study.vinc_id || ''}
+                  onChange={(e) => updateStudy({ vinc_id: e.target.value })}
+                  placeholder="ID Fiscal"
+                  className="w-1/2 bg-transparent border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1 text-base font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]"
+                />
+              </div>
             </div>
 
             {/* El monto de la sección «4. Información adicional» del formato, en el resumen y
@@ -300,9 +342,15 @@ export default function IngestaOperaciones({ study, updateStudy }) {
                 <span className="text-xs text-amber-700 dark:text-amber-500 font-semibold uppercase tracking-wider block">
                   Monto de Operación · Información Adicional (códigos 61 a 63)
                 </span>
-                <span className="text-xl font-bold text-amber-700 dark:text-amber-500 font-mono block">
-                  COP $ {fmt(montoOperacionAdicional(study))}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xl font-bold text-amber-700 dark:text-amber-500 font-mono">COP $</span>
+                  <input
+                    type="number"
+                    value={montoOperacionAdicional(study) ?? ''}
+                    onChange={(e) => actualizarMontoOperacionAdicional(e.target.value)}
+                    className="w-full bg-transparent border border-amber-200 dark:border-amber-900/40 rounded px-2 py-1 text-xl font-bold text-amber-700 dark:text-amber-500 font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
                 <span className="text-xs text-zinc-500 block">
                   {tieneOperacionAdicional(study)
                     ? `Supera el umbral de 45.000 UVT (COP $ ${fmt(umbralOperacionAdicional(study.anio))}): se declara en la tabla «Operación adicional Transacciones Intercompañía» del informe.`
