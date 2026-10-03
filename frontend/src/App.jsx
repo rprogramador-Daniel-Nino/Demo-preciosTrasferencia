@@ -39,6 +39,7 @@ import {
 /* Rescata las cifras del EEFF que se guardaron con el separador de miles como punto
    decimal, antes de que `valorDeRubro` lo corrigiera en la lectura. Ver `eeffParser.js`. */
 import { repararCifrasDelEstudio } from './services/eeffParser';
+import { cargarEstudio as cargarEstudioGastoIA, suscribir as suscribirGastoIA } from './services/gastoIA';
 
 /* Retardo del autoguardado. El estudio cambia con cada tecla y cada escritura en
    Firestore se factura y cuenta contra el límite de escrituras por documento, así que
@@ -374,6 +375,36 @@ export default function App() {
       if (vigilante.current) clearTimeout(vigilante.current);
     };
   }, [study, activeStudyId, usuario, estudioAjeno]);
+
+  /* Mismo candado que `updateStudyDeEtapa` (activeStudyId contra el sello del estudio
+     activo, ver más abajo), sin su lógica de reversión de etapas: el gasto de IA es un
+     contador pasivo, no una edición del analista, y no debe revertir la confirmación de
+     etapas posteriores. */
+  const updateStudyGastoIA = (gastoIA) => {
+    setStudy(prev => {
+      if (activeStudyId && prev[SELLO_ESTUDIO] && activeStudyId !== prev[SELLO_ESTUDIO]) return prev;
+      return { ...prev, gastoIA };
+    });
+  };
+
+  /* Siembra (o vacía) el store de gasto de IA cada vez que cambia el estudio activo:
+     abrir, cerrar o restaurar uno cambian `activeStudyId` y `study` en el mismo commit,
+     así que leer `study.gastoIA` aquí ya ve los datos del estudio correcto. */
+  useEffect(() => {
+    cargarEstudioGastoIA(activeStudyId ? study.gastoIA : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStudyId]);
+
+  /* Se resuscribe cada vez que cambia `activeStudyId`, y no una sola vez al montar: con
+     dependencias vacías, `updateStudyGastoIA` quedaba con el `activeStudyId` de aquel
+     primer render (siempre null) capturado para siempre en el cierre, y su candado
+     `if (activeStudyId && ...)` nunca se activaba — el gasto de un estudio podía
+     escribirse sobre el que estuviera abierto después. Reabrir la suscripción en cada
+     cambio hace que el cierre siempre lea el `activeStudyId` del render vigente, igual
+     que ya hace `updateStudyDeEtapa` al llamarse desde el propio render. */
+  useEffect(() => suscribirGastoIA((snapshot) => updateStudyGastoIA(snapshot)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeStudyId]);
   /* `tabInicial` existe para la restauración al arrancar: abrir un estudio a mano empieza
      por el primer paso, pero volver tras una recarga tiene que dejar al usuario en el paso
      donde estaba. */

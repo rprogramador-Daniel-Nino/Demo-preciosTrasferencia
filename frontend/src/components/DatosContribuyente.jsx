@@ -5,6 +5,7 @@ import { parseAccionistasWithGeminiOCR } from '../services/accionistasParser';
 import { mensajeAccionistas, mensajeDocumentoIdentidad } from '../services/mensajesIngesta';
 import { resolverComposicionAccionaria } from '../services/tablasContribuyente';
 import { fmt } from '../utils/calculations';
+import { registrarUsoIA } from '../services/gastoIA';
 
 export default function DatosContribuyente({ study, updateStudy }) {
   const [loadingRut, setLoadingRut] = useState(false);
@@ -49,6 +50,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
         });
 
         const data = response.data || {};
+        registrarUsoIA(tipoDoc === 'rut' ? 'Carga de RUT' : 'Carga de Cámara de Comercio', data._uso);
         const updates = {};
         if (tipoDoc === 'rut') {
           if (data.razon_social) updates.ent = data.razon_social;

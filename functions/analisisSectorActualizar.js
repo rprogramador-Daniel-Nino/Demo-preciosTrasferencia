@@ -37,8 +37,11 @@ const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
  *  reduce a una frase de sector con un llamado liviano a Gemini (sin
  *  herramienta de búsqueda). Si ese llamado falla, se recorta sin IA: sigue
  *  siendo mejor una frase corta imperfecta que la descripción completa. */
+/** @returns {Promise<{actividadBusqueda:string, uso:object|null}>} `uso` es null cuando
+ *  no hubo llamada a IA (actividad ya corta) o cuando la llamada falló y se recortó sin
+ *  IA — en ninguno de los dos casos hay tokens que cobrar. */
 async function resumirActividad(geminiApiKey, actividad) {
-  if (!necesitaResumenActividad(actividad)) return actividad;
+  if (!necesitaResumenActividad(actividad)) return { actividadBusqueda: actividad, uso: null };
   try {
     const prompt = construirPromptResumenActividad(actividad);
     const respuesta = await fetch(
@@ -55,13 +58,17 @@ async function resumirActividad(geminiApiKey, actividad) {
       throw new Error('Gemini no devolvió una respuesta usable: ' + JSON.stringify(data).slice(0, 500));
     }
     const texto = (candidato.content.parts || []).map((p) => p.text || '').join('');
-    return parsearRespuestaResumenActividad(texto);
+    return {
+      actividadBusqueda: parsearRespuestaResumenActividad(texto),
+      uso: { modelo: GEMINI_MODEL, proveedor: 'gemini', usageMetadata: data.usageMetadata },
+    };
   } catch (err) {
     console.error('No se pudo resumir la actividad con IA, se recorta sin IA:', err.message);
-    return recortarActividad(actividad);
+    return { actividadBusqueda: recortarActividad(actividad), uso: null };
   }
 }
 
+/** @returns {Promise<{datos:object, uso:object}>} */
 async function buscarDatosSector(geminiApiKey, actividad, year) {
   const prompt = construirPromptBusquedaSector(actividad, year);
   const respuesta = await fetch(
@@ -85,15 +92,19 @@ async function buscarDatosSector(geminiApiKey, actividad, year) {
      (confirmado en vivo) — webSearchQueries es el campo que sí confirma que hubo
      una búsqueda real. Ver el comentario en analisisSectorPrompts.js. */
   const webSearchQueries = (candidato.groundingMetadata && candidato.groundingMetadata.webSearchQueries) || [];
-  return parsearRespuestaBusquedaSector(texto, webSearchQueries);
+  return {
+    datos: parsearRespuestaBusquedaSector(texto, webSearchQueries),
+    uso: { modelo: GEMINI_MODEL, proveedor: 'gemini', usageMetadata: data.usageMetadata },
+  };
 }
 
 /* Con respaldo en Gemini, por lo mismo que en el análisis de mercado: esta función llama a
    Anthropic directamente y no pasa por `/api/claude`, así que se quedaba sin el fallback del
    proxy. Aquí duele más que en el cron mensual, porque esta corre por demanda: con el tope
    de uso alcanzado, la primera actividad nueva del día se quedaba sin análisis de sector. */
+/** @returns {Promise<{narrativa:object, uso:object}>} */
 async function redactarSector(claudeApiKey, geminiApiKey, datosConfiables, actividad, year) {
-  const { texto } = await redactarConFallback({
+  const { texto, modelo, proveedor, usage } = await redactarConFallback({
     prompt: construirPromptRedaccionSector(datosConfiables, actividad, year),
     claudeApiKey, geminiApiKey,
     modeloClaude: CLAUDE_MODEL, modeloGemini: GEMINI_MODEL,
@@ -105,7 +116,7 @@ async function redactarSector(claudeApiKey, geminiApiKey, datosConfiables, activ
        perdía con un 502, verificado en vivo el 2026-08-13. */
     maxTokens: 12288,
   });
-  return parsearRespuestaRedaccionSector(texto);
+  return { narrativa: parsearRespuestaRedaccionSector(texto), uso: { modelo, proveedor, usage } };
 }
 
 /** Corrida completa para una actividad y un año: busca, redacta y guarda bajo
@@ -119,8 +130,8 @@ async function actualizarAnalisisSector({ geminiApiKey, claudeApiKey, actividad,
   }
   const clave = claveActividad(actividadNormalizada);
 
-  const actividadBusqueda = await resumirActividad(geminiApiKey, actividad);
-  const datos = await buscarDatosSector(geminiApiKey, actividadBusqueda, year);
+  const { actividadBusqueda, uso: usoResumen } = await resumirActividad(geminiApiKey, actividad);
+  const { datos, uso: usoBusqueda } = await buscarDatosSector(geminiApiKey, actividadBusqueda, year);
   const datosConfiables = filtrarConfiables(datos);
   const hayAlgunDato =
     datosConfiables.datosClaveTabla.length ||
@@ -131,7 +142,7 @@ async function actualizarAnalisisSector({ geminiApiKey, claudeApiKey, actividad,
     throw new Error('Ningún dato del sector trajo confirmación de búsqueda esta corrida.');
   }
 
-  const narrativa = await redactarSector(claudeApiKey, geminiApiKey, datosConfiables, actividad, year);
+  const { narrativa, uso: usoRedaccion } = await redactarSector(claudeApiKey, geminiApiKey, datosConfiables, actividad, year);
 
   const ahora = Timestamp.now();
   const entrada = armarEntradaAnio({ datosVerificados: datosConfiables, narrativa, ahora });
@@ -143,7 +154,15 @@ async function actualizarAnalisisSector({ geminiApiKey, claudeApiKey, actividad,
     porAnio: { [String(year)]: entrada },
   }, { merge: true });
 
-  return { clave, entrada };
+  /* Para el contador de gasto en IA del frontend (ver frontend/src/services/gastoIA.js):
+     esta corrida hace hasta 3 llamadas a IA server-a-server que el frontend nunca ve
+     directamente, así que su costo viaja aparte en `_uso`. */
+  const usos = [];
+  if (usoResumen) usos.push({ etapa: 'resumen actividad', ...usoResumen });
+  usos.push({ etapa: 'búsqueda sector', ...usoBusqueda });
+  usos.push({ etapa: 'redacción', ...usoRedaccion });
+
+  return { clave, entrada, _uso: usos };
 }
 
 module.exports = { actualizarAnalisisSector };

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { registrarUsoIA } from './gastoIA.js';
 
 /* Antes aquí estaba claude-3-5-haiku-20241022, retirado por Anthropic el 19-02-2026 y
    respondiendo 404: la redacción de descripciones fallaba en toda comparable. */
@@ -52,6 +53,7 @@ export async function redactarDescripcionActividad(nombre, descCruda) {
       max_tokens: 500,
       messages: [{ role: 'user', content: promptRedaccion(nombre, cruda) }],
     });
+    registrarUsoIA('Traducción de actividad de comparables', response.data);
     const texto = textoDeRespuesta(response.data);
     return texto || null;
   } catch (err) {

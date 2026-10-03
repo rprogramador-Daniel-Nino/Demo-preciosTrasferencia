@@ -26,7 +26,10 @@ function fetchFalso(respuestas) {
 
 const RESPUESTA_CLAUDE = {
   ok: true, status: 200,
-  datos: { content: [{ type: 'text', text: '{"mundial":"…","colombia":"…"}' }] },
+  datos: {
+    content: [{ type: 'text', text: '{"mundial":"…","colombia":"…"}' }],
+    usage: { input_tokens: 300, output_tokens: 150 },
+  },
 };
 
 /* El error exacto que devolvió producción el 2026-08-11. */
@@ -60,6 +63,14 @@ test('cuando Claude atiende, no se llama a Gemini', async () => {
   assert.strictEqual(pedir.llamadas[0].url, URL_ANTHROPIC);
 });
 
+test('cuando Claude atiende, el retorno trae el modelo y el uso de tokens', async () => {
+  const pedir = fetchFalso({ anthropic: RESPUESTA_CLAUDE });
+  const r = await redactarConFallback({ ...OPCIONES, fetchImpl: pedir });
+
+  assert.strictEqual(r.modelo, OPCIONES.modeloClaude);
+  assert.deepStrictEqual(r.usage, { input_tokens: 300, output_tokens: 150 });
+});
+
 test('con el tope de uso alcanzado redacta Gemini', async () => {
   /* Es el caso que dejaba sin análisis de sector a cualquier actividad nueva: estas
      funciones llaman a Anthropic directo y no pasaban por el fallback del proxy. */
@@ -70,6 +81,14 @@ test('con el tope de uso alcanzado redacta Gemini', async () => {
   assert.match(r.texto, /"mundial":"g"/, 'devuelve el texto de Gemini');
   assert.strictEqual(pedir.llamadas.length, 2, 'se intentó Claude y después Gemini');
   assert.ok(pedir.llamadas[1].url.includes('gemini-3.5-flash'));
+});
+
+test('el respaldo con Gemini devuelve el modelo de Gemini y su uso de tokens', async () => {
+  const pedir = fetchFalso({ anthropic: TOPE_ALCANZADO, gemini: RESPUESTA_GEMINI });
+  const r = await redactarConFallback({ ...OPCIONES, fetchImpl: pedir });
+
+  assert.strictEqual(r.modelo, OPCIONES.modeloGemini);
+  assert.deepStrictEqual(r.usage, { input_tokens: 10, output_tokens: 20 });
 });
 
 test('el respaldo desactiva el pensamiento de Gemini', async () => {

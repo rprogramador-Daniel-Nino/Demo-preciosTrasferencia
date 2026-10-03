@@ -3,6 +3,7 @@ import {
   Sun, Moon, FileText, BarChart3, ShieldAlert, FileDown, Menu, X, BookOpen, LogOut, Lock
 } from 'lucide-react';
 import { etapaAlcanzable } from '../services/flujoEstudio';
+import GastoIABadge from './GastoIABadge';
 
 export default function Layout({
   children, activeTab, setActiveTab, cerrarSesion, mostrarSidebar,
@@ -129,6 +130,7 @@ export default function Layout({
                 {finalizado ? '✓ Finalizado' : 'Finalizar estudio'}
               </button>
             )}
+            {mostrarSidebar && <GastoIABadge />}
             {/* Theme Toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}

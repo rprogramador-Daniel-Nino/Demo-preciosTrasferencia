@@ -23,6 +23,7 @@ import {
 } from '../services/firestoreRepo';
 import { leerCriteriosScreeningDeArchivo } from '../services/comparablesEngine.js';
 import { necesitaRedaccion, redactarNarrativaMacroEnVivo } from '../services/analisisMercadoRedaccion';
+import { registrarUsoIA } from '../services/gastoIA';
 import RevisorDeMarcas from './RevisorDeMarcas.jsx';
 import {
   proponerMarcas, aplicarMarcas,
@@ -117,6 +118,7 @@ function avisosDeAvisosTablas(avisosTablas, origen) {
    generación bajo demanda y para regenerar a mano una corrida vieja. */
 async function pedirAnalisisSector(actividad, year) {
   const resp = await axios.post(URL_ANALISIS_SECTOR, { actividad, year });
+  (resp.data._uso || []).forEach((u) => registrarUsoIA('Análisis del sector: ' + u.etapa, u));
   return { porAnio: { [String(year)]: resp.data.entrada } };
 }
 

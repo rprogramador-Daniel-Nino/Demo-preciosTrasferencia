@@ -280,7 +280,20 @@ const handlerExtraerRut = async (req, res) => {
     if (upstream.ok && texto) {
       const cleanJsonStr = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(cleanJsonStr);
-      return res.json(parsed);
+      return res.json({
+        ...parsed,
+        /* Namespaced para no chocar con los campos reales extraídos del RUT. Misma
+           forma que `usage` de /api/claude, para que el frontend reutilice un solo
+           extractor de uso al registrar el gasto de IA. */
+        _uso: {
+          modelo: GEMINI_MODEL_DEFAULT,
+          proveedor: 'gemini',
+          usage: {
+            input_tokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
+            output_tokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
+          },
+        },
+      });
     }
     res.status(upstream.status).json({ error: 'No se pudo extraer el RUT', raw: data });
   } catch (err) {
@@ -345,7 +358,17 @@ const handlerExtraerCamara = async (req, res) => {
     if (upstream.ok && texto) {
       const cleanJsonStr = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(cleanJsonStr);
-      return res.json(parsed);
+      return res.json({
+        ...parsed,
+        _uso: {
+          modelo: GEMINI_MODEL_DEFAULT,
+          proveedor: 'gemini',
+          usage: {
+            input_tokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
+            output_tokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
+          },
+        },
+      });
     }
     res.status(upstream.status).json({ error: 'No se pudo extraer la Cámara de Comercio', raw: data });
   } catch (err) {

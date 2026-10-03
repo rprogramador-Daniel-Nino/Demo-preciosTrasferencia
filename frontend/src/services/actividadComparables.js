@@ -31,6 +31,7 @@
 
 import axios from 'axios';
 import { extraerJSON, claveDeCruce } from './comparablesEngine.js';
+import { registrarUsoIA } from './gastoIA.js';
 
 /* Sonnet y no Haiku, que es el de por defecto del reparto por costo. Esto no es redacción sino
    RECUERDO de un hecho —a qué se dedica una compañía que cotiza en Bombay o en Fráncfort— y lo
@@ -156,6 +157,7 @@ export async function buscarActividadesPorRazonSocial(nombres) {
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
+    registrarUsoIA('Actividad Económica Detectada', response.data);
     const bloques = (response.data && response.data.content) || [];
     return leerRespuestaActividades(bloques.map((b) => b.text || '').join(''), nombres);
   } catch (err) {

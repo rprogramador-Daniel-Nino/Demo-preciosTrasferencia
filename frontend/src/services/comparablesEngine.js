@@ -5,6 +5,13 @@ import {
   esHolding, tieneSemanticaHolding, holdingSospecha, esControlada, participacionMaxima,
 } from './filtrosComparablesPatch.js';
 import { perfilFuncionalBilingue, PERFILES_DETERMINADOS } from './perfilFuncionalPatch.js';
+import { registrarUsoIA } from './gastoIA.js';
+
+/* `etiqueta` de `consultarGemini` (más abajo) es hoy solo un prefijo de log; esto la
+   traduce al nombre de operación que ve el contador de gasto en IA del header. Un valor
+   que no está aquí (o el valor por defecto, 'curación IA') cae en Motor de Selección
+   Automática, que es su llamador real. */
+const ETIQUETAS_GASTO_IA = { marcado: 'Subir otra plantilla Word' };
 
 /**
  * Normaliza nombres de empresas para cruces de continuidad
@@ -1933,6 +1940,7 @@ export async function consultarGemini(prompt, opciones = {}) {
         model: modelo,
         contents: [{ parts: [{ text: prompt }] }],
       });
+      registrarUsoIA(ETIQUETAS_GASTO_IA[etiqueta] || 'Motor de Selección Automática', respuesta.data, modelo);
       /* todas las partes, no solo la primera: los modelos parten la respuesta */
       const texto = (respuesta.data?.candidates?.[0]?.content?.parts || [])
         .map(p => p.text || '').join('');

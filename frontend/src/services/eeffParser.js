@@ -4,6 +4,7 @@ import { num } from '../utils/calculations.js';
 import { extraerJSON } from './comparablesEngine.js';
 import { extraerTextoPdf } from './eeffTextoPdf.js';
 import { extraerEstructuraPdf, textoAnotado } from './eeffColumnas.js';
+import { registrarUsoIA } from './gastoIA.js';
 
 /* Dos lecturas del PDF nativo conviven en este archivo y hay que saber cuál es cuál:
    `extraerTextoEstructuradoPdf` (de aquí abajo) lee las FICHAS DE LAS COMPARABLES, que
@@ -252,7 +253,9 @@ export async function postGeminiWithRetry(payload, maxRetries = 3) {
   let ultimo;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await axios.post('/api/gemini', payload);
+      const response = await axios.post('/api/gemini', payload);
+      registrarUsoIA('Ingesta de EEFF', response.data, payload.model);
+      return response;
     } catch (err) {
       ultimo = err;
       const status = err && err.response ? err.response.status : undefined;

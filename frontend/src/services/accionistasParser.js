@@ -2,6 +2,7 @@ import axios from 'axios';
 import mammoth from 'mammoth';
 import { extraerJSON } from './comparablesEngine.js';
 import { extraerTextoEstructuradoPdf } from './eeffParser.js';
+import { registrarUsoIA } from './gastoIA.js';
 
 const ACCIONISTAS_PROMPT = `Eres un contador público y auditor. Lee este certificado de composición accionaria y extrae la lista de todos los accionistas en formato JSON estricto:
 
@@ -64,6 +65,7 @@ async function postGeminiWithRetry(payload, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await axios.post('/api/gemini', payload);
+      registrarUsoIA('Certificado de Composición Accionaria', response.data, payload.model);
       return response;
     } catch (err) {
       const status = err.response && err.response.status;

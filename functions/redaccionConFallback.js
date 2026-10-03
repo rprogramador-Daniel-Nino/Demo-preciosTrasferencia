@@ -51,7 +51,7 @@ function textoDeRespuesta(cuerpo) {
  * @param {number} [opciones.maxTokens]     4096 por defecto, como los dos llamadores.
  * @param {number} [opciones.corteMs]       corte de la llamada de respaldo.
  * @param {Function} [opciones.fetchImpl]   para poder probar sin red.
- * @returns {Promise<{texto:string, proveedor:string}>}
+ * @returns {Promise<{texto:string, proveedor:string, modelo:string, usage:{input_tokens:number, output_tokens:number}}>}
  * @throws {Error} si Claude no pudo y Gemini tampoco: con el mensaje de Anthropic.
  */
 async function redactarConFallback({
@@ -77,7 +77,10 @@ async function redactarConFallback({
   const datos = await respuesta.json();
 
   if (respuesta.ok && datos && Array.isArray(datos.content) && datos.content.length) {
-    return { texto: textoDeRespuesta(datos), proveedor: 'anthropic' };
+    return {
+      texto: textoDeRespuesta(datos), proveedor: 'anthropic', modelo: modeloClaude,
+      usage: datos.usage || { input_tokens: 0, output_tokens: 0 },
+    };
   }
 
   /* Mensaje del error de Anthropic, para explicar el fallo con lo que él dijo. */
@@ -116,7 +119,10 @@ async function redactarConFallback({
   if (!traducida) {
     throw new Error('Claude no pudo atender (' + detalle() + ') y el respaldo con Gemini tampoco redactó.');
   }
-  return { texto: textoDeRespuesta(traducida), proveedor: PROVEEDOR_GEMINI };
+  return {
+    texto: textoDeRespuesta(traducida), proveedor: PROVEEDOR_GEMINI, modelo: modeloGemini,
+    usage: traducida.usage || { input_tokens: 0, output_tokens: 0 },
+  };
 }
 
 module.exports = { redactarConFallback, textoDeRespuesta, URL_ANTHROPIC, URL_GEMINI };

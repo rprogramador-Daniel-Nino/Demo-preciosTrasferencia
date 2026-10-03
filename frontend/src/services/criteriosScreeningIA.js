@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { extraerJSON } from './comparablesEngine.js';
 import { residuoDeCriterios } from './criteriosScreeningEs.js';
+import { registrarUsoIA } from './gastoIA.js';
 
 /* ══════════════ Respaldo de IA para los criterios de búsqueda ══════════════
 
@@ -93,6 +94,7 @@ export async function traducirCriteriosScreening(criterios) {
       max_tokens: 2000,
       messages: [{ role: 'user', content: promptTraduccion(pendientes) }],
     });
+    registrarUsoIA('Traducción de actividad de comparables', response.data);
     /* `extraerJSON` y no `JSON.parse`: el modelo envuelve el objeto en prosa o en cercas
        de markdown con frecuencia (ver CLAUDE.md). */
     const objeto = extraerJSON(textoDeRespuesta(response.data));
