@@ -89,27 +89,41 @@ export function quitarTablasPrestamoColumnasHtml(html) {
 }
 
 /**
- * Inserta la Tabla 4 y la Tabla 13 con los datos frescos del estudio, ancladas justo
- * después de la ficha "Transacciones Inter compañía" —ya refrescada por
- * `actualizarTablasOperacionesHtml`, que corre antes—. Sin `estudio.prestamos` no hace
- * nada: ya se quitaron las que hubiera.
+ * Inserta la Tabla 4 y la Tabla 13 con los datos frescos del estudio. Sin `estudio.prestamos`
+ * no hace nada: ya se quitaron las que hubiera.
+ *
+ * Regla confirmada con el usuario: estas dos tablas se crean SIEMPRE que el estudio es de
+ * tipo préstamo, nunca se degrada a un simple aviso de "no encontrada" como sí le pasa a la
+ * tabla de la Fase 2 cuando falta su ancla. Misma cadena de tres anclas que la ruta .docx
+ * (`docxRellenoPrestamoColumnas.js`, ver ahí el porqué completo): ficha genérica →
+ * "Préstamo con su vinculado" → el final del documento como último recurso, siempre con
+ * aviso de que se revise la ubicación cuando no se usó la primera opción.
  */
 export function insertarTablasPrestamoColumnasHtml(html, estudio, avisos) {
   let out = String(html || '');
   if (!tienePrestamos(estudio)) return out;
 
-  const ancla = localizarTablaHtml(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
+  let ancla = localizarTablaHtml(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
+  let descripcionAncla = 'junto a «Transacciones Inter compañía»';
   if (!ancla) {
-    if (Array.isArray(avisos)) {
-      avisos.push(NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS);
-      avisos.push(NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS);
-    }
-    return out;
+    ancla = localizarTablaHtml(out, NOMBRES_TABLA_PRESTAMO);
+    descripcionAncla = 'junto a «Préstamo con su vinculado», porque la plantilla no trae '
+      + '«Transacciones Inter compañía»: revise la ubicación';
   }
 
-  let cursor = finDeFuenteTrasPosicionHtml(out, ancla.fin);
-  const numeroAncla = numeroDeTabla(ancla.titulo);
-  let numero = numeroAncla != null ? numeroAncla : null;
+  let cursor;
+  let numero;
+  if (ancla) {
+    cursor = finDeFuenteTrasPosicionHtml(out, ancla.fin);
+    const numeroAncla = numeroDeTabla(ancla.titulo);
+    numero = numeroAncla != null ? numeroAncla : null;
+  } else {
+    cursor = out.length;
+    numero = null;
+    descripcionAncla = 'al final del documento, porque la plantilla no trae ni '
+      + '«Transacciones Inter compañía» ni «Préstamo con su vinculado»: revise la ubicación '
+      + 'antes de radicar';
+  }
 
   [
     { nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS, tabla: filasTablaTransaccionesPrestamos(estudio) },
@@ -124,7 +138,7 @@ export function insertarTablasPrestamoColumnasHtml(html, estudio, avisos) {
     out = out.slice(0, cursor) + bloque + out.slice(cursor);
     cursor += bloque.length;
     if (Array.isArray(avisos)) {
-      avisos.push('se insertó la tabla «' + nombre + '» junto a «Transacciones Inter compañía».');
+      avisos.push('se insertó la tabla «' + nombre + '» ' + descripcionAncla + '.');
     }
   });
 

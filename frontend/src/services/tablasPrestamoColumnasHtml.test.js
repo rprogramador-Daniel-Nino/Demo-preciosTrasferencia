@@ -93,13 +93,31 @@ test('insertarTablasPrestamoColumnasHtml: inserta las dos tablas sin colspan, co
   assert.ok(avisos.some((a) => a.includes('se insertó la tabla')));
 });
 
-test('insertarTablasPrestamoColumnasHtml: sin ancla, avisa en vez de insertar a ciegas', () => {
+test('insertarTablasPrestamoColumnasHtml: sin la ficha genérica, ancla junto a "Préstamo con su vinculado"', () => {
+  const html =
+    '<p><strong>Préstamo con su vinculado</strong></p>'
+    + '<table><tr><th><p>x</p></th></tr></table>'
+    + '<p>FUENTE: de la Fase 2.</p>'
+    + '<p>Prosa que sigue.</p>';
+  const avisos = [];
+  const salida = insertarTablasPrestamoColumnasHtml(html, ESTUDIO_PRESTAMO, avisos);
+  assert.match(salida, /Transacciones Intercompañías/, 'la tabla se crea igual, sin la ficha genérica');
+  assert.match(salida, /Histórico de la deuda intereses sobre Préstamos \(42\)/);
+  const iFuente = salida.indexOf('FUENTE: de la Fase 2.');
+  const iTabla4 = salida.indexOf('Transacciones Intercompañías');
+  const iProsa = salida.indexOf('Prosa que sigue.');
+  assert.ok(iFuente < iTabla4 && iTabla4 < iProsa, 'se ancla después de la tabla de la Fase 2');
+  assert.ok(avisos.some((a) => a.includes('revise la ubicación')));
+});
+
+test('insertarTablasPrestamoColumnasHtml: sin ninguna ancla, igual crea las tablas al final del documento', () => {
   const html = '<p>Nada que sirva de ancla.</p>';
   const avisos = [];
   const salida = insertarTablasPrestamoColumnasHtml(html, ESTUDIO_PRESTAMO, avisos);
-  assert.strictEqual(salida, html);
-  assert.ok(avisos.includes(NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS));
-  assert.ok(avisos.includes(NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS));
+  assert.match(salida, /Transacciones Intercompañías/, 'la regla es crear siempre, nunca solo avisar');
+  assert.match(salida, /Histórico de la deuda intereses sobre Préstamos \(42\)/);
+  assert.ok(salida.startsWith(html), 'lo que ya había en el documento no se mueve ni se pierde');
+  assert.ok(avisos.some((a) => a.includes('revise la ubicación antes de radicar')));
 });
 
 /* ══════ El guardián: la secuencia completa no deja que la Tabla 4 pise a la ficha genérica ══════ */

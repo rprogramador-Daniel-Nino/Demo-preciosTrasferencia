@@ -116,13 +116,32 @@ test('insertarTablasPrestamoColumnasOoxml: inserta las dos tablas junto a la fic
   assert.ok(avisos.some((a) => a.includes('se insertó la tabla')));
 });
 
-test('insertarTablasPrestamoColumnasOoxml: sin ancla, avisa en vez de insertar a ciegas', () => {
-  const xml = '<w:p><w:t>Nada que sirva de ancla.</w:t></w:p>';
+test('insertarTablasPrestamoColumnasOoxml: sin la ficha genérica, ancla junto a "Préstamo con su vinculado"', () => {
+  const xml =
+    '<w:p><w:t>Préstamo con su vinculado</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>x</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>FUENTE: de la Fase 2.</w:t></w:p>'
+    + '<w:p><w:t>Prosa que sigue.</w:t></w:p>';
   const avisos = [];
   const salida = insertarTablasPrestamoColumnasOoxml(xml, ESTUDIO_PRESTAMO, avisos);
-  assert.strictEqual(salida, xml);
-  assert.ok(avisos.includes(NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS));
-  assert.ok(avisos.includes(NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS));
+  assert.match(salida, /Transacciones Intercompañías/, 'la tabla se crea igual, sin la ficha genérica');
+  assert.match(salida, /Histórico de la deuda intereses sobre Préstamos \(42\)/);
+  const iFuente = salida.indexOf('FUENTE: de la Fase 2.');
+  const iTabla4 = salida.indexOf('Transacciones Intercompañías');
+  const iProsa = salida.indexOf('Prosa que sigue.');
+  assert.ok(iFuente < iTabla4 && iTabla4 < iProsa, 'se ancla después de la tabla de la Fase 2');
+  assert.ok(avisos.some((a) => a.includes('revise la ubicación')));
+});
+
+test('insertarTablasPrestamoColumnasOoxml: sin ninguna ancla, igual crea las tablas al final del documento', () => {
+  const xml = '<w:p><w:t>Nada que sirva de ancla.</w:t></w:p><w:sectPr/>';
+  const avisos = [];
+  const salida = insertarTablasPrestamoColumnasOoxml(xml, ESTUDIO_PRESTAMO, avisos);
+  assert.match(salida, /Transacciones Intercompañías/, 'la regla es crear siempre, nunca solo avisar');
+  assert.match(salida, /Histórico de la deuda intereses sobre Préstamos \(42\)/);
+  assert.ok(salida.indexOf('Transacciones Intercompañías') < salida.indexOf('<w:sectPr'),
+    'se inserta antes del cierre de sección, no después');
+  assert.ok(avisos.some((a) => a.includes('revise la ubicación antes de radicar')));
 });
 
 test('insertarTablasPrestamoColumnasOoxml: avisa si el estudio mezcla más de un vinculado', () => {

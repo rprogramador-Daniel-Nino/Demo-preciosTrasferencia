@@ -188,27 +188,58 @@ export function quitarTablasPrestamoColumnasOoxml(xml) {
   return out;
 }
 
+/* Dónde termina el cuerpo del documento: justo antes del `<w:sectPr>` de la última sección,
+   o antes de `</w:body>` si no hay uno. Mismo criterio que usa `parrafoHermanoSiguiente`
+   (`docxRelleno.js`) para reconocer el final del cuerpo. Es el ancla de ÚLTIMO recurso —
+   nunca el objetivo—, para que la regla de "crear siempre, nunca solo avisar" se cumpla
+   incluso en una plantilla que no trae ni la ficha genérica ni la tabla de la Fase 2. */
+function finDelCuerpoOoxml(xml) {
+  const iSect = xml.indexOf('<w:sectPr');
+  if (iSect >= 0) return iSect;
+  const iBody = xml.indexOf('</w:body>');
+  return iBody >= 0 ? iBody : xml.length;
+}
+
 /**
- * Inserta la Tabla 4 y la Tabla 13 con los datos frescos del estudio, ancladas justo
- * después de la ficha "Transacciones Inter compañía" —ya refrescada por
- * `actualizarTablasOperacionesOoxml`, que corre antes—. Sin `estudio.prestamos` no hace
- * nada: ya se quitaron las que hubiera, y no hay nada que insertar.
+ * Inserta la Tabla 4 y la Tabla 13 con los datos frescos del estudio. Sin `estudio.prestamos`
+ * no hace nada: ya se quitaron las que hubiera, y no hay nada que insertar.
+ *
+ * Regla confirmada con el usuario: estas dos tablas se crean SIEMPRE que el estudio es de
+ * tipo préstamo, nunca se degrada a un simple aviso de "no encontrada" como sí le pasa a la
+ * tabla de la Fase 2 cuando falta su ancla. Por eso la búsqueda de dónde anclarlas es una
+ * cadena de tres intentos, de más a menos ideal:
+ *   1. junto a la ficha "Transacciones Inter compañía" (el lugar natural, el mismo que usa
+ *      la Fase 2) — el caso normal.
+ *   2. junto a "Préstamo con su vinculado" (Fase 2): no todas las plantillas traen la ficha
+ *      genérica, pero un estudio de tipo préstamo que ya pasó por el informe suele traer esa.
+ *   3. al final del cuerpo del documento, si ninguna de las dos anclas existe — un informe
+ *      armado a mano puede no traer ninguna. Se avisa para que se revise la ubicación antes
+ *      de radicar, pero la tabla SALE con los datos del estudio; nunca se queda sin crear.
  */
 export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
   let out = String(xml || '');
   if (!tienePrestamos(estudio)) return out;
 
-  const ancla = localizarBloqueTabla(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
+  let ancla = localizarBloqueTabla(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
+  let descripcionAncla = 'junto a «Transacciones Inter compañía»';
   if (!ancla) {
-    if (Array.isArray(avisos)) {
-      avisos.push(NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS);
-      avisos.push(NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS);
-    }
-    return out;
+    ancla = localizarBloqueTabla(out, NOMBRES_TABLA_PRESTAMO);
+    descripcionAncla = 'junto a «Préstamo con su vinculado», porque la plantilla no trae '
+      + '«Transacciones Inter compañía»: revise la ubicación';
   }
 
-  let cursor = finDeFuenteTrasPosicion(out, ancla.fin);
-  let numero = ancla.numero != null ? ancla.numero : null;
+  let cursor;
+  let numero;
+  if (ancla) {
+    cursor = finDeFuenteTrasPosicion(out, ancla.fin);
+    numero = ancla.numero != null ? ancla.numero : null;
+  } else {
+    cursor = finDelCuerpoOoxml(out);
+    numero = null;
+    descripcionAncla = 'al final del documento, porque la plantilla no trae ni '
+      + '«Transacciones Inter compañía» ni «Préstamo con su vinculado»: revise la ubicación '
+      + 'antes de radicar';
+  }
 
   [
     { nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS, tabla: filasTablaTransaccionesPrestamos(estudio) },
@@ -222,7 +253,7 @@ export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
     out = out.slice(0, cursor) + ooxml + out.slice(cursor);
     cursor += ooxml.length;
     if (Array.isArray(avisos)) {
-      avisos.push('se insertó la tabla «' + nombre + '» junto a «Transacciones Inter compañía».');
+      avisos.push('se insertó la tabla «' + nombre + '» ' + descripcionAncla + '.');
     }
   });
 
