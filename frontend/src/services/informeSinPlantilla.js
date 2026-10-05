@@ -28,6 +28,12 @@ import { gruposDelAnexoC, filasResumenAnexoC, tituloDeGrupoAnexoC } from './anex
 import { RUBROS_RESULTADOS, RUBROS_BALANCE, cifraDeRubro, rubrosConDato } from './anexoBRubros.js';
 import { citaBaseDatos } from './prosaBaseDatos.js';
 import { filasPrestamoConVinculado } from './tablasPrestamos.js';
+/* Fase 3 de los estudios tipo préstamo: archivo nuevo, no toca nada de este ni de
+   `tablasPrestamos.js`. `aMatrizPlana` ya entrega `{titulo, encabezados, filas, fuente}`,
+   la misma forma que espera `tablaDesde` — ninguna conversión adicional hace falta aquí. */
+import {
+  filasTablaTransaccionesPrestamos, filasTablaHistoricoDeudaPrestamos, aMatrizPlana,
+} from './tablasPrestamoColumnas.js';
 import {
   tablaHTML, generarApartadoMundial, generarApartadoColombia, generarApartadoSectorial,
   tituloSectorial,
@@ -203,6 +209,8 @@ export function construirHtmlSinPlantilla(estudio, analisisMercado, analisisSect
       tPrestamo ? 'Préstamo con su vinculado — ' + tPrestamo.vinculado : 'Préstamo con su vinculado',
       tablaDesde(tPrestamo),
     ),
+    seccion('Transacciones Intercompañías', tablaDesde(aMatrizPlana(filasTablaTransaccionesPrestamos(e)))),
+    seccion('Histórico de la deuda', tablaDesde(aMatrizPlana(filasTablaHistoricoDeudaPrestamos(e)))),
     seccion('Estados financieros', tablaDesde(filasActivos(e))),
     seccion('Muestra de comparables seleccionadas', tablaDesde({
       nombre: 'Muestra de comparables seleccionadas',

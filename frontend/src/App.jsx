@@ -39,7 +39,10 @@ import {
 /* Rescata las cifras del EEFF que se guardaron con el separador de miles como punto
    decimal, antes de que `valorDeRubro` lo corrigiera en la lectura. Ver `eeffParser.js`. */
 import { repararCifrasDelEstudio } from './services/eeffParser';
-import { cargarEstudio as cargarEstudioGastoIA, suscribir as suscribirGastoIA } from './services/gastoIA';
+import {
+  cargarEstudio as cargarEstudioGastoIA, suscribir as suscribirGastoIA,
+  obtenerEstado as obtenerEstadoGastoIA,
+} from './services/gastoIA';
 
 /* Retardo del autoguardado. El estudio cambia con cada tecla y cada escritura en
    Firestore se factura y cuenta contra el límite de escrituras por documento, así que
@@ -402,7 +405,14 @@ export default function App() {
      escribirse sobre el que estuviera abierto después. Reabrir la suscripción en cada
      cambio hace que el cierre siempre lea el `activeStudyId` del render vigente, igual
      que ya hace `updateStudyDeEtapa` al llamarse desde el propio render. */
-  useEffect(() => suscribirGastoIA((snapshot) => updateStudyGastoIA(snapshot)),
+  /* El oyente NO recibe el estado como argumento —`suscribir` solo avisa que cambió,
+     como cualquier store externo de React (useSyncExternalStore ignora ese argumento y
+     vuelve a leer)—, así que hay que pedirlo con `obtenerEstadoGastoIA()`. Pasarlo por
+     el argumento del oyente dejaba `gastoIA` en `undefined` en cada registro, y
+     Firestore rechazaba el guardado del estudio entero («Unsupported field value:
+     undefined (found in field datos.gastoIA)»), verificado en producción el
+     2026-10-03. */
+  useEffect(() => suscribirGastoIA(() => updateStudyGastoIA(obtenerEstadoGastoIA())),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeStudyId]);
   /* `tabInicial` existe para la restauración al arrancar: abrir un estudio a mano empieza

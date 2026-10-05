@@ -14,6 +14,12 @@ import { actualizarProsaTablas } from './prosaTablasInforme.js';
 import { actualizarProsaBaseDatos } from './prosaBaseDatos.js';
 import { crearNumeradorDeNotasHtml } from './notasAlPieHtml.js';
 import { actualizarTablasOperacionesHtml } from './tablasOperacionesHtml.js';
+/* Fase 3 de los estudios tipo préstamo: archivo nuevo, no toca nada de este. Ver su cabecera
+   para el porqué del orden quitar-antes/insertar-después alrededor de
+   `actualizarTablasOperacionesHtml`, más abajo. */
+import {
+  quitarTablasPrestamoColumnasHtml, insertarTablasPrestamoColumnasHtml,
+} from './tablasPrestamoColumnasHtml.js';
 import { actualizarAnexoBHtml } from './anexoBHtml.js';
 import { actualizarAnexoCHtml } from './anexoCHtml.js';
 import { tieneComposicionAccionariaPropia } from './tablasContribuyente.js';
@@ -71,7 +77,12 @@ export function renderizar(htmlMarcado, estudio, recursos = [], opciones = {}) {
      del motor: sus celdas no corresponden a ningún campo del vocabulario, así que el
      marcado no las alcanza y se radicaban con el concepto, el vinculado, el país y el
      monto del cliente anterior. */
+  /* Quitar ANTES de refrescar la ficha genérica, e insertar DESPUÉS: el título real de la
+     Tabla 4 contiene el nombre registrado de "Transacciones Inter compañía", y esa función no
+     la excluye al buscar sus dos apariciones. Ver `tablasPrestamoColumnasHtml.js`. */
+  html = quitarTablasPrestamoColumnasHtml(html);
   html = actualizarTablasOperacionesHtml(html, estudio, avisosTablas);
+  html = insertarTablasPrestamoColumnasHtml(html, estudio, avisosTablas);
   /* Las fuentes de la Sección III se citan como notas —número al final de la frase y referencia
      debajo, en formato bibliográfico—, no como un párrafo «FUENTE:» con las URL crudas en el
      cuerpo del informe (2026-08-20). El numerador es uno solo para toda la ruta: la numeración

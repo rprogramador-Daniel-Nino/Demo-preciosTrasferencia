@@ -211,3 +211,51 @@ test('no incluye la tabla de préstamo en un estudio préstamo sin datos cargado
   const html = construirHtmlSinPlantilla({ ...CONTRIBUYENTE_PRESTAMO, prestamos: [] }, null, null);
   assert.ok(!html.includes('Préstamo con su vinculado'));
 });
+
+/* ── Fase 3: Transacciones Intercompañías / Histórico de la deuda (préstamos como columnas) ── */
+
+const CONTRIBUYENTE_PRESTAMO_COLUMNAS = {
+  ...CONTRIBUYENTE_PRESTAMO,
+  vinc: 'Inversiones San Jeronimo SpA', vinc_id: '76.421.180-4', pais_vinc: 'Chile',
+  tipo_vinculacion: 'Articulo 260-1 E.T – Literal 1',
+  prestamos: [
+    {
+      otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+      fechaDesembolso: '2020-10-27', valorCOPDesembolso: 10431000000,
+      interesesCOP: 545267665, tasaEA: '4,540% E.A.', periodicidad: '12 meses',
+    },
+    {
+      otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+      fechaDesembolso: '2022-07-07', valorCOPDesembolso: 8822000000,
+      interesesCOP: 480413482, tasaEA: '6,000% E.A.', periodicidad: '6 meses',
+    },
+  ],
+};
+
+test('incluye las dos tablas de columnas-por-préstamo con los datos de Autoland', () => {
+  const html = construirHtmlSinPlantilla(CONTRIBUYENTE_PRESTAMO_COLUMNAS, null, null);
+  assert.ok(html.includes('Transacciones Intercompañías'));
+  assert.ok(html.includes('Histórico de la deuda'));
+  assert.ok(html.includes('76.421.180-4'));
+  assert.ok(html.includes('Préstamo 1'));
+  assert.ok(html.includes('Préstamo 2'));
+  assert.ok(html.includes('545.267.665'), 'el monto de intereses sale en la tabla completa');
+  /* «Razón social» es una fila fusionada: en esta ruta (sin colspan) el valor se repite en
+     cada columna de préstamo, igual que en la ruta de PDF marcado. */
+  assert.strictEqual((html.match(/Inversiones San Jeronimo SpA/g) || []).length >= 4, true);
+});
+
+test('la tabla resumida no trae monto de intereses ni fecha de desembolso', () => {
+  const html = construirHtmlSinPlantilla(CONTRIBUYENTE_PRESTAMO_COLUMNAS, null, null);
+  const iHistorico = html.indexOf('Histórico de la deuda');
+  const bloqueHistorico = html.slice(iHistorico);
+  assert.ok(!bloqueHistorico.includes('Monto de intereses'));
+  assert.ok(!bloqueHistorico.includes('Fecha de Desembolso'));
+});
+
+test('no incluye las tablas de columnas-por-préstamo en un estudio estándar', () => {
+  const html = construirHtmlSinPlantilla(
+    { ...CONTRIBUYENTE_PRESTAMO_COLUMNAS, tipo_estudio: 'estandar' }, null, null);
+  assert.ok(!html.includes('Transacciones Intercompañías'));
+  assert.ok(!html.includes('Histórico de la deuda intereses sobre Préstamos'));
+});

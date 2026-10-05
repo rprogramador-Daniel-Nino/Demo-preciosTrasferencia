@@ -157,7 +157,12 @@ export async function buscarActividadesPorRazonSocial(nombres) {
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
-    registrarUsoIA('Actividad Económica Detectada', response.data);
+    /* Etiqueta propia y distinta de "Actividad Económica Detectada de la Empresa"
+       (ver MotorComparables.jsx): ESTA llamada busca la actividad de las COMPARABLES,
+       no la del contribuyente — la del contribuyente viaja en el mismo JSON que ya pide
+       las cifras del EEFF (eeffParser.js, campo `actividad_economica`) y no genera una
+       llamada aparte que registrar. */
+    registrarUsoIA('Actividad de comparables sin EEFF', response.data);
     const bloques = (response.data && response.data.content) || [];
     return leerRespuestaActividades(bloques.map((b) => b.text || '').join(''), nombres);
   } catch (err) {

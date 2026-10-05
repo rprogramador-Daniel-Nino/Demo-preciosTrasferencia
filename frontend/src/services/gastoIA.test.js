@@ -2,6 +2,26 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { registrarUsoIA, cargarEstudio, suscribir, obtenerEstado } from './gastoIA.js';
 
+test('el oyente de suscribir no recibe el estado como argumento: hay que leerlo con obtenerEstado()', () => {
+  /* Bug real (2026-10-03): App.jsx asumió que el oyente recibía el snapshot como
+     argumento (`(snapshot) => updateStudyGastoIA(snapshot)`), y como `emitir()` llama a
+     cada oyente sin argumentos, `snapshot` era `undefined` en cada notificación —
+     `study.gastoIA` quedaba en `undefined` y Firestore rechazaba el guardado del
+     estudio entero («Unsupported field value: undefined»). Este test fija el contrato
+     para que no se repita: quien se suscribe debe llamar `obtenerEstado()` dentro del
+     oyente, nunca confiar en su argumento. */
+  cargarEstudio(null);
+  let recibido = 'nunca-invocado';
+  const cancelar = suscribir((arg) => { recibido = arg; });
+  try {
+    registrarUsoIA('a', { model: 'claude-haiku-4-5-20251001', usage: { input_tokens: 1, output_tokens: 1 } });
+    assert.strictEqual(recibido, undefined);
+    assert.ok(obtenerEstado().totalUSD > 0, 'el estado real sí refleja el cambio, vía obtenerEstado()');
+  } finally {
+    cancelar();
+  }
+});
+
 test('registra un uso con forma Anthropic (data.usage + data.model)', () => {
   cargarEstudio(null);
   registrarUsoIA('Actividad Económica Detectada', {

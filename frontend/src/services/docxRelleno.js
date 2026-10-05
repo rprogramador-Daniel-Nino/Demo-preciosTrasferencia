@@ -63,6 +63,12 @@ import {
   NOMBRES_TABLA_ADICIONAL, NOMBRES_TABLA_TRANSACCIONES,
 } from './tablasOperaciones.js';
 import { tienePrestamos, filasPrestamoConVinculado, NOMBRES_TABLA_PRESTAMO } from './tablasPrestamos.js';
+/* Fase 3 de los estudios tipo préstamo (Tabla "Transacciones Intercompañías" y "Histórico de
+   la deuda..."): archivo nuevo, no toca nada de este. Ver su cabecera para el porqué del orden
+   quitar-antes/insertar-después alrededor de `actualizarTablasOperacionesOoxml`, más abajo. */
+import {
+  quitarTablasPrestamoColumnasOoxml, insertarTablasPrestamoColumnasOoxml,
+} from './docxRellenoPrestamoColumnas.js';
 /* `verticalSobreActivos` se reexporta al final: vivía aquí y hay quien la importa de
    este módulo. Su definición se mudó con la Tabla 10, que es quien la usa. */
 import {
@@ -3310,7 +3316,14 @@ export function renderizarDocx(binario, estudio, opciones = {}) {
   xml = actualizarApartadosMacroOoxml(xml, datosMacro, year, avisosTablas, notas);
   xml = actualizarApartadoSectorialOoxml(xml, analisisSector, estudio, year, avisosTablas, notas);
   xml = actualizarTablasMacroOoxml(xml, datosMacro, year, avisosTablas);
+  /* Quitar ANTES de refrescar la ficha genérica, e insertar DESPUÉS: el título real de la
+     Tabla 4 contiene el nombre registrado de "Transacciones Inter compañía", y esa función no
+     la excluye al buscar sus dos apariciones. Quitándola antes, esa función —sin tocarle una
+     línea— solo ve sus dos apariciones reales; insertando después, se ancla en la ficha ya
+     refrescada. Ver `docxRellenoPrestamoColumnas.js`. */
+  xml = quitarTablasPrestamoColumnasOoxml(xml);
   xml = actualizarTablasOperacionesOoxml(xml, estudio, avisosTablas);
+  xml = insertarTablasPrestamoColumnasOoxml(xml, estudio, avisosTablas);
   /* La letra de la Sección III, DESPUÉS de que sus apartados, su análisis sectorial y sus ocho
      tablas estén ya puestos: la pasada tiene que ver el contenido definitivo, no el de la
      plantilla. Y antes de docxtemplater, que no se entera: insertar un `rPr` no parte ni funde

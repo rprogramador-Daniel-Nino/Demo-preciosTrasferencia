@@ -1,6 +1,11 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 
+/* Rotada el 2026-10-05: la versión anterior quedó inválida en Anthropic y, de paso, un
+   fragmento de ambas claves (pruebas y producción) se expuso sin querer en una sesión de
+   depuración. `defineSecret` ata la función a una versión concreta EN EL MOMENTO DEL
+   DEPLOY, así que una rotación en Secret Manager no basta: hace falta un deploy real
+   (no "Skipped (No changes detected)") para que la función recoja la versión nueva. */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 const GEMINI_MODEL_DEFAULT = 'gemini-3.5-flash';
