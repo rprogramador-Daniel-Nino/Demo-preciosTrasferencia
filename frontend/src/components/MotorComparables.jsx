@@ -49,6 +49,7 @@ import {
 } from '../services/cribadoStorage';
 import MemoriaRangoModal from './MemoriaRangoModal.jsx';
 import CampoMoneda from './CampoMoneda';
+import PrestamoTasas from './PrestamoTasas.jsx';
 
 /* Aviso que ocupa el lugar de la actividad económica mientras no se extraiga de los
    adjuntos. No es un dato del contribuyente y no debe guardarse como tal. */
@@ -276,7 +277,7 @@ function ActividadDeLaComparable({ row, alEditarActividad, alRedactar, redactand
       title={redactada
         ? texto
         : texto + '  —  Sin redactar: el informe publicaría este texto en inglés, tal como '
-          + 'viene de Capital IQ. Use «Redactar descripciones» para pasarlo a español.'}
+        + 'viene de Capital IQ. Use «Redactar descripciones» para pasarlo a español.'}
     >
       {!redactada && (
         <span className="text-amber-600 dark:text-amber-500 font-semibold">[sin redactar] </span>
@@ -321,7 +322,7 @@ function InsigniaActividad({ row }) {
              algo que no pasó. */
           + (row.entroPorCuotaNegativas
             ? '. Entró para completar la cuota de comparables en pérdida, porque las de '
-              + 'actividad idéntica no alcanzaban'
+            + 'actividad idéntica no alcanzaban'
             : (row.entroPorAmpliacion
               ? `. Entró para no bajar de ${MINIMO_COMPARABLES} comparables`
               : ''))
@@ -1524,12 +1525,12 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
              entraron 0 y el aviso mandaba a ampliar un cribado que estaba bien. */
           const causa = negDisponibles < negObjetivo
             ? `el universo de Capital IQ solo tiene ${negDisponibles} en pérdida que superen `
-              + `los filtros (${result.negativasIdenticasDisponibles || 0} de actividad `
-              + `idéntica y ${result.negativasAfinesDisponibles || 0} de actividad afín). `
-              + 'Amplíe el cribado del paso 1, o revise la actividad detectada si cree que '
-              + 'debería reconocer más.'
+            + `los filtros (${result.negativasIdenticasDisponibles || 0} de actividad `
+            + `idéntica y ${result.negativasAfinesDisponibles || 0} de actividad afín). `
+            + 'Amplíe el cribado del paso 1, o revise la actividad detectada si cree que '
+            + 'debería reconocer más.'
             : `el universo tiene ${negDisponibles} en pérdida que superan los filtros, así que `
-              + 'no faltan candidatas: lo que faltó fue cupo. Suba el N objetivo en el paso 2.';
+            + 'no faltan candidatas: lo que faltó fue cupo. Suba el N objetivo en el paso 2.';
           anotar(`Se pidieron ${negObjetivo} comparables en pérdida y solo se incluyeron `
             + `${negIncluidas}: ${causa}`, 'aviso');
         }
@@ -1541,7 +1542,7 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
             + 'AFÍN, no idéntica, porque las de actividad idéntica no alcanzaban para la cuota. '
             + 'Cada una necesita dos justificaciones en el informe: por qué se admite su '
             + 'pérdida y por qué se amplió el criterio de búsqueda. Revíselas una a una.',
-          'aviso');
+            'aviso');
         }
         if (!String(engineConfig.justificacionPerdida || '').trim()) {
           anotar('Falta la justificación de la política de pérdidas: sin ella, el informe ' +
@@ -2633,663 +2634,667 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
         )}
       </div>
 
+      {study.tipo_estudio === 'prestamo' && (
+        <PrestamoTasas study={study} updateStudy={updateStudy} />
+      )}
+
       {study.tipo_estudio !== 'prestamo' && (
         <>
-        {/* ══════ WIZARD DE SELECCIÓN AUTOMÁTICA (TOP-N) ══════ */}
-      <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-6">
-        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#0FA3A1]" />
-            ⚙️ Motor de Selección Automática (TOP-N)
-          </h3>
-          {/* Los pesos que se anuncian son los que aplica scoreCandidates de verdad
+          {/* ══════ WIZARD DE SELECCIÓN AUTOMÁTICA (TOP-N) ══════ */}
+          <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#0FA3A1]" />
+                ⚙️ Motor de Selección Automática (TOP-N)
+              </h3>
+              {/* Los pesos que se anuncian son los que aplica scoreCandidates de verdad
               y cambian según haya o no actividad detectada. Antes el encabezado
               declaraba una ponderación que el código no implementaba. */}
-          <span className="text-[11px] font-medium text-zinc-500">
-            {actividad && actividad.trim()
-              ? 'Ponderación: Actividad (40%) · Perfil (20%) · Tamaño (15%) · Rentabilidad (15%) · Geografía (10%)'
-              : 'Ponderación sin actividad detectada: Perfil (35%) · Tamaño (20%) · Actividad (15%) · Rentabilidad (15%) · Geografía (15%)'}
-          </span>
-        </div>
+              <span className="text-[11px] font-medium text-zinc-500">
+                {actividad && actividad.trim()
+                  ? 'Ponderación: Actividad (40%) · Perfil (20%) · Tamaño (15%) · Rentabilidad (15%) · Geografía (10%)'
+                  : 'Ponderación sin actividad detectada: Perfil (35%) · Tamaño (20%) · Actividad (15%) · Rentabilidad (15%) · Geografía (15%)'}
+              </span>
+            </div>
 
-        {/* Paso 1: Importar Capital IQ */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">1</span>
-            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Importar Excel de Capital IQ</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-sm">
-              <Upload className="w-4 h-4" />
-              <span>{loadingExcel ? 'Importando...' : '📥 Importar Excel (Capital IQ)'}</span>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                disabled={loadingExcel}
-                onChange={(e) => e.target.files[0] && handleImportExcel(e.target.files[0])}
-                className="hidden"
-              />
-            </label>
-            {universo.length > 0 && (
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                <CheckCircle className="w-4 h-4" /> {universo.length} candidatas cargadas.
-              </span>
-            )}
-            {restaurando && (
-              <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold flex items-center gap-1">
-                <RefreshCw className="w-4 h-4 animate-spin" /> Restaurando el cribado guardado…
-              </span>
-            )}
-            {/* Distingue «guardado» de «solo en esta pestaña»: es la diferencia entre
+            {/* Paso 1: Importar Capital IQ */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">1</span>
+                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Importar Excel de Capital IQ</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-sm">
+                  <Upload className="w-4 h-4" />
+                  <span>{loadingExcel ? 'Importando...' : '📥 Importar Excel (Capital IQ)'}</span>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    disabled={loadingExcel}
+                    onChange={(e) => e.target.files[0] && handleImportExcel(e.target.files[0])}
+                    className="hidden"
+                  />
+                </label>
+                {universo.length > 0 && (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" /> {universo.length} candidatas cargadas.
+                  </span>
+                )}
+                {restaurando && (
+                  <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold flex items-center gap-1">
+                    <RefreshCw className="w-4 h-4 animate-spin" /> Restaurando el cribado guardado…
+                  </span>
+                )}
+                {/* Distingue «guardado» de «solo en esta pestaña»: es la diferencia entre
                 poder reabrir el estudio y tener que volver a cargar el archivo. */}
-            {!restaurando && cribadoIQ && cribadoIQ.ruta ? (
-              <span className="text-xs text-zinc-500 flex items-center gap-1" title={`Guardado en la nube: ${cribadoIQ.archivo || ''}`}>
-                <FileCheck className="w-4 h-4" /> Cribado guardado
-                {cribadoIQ.subidoEn ? ` el ${new Date(cribadoIQ.subidoEn).toLocaleDateString('es-CO')}` : ''}
-                {cribadoIQ.curacion ? ' · curación incluida' : ''}
-              </span>
-            ) : (!restaurando && universo.length > 0 && (
-              <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4" /> Solo en esta pestaña: al reabrir habrá que cargar el Excel otra vez.
-              </span>
-            ))}
-          </div>
+                {!restaurando && cribadoIQ && cribadoIQ.ruta ? (
+                  <span className="text-xs text-zinc-500 flex items-center gap-1" title={`Guardado en la nube: ${cribadoIQ.archivo || ''}`}>
+                    <FileCheck className="w-4 h-4" /> Cribado guardado
+                    {cribadoIQ.subidoEn ? ` el ${new Date(cribadoIQ.subidoEn).toLocaleDateString('es-CO')}` : ''}
+                    {cribadoIQ.curacion ? ' · curación incluida' : ''}
+                  </span>
+                ) : (!restaurando && universo.length > 0 && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4" /> Solo en esta pestaña: al reabrir habrá que cargar el Excel otra vez.
+                  </span>
+                ))}
+              </div>
 
-          {/* Progreso de la carga: etapa, contador y barra. Sin esto, un archivo de
+              {/* Progreso de la carga: etapa, contador y barra. Sin esto, un archivo de
               3.000 filas parece no hacer nada. */}
-          {importProgreso && (
-            <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0FA3A1]" />
-                <span>{importProgreso.etapa}</span>
-                {importProgreso.total ? (
-                  <span className="ml-auto tabular-nums text-zinc-500">
-                    {importProgreso.hechas.toLocaleString('es-CO')} de {importProgreso.total.toLocaleString('es-CO')}
-                    {' · '}{Math.min(100, Math.round((importProgreso.hechas / importProgreso.total) * 100))} %
-                  </span>
-                ) : null}
-              </div>
-              <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-2 overflow-hidden">
-                <div
-                  className={'h-full bg-[#0FA3A1] transition-all duration-150' + (importProgreso.total ? '' : ' opacity-40 w-full animate-pulse')}
-                  style={importProgreso.total
-                    ? { width: Math.min(100, Math.round((importProgreso.hechas / importProgreso.total) * 100)) + '%' }
-                    : undefined}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Diagnóstico de lo que se leyó: hoja, fila de encabezados y columnas.
-              Es lo que permite corregir el export cuando el mapeo no cuadra. */}
-          {importMeta && (
-            <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 space-y-1">
-              <div className="text-zinc-700 dark:text-zinc-200">
-                <span className="font-semibold">Hoja «{importMeta.hoja}»</span>
-                {importMeta.hojas.length > 1 && <span className="text-zinc-500"> de {importMeta.hojas.length} ({importMeta.hojas.join(', ')})</span>}
-                <span className="text-zinc-500"> · encabezados en la fila {importMeta.filaEncabezados + 1} · {importMeta.filas.toLocaleString('es-CO')} filas</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {importMeta.reconocidas.map(r => (
-                  <span key={r.clave} title={String(r.header || '')} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-                    {r.etiqueta}
-                  </span>
-                ))}
-                {importMeta.faltantes.map(f => (
-                  <span key={f.clave} title={'Se buscó: ' + f.claves.join(', ')} className={'px-1.5 py-0.5 rounded border ' + (f.esencial
-                    ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60'
-                    : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 border-zinc-200 dark:border-zinc-700')}>
-                    {f.etiqueta} {f.esencial ? '✗' : '—'}
-                  </span>
-                ))}
-              </div>
-              {importMeta.encabezados && importMeta.encabezados.length > 0 && (
-                <details>
-                  <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Ver los {importMeta.encabezados.length} encabezados del archivo</summary>
-                  <div className="mt-1 text-zinc-500 font-mono text-[10px] leading-relaxed">{importMeta.encabezados.join(' | ')}</div>
-                </details>
+              {importProgreso && (
+                <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0FA3A1]" />
+                    <span>{importProgreso.etapa}</span>
+                    {importProgreso.total ? (
+                      <span className="ml-auto tabular-nums text-zinc-500">
+                        {importProgreso.hechas.toLocaleString('es-CO')} de {importProgreso.total.toLocaleString('es-CO')}
+                        {' · '}{Math.min(100, Math.round((importProgreso.hechas / importProgreso.total) * 100))} %
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-2 overflow-hidden">
+                    <div
+                      className={'h-full bg-[#0FA3A1] transition-all duration-150' + (importProgreso.total ? '' : ' opacity-40 w-full animate-pulse')}
+                      style={importProgreso.total
+                        ? { width: Math.min(100, Math.round((importProgreso.hechas / importProgreso.total) * 100)) + '%' }
+                        : undefined}
+                    />
+                  </div>
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Curación por IA: la dispara el paso 3 sobre las candidatas que pasaron los
+              {/* Diagnóstico de lo que se leyó: hoja, fila de encabezados y columnas.
+              Es lo que permite corregir el export cuando el mapeo no cuadra. */}
+              {importMeta && (
+                <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 space-y-1">
+                  <div className="text-zinc-700 dark:text-zinc-200">
+                    <span className="font-semibold">Hoja «{importMeta.hoja}»</span>
+                    {importMeta.hojas.length > 1 && <span className="text-zinc-500"> de {importMeta.hojas.length} ({importMeta.hojas.join(', ')})</span>}
+                    <span className="text-zinc-500"> · encabezados en la fila {importMeta.filaEncabezados + 1} · {importMeta.filas.toLocaleString('es-CO')} filas</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {importMeta.reconocidas.map(r => (
+                      <span key={r.clave} title={String(r.header || '')} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+                        {r.etiqueta}
+                      </span>
+                    ))}
+                    {importMeta.faltantes.map(f => (
+                      <span key={f.clave} title={'Se buscó: ' + f.claves.join(', ')} className={'px-1.5 py-0.5 rounded border ' + (f.esencial
+                        ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60'
+                        : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 border-zinc-200 dark:border-zinc-700')}>
+                        {f.etiqueta} {f.esencial ? '✗' : '—'}
+                      </span>
+                    ))}
+                  </div>
+                  {importMeta.encabezados && importMeta.encabezados.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Ver los {importMeta.encabezados.length} encabezados del archivo</summary>
+                      <div className="mt-1 text-zinc-500 font-mono text-[10px] leading-relaxed">{importMeta.encabezados.join(' | ')}</div>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              {/* Curación por IA: la dispara el paso 3 sobre las candidatas que pasaron los
               filtros del paso 2, antes de puntuar, porque su veredicto es uno de los
               filtros del motor. Son varios lotes y varios minutos, así que hay que
               decir cuánto falta. */}
-          {curacionProgreso && (
-            <div className="bg-[#0FA3A1]/5 border border-[#0FA3A1]/30 rounded-lg p-3">
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
-                <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1] animate-pulse" />
-                <span>Curación con Gemini: {curacionProgreso.mensaje}</span>
-                {curacionProgreso.total ? (
-                  <span className="ml-auto tabular-nums text-zinc-500">
-                    {Math.min(100, Math.round(((curacionProgreso.evaluadas || 0) / curacionProgreso.total) * 100))} %
-                  </span>
-                ) : null}
-              </div>
-              {curacionProgreso.total ? (
-                <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-2 overflow-hidden">
-                  <div className="h-full bg-[#0FA3A1] transition-all duration-200"
-                    style={{ width: Math.min(100, Math.round(((curacionProgreso.evaluadas || 0) / curacionProgreso.total) * 100)) + '%' }} />
-                </div>
-              ) : null}
-              {curacionProgreso.etaMinutos ? (
-                <div className="text-[10.5px] text-zinc-500 mt-1.5">
-                  {curacionProgreso.lotes} lote(s) · estimado ~{curacionProgreso.etaMinutos} min · no cierre la pestaña
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {/* Resultado de la curación, ya terminada */}
-          {!curando && iaMatch && !iaMatch.omitida && (
-            <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
-              <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
-                <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1]" />
-                <span className="font-semibold">Candidatas curadas con IA</span>
-                <span className="text-zinc-500">
-                  · {iaMatch.coinciden} de {iaMatch.total} coinciden con la actividad
-                  {iaMatch.reutilizadas ? ` · ${iaMatch.reutilizadas} reutilizadas de una corrida anterior` : ''}
-                  {iaMatch.fallidas ? ` · ${iaMatch.fallidas} sin evaluar` : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => curarValidas({ forzar: true })}
-                  disabled={curando || !universo.length}
-                  className="ml-auto text-[10.5px] px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  title="Descarta el veredicto guardado y vuelve a curar desde cero las candidatas que pasan los filtros del paso 2"
-                >
-                  ↻ Volver a curar
-                </button>
-              </div>
-              {iaMatch.fallidas ? (
-                <div className="text-amber-600 dark:text-amber-400 mt-1">
-                  Las que no se pudieron evaluar se dejan pasar sin descartarlas por actividad: un fallo de red no debe excluir comparables.
-                </div>
-              ) : null}
-              {iaMatch.actividadUsada ? (
-                <div className="text-zinc-500 mt-1">Actividad usada: «{iaMatch.actividadUsada.slice(0, 160)}{iaMatch.actividadUsada.length > 160 ? '…' : ''}»</div>
-              ) : null}
-            </div>
-          )}
-
-          {/* Registro de la importación */}
-          {importLog.length > 0 && (
-            <details open className="text-[11px]">
-              <summary className="cursor-pointer font-semibold text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Registro de la importación ({importLog.length})
-              </summary>
-              <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] divide-y divide-zinc-100 dark:divide-zinc-800/70">
-                {importLog.map((l, i) => (
-                  <div key={i} className="flex gap-2 px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed">
-                    <span className="text-zinc-400 tabular-nums flex-none">{l.hora}</span>
-                    <span className={
-                      l.tipo === 'error' ? 'text-red-600 dark:text-red-400'
-                        : l.tipo === 'aviso' ? 'text-amber-600 dark:text-amber-400'
-                          : l.tipo === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-zinc-600 dark:text-zinc-300'
-                    }>
-                      {l.tipo === 'error' ? '✗' : l.tipo === 'aviso' ? '⚠' : l.tipo === 'ok' ? '✓' : '·'} {l.texto}
-                    </span>
+              {curacionProgreso && (
+                <div className="bg-[#0FA3A1]/5 border border-[#0FA3A1]/30 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
+                    <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1] animate-pulse" />
+                    <span>Curación con Gemini: {curacionProgreso.mensaje}</span>
+                    {curacionProgreso.total ? (
+                      <span className="ml-auto tabular-nums text-zinc-500">
+                        {Math.min(100, Math.round(((curacionProgreso.evaluadas || 0) / curacionProgreso.total) * 100))} %
+                      </span>
+                    ) : null}
                   </div>
-                ))}
+                  {curacionProgreso.total ? (
+                    <div className="h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-2 overflow-hidden">
+                      <div className="h-full bg-[#0FA3A1] transition-all duration-200"
+                        style={{ width: Math.min(100, Math.round(((curacionProgreso.evaluadas || 0) / curacionProgreso.total) * 100)) + '%' }} />
+                    </div>
+                  ) : null}
+                  {curacionProgreso.etaMinutos ? (
+                    <div className="text-[10.5px] text-zinc-500 mt-1.5">
+                      {curacionProgreso.lotes} lote(s) · estimado ~{curacionProgreso.etaMinutos} min · no cierre la pestaña
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Resultado de la curación, ya terminada */}
+              {!curando && iaMatch && !iaMatch.omitida && (
+                <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3">
+                  <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
+                    <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1]" />
+                    <span className="font-semibold">Candidatas curadas con IA</span>
+                    <span className="text-zinc-500">
+                      · {iaMatch.coinciden} de {iaMatch.total} coinciden con la actividad
+                      {iaMatch.reutilizadas ? ` · ${iaMatch.reutilizadas} reutilizadas de una corrida anterior` : ''}
+                      {iaMatch.fallidas ? ` · ${iaMatch.fallidas} sin evaluar` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => curarValidas({ forzar: true })}
+                      disabled={curando || !universo.length}
+                      className="ml-auto text-[10.5px] px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      title="Descarta el veredicto guardado y vuelve a curar desde cero las candidatas que pasan los filtros del paso 2"
+                    >
+                      ↻ Volver a curar
+                    </button>
+                  </div>
+                  {iaMatch.fallidas ? (
+                    <div className="text-amber-600 dark:text-amber-400 mt-1">
+                      Las que no se pudieron evaluar se dejan pasar sin descartarlas por actividad: un fallo de red no debe excluir comparables.
+                    </div>
+                  ) : null}
+                  {iaMatch.actividadUsada ? (
+                    <div className="text-zinc-500 mt-1">Actividad usada: «{iaMatch.actividadUsada.slice(0, 160)}{iaMatch.actividadUsada.length > 160 ? '…' : ''}»</div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Registro de la importación */}
+              {importLog.length > 0 && (
+                <details open className="text-[11px]">
+                  <summary className="cursor-pointer font-semibold text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5" /> Registro de la importación ({importLog.length})
+                  </summary>
+                  <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] divide-y divide-zinc-100 dark:divide-zinc-800/70">
+                    {importLog.map((l, i) => (
+                      <div key={i} className="flex gap-2 px-2.5 py-1.5 font-mono text-[10.5px] leading-relaxed">
+                        <span className="text-zinc-400 tabular-nums flex-none">{l.hora}</span>
+                        <span className={
+                          l.tipo === 'error' ? 'text-red-600 dark:text-red-400'
+                            : l.tipo === 'aviso' ? 'text-amber-600 dark:text-amber-400'
+                              : l.tipo === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-zinc-600 dark:text-zinc-300'
+                        }>
+                          {l.tipo === 'error' ? '✗' : l.tipo === 'aviso' ? '⚠' : l.tipo === 'ok' ? '✓' : '·'} {l.texto}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+
+            {/* Paso 2: Filtros del Motor */}
+            <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">2</span>
+                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Definir los Filtros del Motor</span>
               </div>
-            </details>
-          )}
-        </div>
 
-        {/* Paso 2: Filtros del Motor */}
-        <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">2</span>
-            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Definir los Filtros del Motor</span>
-          </div>
-
-          {/* Decir en qué orden se aplican: el reclamo era que la curación y los
+              {/* Decir en qué orden se aplican: el reclamo era que la curación y los
               filtros parecían juzgar conjuntos distintos, y así era. */}
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 -mt-1 leading-relaxed">
-            Estos cuatro filtros se aplican <b>antes</b> de curar con IA, así que la curación solo
-            evalúa —y solo se paga por— lo que los pasa. Los números de la derecha de cada control
-            son el efecto real sobre el cribado que ya cargaste: se calculan aquí, sin gastar una
-            sola consulta.
-          </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 -mt-1 leading-relaxed">
+                Estos cuatro filtros se aplican <b>antes</b> de curar con IA, así que la curación solo
+                evalúa —y solo se paga por— lo que los pasa. Los números de la derecha de cada control
+                son el efecto real sobre el cribado que ya cargaste: se calculan aquí, sin gastar una
+                sola consulta.
+              </p>
 
-          {/* ══ Los avisos: solo cuando lo que dicen es cierto y comprobable ══
+              {/* ══ Los avisos: solo cuando lo que dicen es cierto y comprobable ══
               Un panel que avisa de todo enseña a ignorar los avisos, que es lo que ya le pasó a
               los del generador antes de que se acotaran. Los emite `previsualizarFiltros`; aquí
               solo se pintan. */}
-          {previsualizacion.avisos.length > 0 && (
-            <div className="space-y-1.5">
-              {previsualizacion.avisos.map((a) => (
-                <div
-                  key={a.clave}
-                  className={`rounded-lg p-2.5 flex items-start gap-2 text-[11.5px] leading-relaxed border ${a.severidad === 'bloqueo'
-                    ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200'
-                    : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200'
-                    }`}
-                >
-                  {a.severidad === 'bloqueo'
-                    ? <Ban className="w-4 h-4 mt-px shrink-0" />
-                    : <AlertTriangle className="w-4 h-4 mt-px shrink-0" />}
-                  <span>{a.texto}</span>
+              {previsualizacion.avisos.length > 0 && (
+                <div className="space-y-1.5">
+                  {previsualizacion.avisos.map((a) => (
+                    <div
+                      key={a.clave}
+                      className={`rounded-lg p-2.5 flex items-start gap-2 text-[11.5px] leading-relaxed border ${a.severidad === 'bloqueo'
+                        ? 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50 text-rose-900 dark:text-rose-200'
+                        : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200'
+                        }`}
+                    >
+                      {a.severidad === 'bloqueo'
+                        ? <Ban className="w-4 h-4 mt-px shrink-0" />
+                        : <AlertTriangle className="w-4 h-4 mt-px shrink-0" />}
+                      <span>{a.texto}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* ══ Decisiones de método ══
+              {/* ══ Decisiones de método ══
               Arriba y siempre visibles porque son las que hay que justificar en el informe: la
               política de pérdidas con su cuota, y la independencia con su umbral. */}
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-              Decisiones de método
-            </span>
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                  Decisiones de método
+                </span>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col">
-                <div className="flex items-baseline justify-between gap-2 mb-1">
-                  <label className="text-[11px] font-semibold text-zinc-500">Pérdidas Operativas</label>
-                  <CostoDelFiltro
-                    paso={previsualizacion.pasos.find((x) => x.clave === 'perdidaOperativa')}
-                    universo={previsualizacion.universo}
-                    expandido={filtroExpandido === 'perdidaOperativa'}
-                    alExpandir={() => setFiltroExpandido(filtroExpandido === 'perdidaOperativa' ? null : 'perdidaOperativa')}
-                  />
-                </div>
-                <select
-                  value={engineConfig.perdidaOp}
-                  onChange={(e) => cambiarConfig('perdidaOp', e.target.value)}
-                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                >
-                  <option value="excluir">Excluir (criterio conservador DIAN)</option>
-                  <option value="incluir">Incluir (criterio OCDE)</option>
-                </select>
-                {previsualizacion.hayUniverso && (
-                  <span className="text-[10px] text-zinc-400 mt-1">
-                    El cribado trae {mil(previsualizacion.enPerdidaEnUniverso)} compañía(s) en pérdida.
-                  </span>
-                )}
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <label className="text-[11px] font-semibold text-zinc-500">Pérdidas Operativas</label>
+                      <CostoDelFiltro
+                        paso={previsualizacion.pasos.find((x) => x.clave === 'perdidaOperativa')}
+                        universo={previsualizacion.universo}
+                        expandido={filtroExpandido === 'perdidaOperativa'}
+                        alExpandir={() => setFiltroExpandido(filtroExpandido === 'perdidaOperativa' ? null : 'perdidaOperativa')}
+                      />
+                    </div>
+                    <select
+                      value={engineConfig.perdidaOp}
+                      onChange={(e) => cambiarConfig('perdidaOp', e.target.value)}
+                      className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                    >
+                      <option value="excluir">Excluir (criterio conservador DIAN)</option>
+                      <option value="incluir">Incluir (criterio OCDE)</option>
+                    </select>
+                    {previsualizacion.hayUniverso && (
+                      <span className="text-[10px] text-zinc-400 mt-1">
+                        El cribado trae {mil(previsualizacion.enPerdidaEnUniverso)} compañía(s) en pérdida.
+                      </span>
+                    )}
+                  </div>
 
-              {/* Cuántas comparables en pérdida se quieren en el informe. Cuenta dentro del N
+                  {/* Cuántas comparables en pérdida se quieren en el informe. Cuenta dentro del N
                   objetivo, no aparte, y es también un tope: pedir 3 no puede devolver 5.
                   Deshabilitado mientras la política excluya pérdidas — con «excluir» no hay
                   negativas que repartir, y dejar el campo activo prometería algo que el motor
                   va a ignorar. La UI lo dice en vez de cambiar la política por su cuenta. */}
-              <div className="flex flex-col">
-                <label className="text-[11px] font-semibold text-zinc-500 mb-1">Negativas objetivo</label>
-                <input
-                  type="number"
-                  min="0"
-                  max={engineConfig.nTarget}
-                  disabled={engineConfig.perdidaOp === 'excluir'}
-                  value={engineConfig.negativasObjetivo ?? 0}
-                  onChange={(e) => cambiarConfig('negativasObjetivo', Math.max(0, Number(e.target.value) || 0))}
-                  title={engineConfig.perdidaOp === 'excluir'
-                    ? 'Cambie «Pérdidas Operativas» a Incluir para poder pedir comparables en pérdida'
-                    : 'Cuántas comparables en pérdida debe traer la muestra, dentro del N objetivo'}
-                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1">
-                  {engineConfig.perdidaOp === 'excluir'
-                    ? 'Ponga «Incluir» para habilitarlo'
-                    : `Dentro de las ${engineConfig.nTarget}. Primero de actividad idéntica y, si no alcanzan, de actividad afín. Reserva cupo antes del puntaje: sin cuota no entra ninguna.`}
-                </span>
-              </div>
+                  <div className="flex flex-col">
+                    <label className="text-[11px] font-semibold text-zinc-500 mb-1">Negativas objetivo</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={engineConfig.nTarget}
+                      disabled={engineConfig.perdidaOp === 'excluir'}
+                      value={engineConfig.negativasObjetivo ?? 0}
+                      onChange={(e) => cambiarConfig('negativasObjetivo', Math.max(0, Number(e.target.value) || 0))}
+                      title={engineConfig.perdidaOp === 'excluir'
+                        ? 'Cambie «Pérdidas Operativas» a Incluir para poder pedir comparables en pérdida'
+                        : 'Cuántas comparables en pérdida debe traer la muestra, dentro del N objetivo'}
+                      className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                    />
+                    <span className="text-[10px] text-zinc-400 mt-1">
+                      {engineConfig.perdidaOp === 'excluir'
+                        ? 'Ponga «Incluir» para habilitarlo'
+                        : `Dentro de las ${engineConfig.nTarget}. Primero de actividad idéntica y, si no alcanzan, de actividad afín. Reserva cupo antes del puntaje: sin cuota no entra ninguna.`}
+                    </span>
+                  </div>
 
-              <div className="flex flex-col">
-                <div className="flex items-baseline justify-between gap-2 mb-1">
-                  <label className="text-[11px] font-semibold text-zinc-500">Independencia (Art. 260-1)</label>
-                  <CostoDelFiltro
-                    paso={previsualizacion.pasos.find((x) => x.clave === 'controlada')}
-                    universo={previsualizacion.universo}
-                    expandido={filtroExpandido === 'controlada'}
-                    alExpandir={() => setFiltroExpandido(filtroExpandido === 'controlada' ? null : 'controlada')}
-                  />
-                </div>
-                <select
-                  value={engineConfig.control ?? 'excluir'}
-                  onChange={(e) => cambiarConfig('control', e.target.value)}
-                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                >
-                  <option value="excluir">Excluir controladas</option>
-                  <option value="incluir">Incluir</option>
-                </select>
-                <span className="text-[10px] text-zinc-400 mt-1">
-                  No perdona a las del estudio anterior: no ser independiente es un hecho de hoy.
-                </span>
-              </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <label className="text-[11px] font-semibold text-zinc-500">Independencia (Art. 260-1)</label>
+                      <CostoDelFiltro
+                        paso={previsualizacion.pasos.find((x) => x.clave === 'controlada')}
+                        universo={previsualizacion.universo}
+                        expandido={filtroExpandido === 'controlada'}
+                        alExpandir={() => setFiltroExpandido(filtroExpandido === 'controlada' ? null : 'controlada')}
+                      />
+                    </div>
+                    <select
+                      value={engineConfig.control ?? 'excluir'}
+                      onChange={(e) => cambiarConfig('control', e.target.value)}
+                      className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                    >
+                      <option value="excluir">Excluir controladas</option>
+                      <option value="incluir">Incluir</option>
+                    </select>
+                    <span className="text-[10px] text-zinc-400 mt-1">
+                      No perdona a las del estudio anterior: no ser independiente es un hecho de hoy.
+                    </span>
+                  </div>
 
-              {/* El umbral es la palanca de más peso del paso 2 —sobre el cribado de Makita
+                  {/* El umbral es la palanca de más peso del paso 2 —sobre el cribado de Makita
                   saca 238 al 50 % y 775 al 25 %— y era un campo mudo. Con el costo al lado,
                   moverlo deja de ser a ciegas. */}
-              <div className="flex flex-col">
-                <label className="text-[11px] font-semibold text-zinc-500 mb-1">Umbral de control (%)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  value={engineConfig.umbralControl ?? 50}
-                  disabled={(engineConfig.control ?? 'excluir') !== 'excluir'}
-                  onChange={(e) => cambiarConfig('umbralControl', Number(e.target.value))}
-                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none disabled:opacity-40"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1">
-                  Baje el umbral y el filtro se endurece: se ve al instante en el número de arriba.
-                </span>
-              </div>
+                  <div className="flex flex-col">
+                    <label className="text-[11px] font-semibold text-zinc-500 mb-1">Umbral de control (%)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={engineConfig.umbralControl ?? 50}
+                      disabled={(engineConfig.control ?? 'excluir') !== 'excluir'}
+                      onChange={(e) => cambiarConfig('umbralControl', Number(e.target.value))}
+                      className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none disabled:opacity-40"
+                    />
+                    <span className="text-[10px] text-zinc-400 mt-1">
+                      Baje el umbral y el filtro se endurece: se ve al instante en el número de arriba.
+                    </span>
+                  </div>
 
-              {/* Los ejemplos ocupan las dos columnas: cinco razones sociales de Capital IQ no
+                  {/* Los ejemplos ocupan las dos columnas: cinco razones sociales de Capital IQ no
                   caben en la columna de un selector. */}
-              {['perdidaOperativa', 'controlada'].includes(filtroExpandido) && (
-                <EjemplosDelFiltro paso={previsualizacion.pasos.find((x) => x.clave === filtroExpandido)} />
-              )}
-            </div>
+                  {['perdidaOperativa', 'controlada'].includes(filtroExpandido) && (
+                    <EjemplosDelFiltro paso={previsualizacion.pasos.find((x) => x.clave === filtroExpandido)} />
+                  )}
+                </div>
 
-            {/* La justificación de admitir comparables en pérdida. Solo aparece cuando de verdad
+                {/* La justificación de admitir comparables en pérdida. Solo aparece cuando de verdad
                 se van a admitir: pedirla siempre la convertiría en un campo que se rellena sin
                 leer. Va al embudo, que se persiste con el estudio y que el informe y el Excel de
                 soporte ya leen: es lo que impide que el documento radicado publique comparables
                 en pérdida sin nada que explique por qué están ahí. */}
-            {(engineConfig.negativasObjetivo ?? 0) > 0 && (
-              <div className="flex flex-col pt-1">
-                <label className="text-[11px] font-semibold text-zinc-500 mb-1">
-                  Justificación de admitir pérdidas
-                  {!String(engineConfig.justificacionPerdida || '').trim() && (
-                    <span className="text-amber-600 dark:text-amber-400 font-normal"> · falta, y va al informe</span>
-                  )}
-                </label>
-                <textarea
-                  rows={2}
-                  value={engineConfig.justificacionPerdida || ''}
-                  onChange={(e) => cambiarConfig('justificacionPerdida', e.target.value)}
-                  placeholder="Ej: Guías OCDE cap. III §3.64-3.65 — las pérdidas de las comparables reflejan condiciones normales del mercado en el año gravable y su exclusión sesgaría el rango al alza."
-                  className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1">
-                  Se publica con el estudio y viaja al Excel de soporte. Escríbala antes de radicar.
-                </span>
+                {(engineConfig.negativasObjetivo ?? 0) > 0 && (
+                  <div className="flex flex-col pt-1">
+                    <label className="text-[11px] font-semibold text-zinc-500 mb-1">
+                      Justificación de admitir pérdidas
+                      {!String(engineConfig.justificacionPerdida || '').trim() && (
+                        <span className="text-amber-600 dark:text-amber-400 font-normal"> · falta, y va al informe</span>
+                      )}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={engineConfig.justificacionPerdida || ''}
+                      onChange={(e) => cambiarConfig('justificacionPerdida', e.target.value)}
+                      placeholder="Ej: Guías OCDE cap. III §3.64-3.65 — las pérdidas de las comparables reflejan condiciones normales del mercado en el año gravable y su exclusión sesgaría el rango al alza."
+                      className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50"
+                    />
+                    <span className="text-[10px] text-zinc-400 mt-1">
+                      Se publica con el estudio y viaja al Excel de soporte. Escríbala antes de radicar.
+                    </span>
 
-                {/* ══ El asistente ══
+                    {/* ══ El asistente ══
                     Pide la CAUSA porque es lo único que no está en los datos: las Guías OCDE
                     (cap. III, §3.64-3.65) no dicen «las pérdidas se admiten», dicen que una
                     pérdida no descalifica siempre que se analice su causa. El resto —cifras,
                     fundamento normativo, argumento del sesgo— sale del estudio. */}
-                <div className="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-2.5 space-y-2">
-                  <label className="text-[11px] font-semibold text-zinc-500 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1]" />
-                    ¿Por qué el sector tuvo pérdidas en {study.anio || 'el año gravable'}?
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={study.causaPerdidasSector || ''}
-                    onChange={(e) => updateStudy({ causaPerdidasSector: e.target.value })}
-                    placeholder="Dos líneas bastan: contracción de la demanda, alza de un insumo importado, devaluación, sobreoferta del sector…"
-                    className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50"
-                  />
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={redactarJustificacion}
-                      disabled={redactando}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#0FA3A1] text-white hover:bg-[#0B7C7A] disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {redactando
-                        ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Redactando…</>
-                        : <><Sparkles className="w-3.5 h-3.5" /> Redactar con IA</>}
-                    </button>
-                    <span className="text-[10px] text-zinc-400">
-                      Usa las cifras reales del estudio y no inventa causas: solo la que escriba arriba.
-                    </span>
-                  </div>
-
-                  {avisoJustificacion && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                      {avisoJustificacion}
-                    </p>
-                  )}
-
-                  {/* El borrador se propone; no pisa lo que haya hasta que se acepte. */}
-                  {borradorJustificacion && (
-                    <div className="rounded-lg bg-zinc-50 dark:bg-[#09090b] border border-[#0FA3A1]/40 p-2.5 space-y-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Borrador propuesto
-                      </span>
-                      <p className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                        {borradorJustificacion}
-                      </p>
+                    <div className="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-2.5 space-y-2">
+                      <label className="text-[11px] font-semibold text-zinc-500 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#0FA3A1]" />
+                        ¿Por qué el sector tuvo pérdidas en {study.anio || 'el año gravable'}?
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={study.causaPerdidasSector || ''}
+                        onChange={(e) => updateStudy({ causaPerdidasSector: e.target.value })}
+                        placeholder="Dos líneas bastan: contracción de la demanda, alza de un insumo importado, devaluación, sobreoferta del sector…"
+                        className="w-full bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50"
+                      />
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            cambiarConfig('justificacionPerdida', borradorJustificacion);
-                            setBorradorJustificacion(null);
-                          }}
-                          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                          onClick={redactarJustificacion}
+                          disabled={redactando}
+                          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#0FA3A1] text-white hover:bg-[#0B7C7A] disabled:opacity-50 flex items-center gap-1.5"
                         >
-                          Usar este texto
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBorradorJustificacion(null)}
-                          className="text-[11px] px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        >
-                          Descartar
+                          {redactando
+                            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Redactando…</>
+                            : <><Sparkles className="w-3.5 h-3.5" /> Redactar con IA</>}
                         </button>
                         <span className="text-[10px] text-zinc-400">
-                          Léalo antes de aceptarlo: se radica.
+                          Usa las cifras reales del estudio y no inventa causas: solo la que escriba arriba.
                         </span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* ══ Afinaciones ══
+                      {avisoJustificacion && (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                          {avisoJustificacion}
+                        </p>
+                      )}
+
+                      {/* El borrador se propone; no pisa lo que haya hasta que se acepte. */}
+                      {borradorJustificacion && (
+                        <div className="rounded-lg bg-zinc-50 dark:bg-[#09090b] border border-[#0FA3A1]/40 p-2.5 space-y-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            Borrador propuesto
+                          </span>
+                          <p className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                            {borradorJustificacion}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                cambiarConfig('justificacionPerdida', borradorJustificacion);
+                                setBorradorJustificacion(null);
+                              }}
+                              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                            >
+                              Usar este texto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBorradorJustificacion(null)}
+                              className="text-[11px] px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            >
+                              Descartar
+                            </button>
+                            <span className="text-[10px] text-zinc-400">
+                              Léalo antes de aceptarlo: se radica.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ══ Afinaciones ══
               Plegadas, con su costo en la propia barra: esconderlas no puede ocultar un
               descarte. */}
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setAfinacionesAbiertas(!afinacionesAbiertas)}
-              className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/40 rounded-lg transition-colors"
-            >
-              <span className="flex items-center gap-1.5">
-                {afinacionesAbiertas
-                  ? <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-                  : <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />}
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                  Afinaciones
-                </span>
-                <span className="text-[10.5px] text-zinc-500">
-                  N objetivo, holding, saldos negativos, geografía
-                </span>
-              </span>
-              {previsualizacion.hayUniverso && (
-                <span className="text-[10.5px] text-zinc-500 shrink-0">
-                  sacan{' '}
-                  <b className="text-zinc-700 dark:text-zinc-300">
-                    {mil(previsualizacion.pasos
-                      .filter((x) => x.clave === 'holding' || x.clave === 'saldoNegativo')
-                      .reduce((n, x) => n + x.saca, 0))}
-                  </b>
-                </span>
-              )}
-            </button>
-
-            {afinacionesAbiertas && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 pt-0">
-                <div className="flex flex-col">
-                  <label className="text-[11px] font-semibold text-zinc-500 mb-1">N Objetivo (Tope 30)</label>
-                  <input
-                    type="number"
-                    min="4"
-                    max="30"
-                    value={engineConfig.nTarget}
-                    onChange={(e) => cambiarConfig('nTarget', Number(e.target.value))}
-                    className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                  />
-                  <span className="text-[10px] text-zinc-400 mt-1">
-                    Cuántas entran en la muestra. Piso normativo del motor: {MINIMO_COMPARABLES}.
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setAfinacionesAbiertas(!afinacionesAbiertas)}
+                  className="w-full flex items-center justify-between gap-2 p-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/40 rounded-lg transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {afinacionesAbiertas
+                      ? <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                      : <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                      Afinaciones
+                    </span>
+                    <span className="text-[10.5px] text-zinc-500">
+                      N objetivo, holding, saldos negativos, geografía
+                    </span>
                   </span>
-                </div>
+                  {previsualizacion.hayUniverso && (
+                    <span className="text-[10.5px] text-zinc-500 shrink-0">
+                      sacan{' '}
+                      <b className="text-zinc-700 dark:text-zinc-300">
+                        {mil(previsualizacion.pasos
+                          .filter((x) => x.clave === 'holding' || x.clave === 'saldoNegativo')
+                          .reduce((n, x) => n + x.saca, 0))}
+                      </b>
+                    </span>
+                  )}
+                </button>
 
-                <div className="flex flex-col">
-                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <label className="text-[11px] font-semibold text-zinc-500">Sociedades Holding</label>
-                    <CostoDelFiltro
-                      paso={previsualizacion.pasos.find((x) => x.clave === 'holding')}
-                      universo={previsualizacion.universo}
-                      expandido={filtroExpandido === 'holding'}
-                      alExpandir={() => setFiltroExpandido(filtroExpandido === 'holding' ? null : 'holding')}
-                    />
+                {afinacionesAbiertas && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 pt-0">
+                    <div className="flex flex-col">
+                      <label className="text-[11px] font-semibold text-zinc-500 mb-1">N Objetivo (Tope 30)</label>
+                      <input
+                        type="number"
+                        min="4"
+                        max="30"
+                        value={engineConfig.nTarget}
+                        onChange={(e) => cambiarConfig('nTarget', Number(e.target.value))}
+                        className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                      />
+                      <span className="text-[10px] text-zinc-400 mt-1">
+                        Cuántas entran en la muestra. Piso normativo del motor: {MINIMO_COMPARABLES}.
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col">
+                      <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <label className="text-[11px] font-semibold text-zinc-500">Sociedades Holding</label>
+                        <CostoDelFiltro
+                          paso={previsualizacion.pasos.find((x) => x.clave === 'holding')}
+                          universo={previsualizacion.universo}
+                          expandido={filtroExpandido === 'holding'}
+                          alExpandir={() => setFiltroExpandido(filtroExpandido === 'holding' ? null : 'holding')}
+                        />
+                      </div>
+                      <select
+                        value={engineConfig.holding}
+                        onChange={(e) => cambiarConfig('holding', e.target.value)}
+                        className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                      >
+                        <option value="excluir">Excluir (sin actividad propia)</option>
+                        <option value="incluir">Incluir</option>
+                      </select>
+                      <span className="text-[10px] text-zinc-400 mt-1">
+                        Se presume de la razón social: revise los ejemplos, por el nombre se acierta de más.
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col">
+                      <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <label className="text-[11px] font-semibold text-zinc-500">Saldos Negativos</label>
+                        <CostoDelFiltro
+                          paso={previsualizacion.pasos.find((x) => x.clave === 'saldoNegativo')}
+                          universo={previsualizacion.universo}
+                          expandido={filtroExpandido === 'saldoNegativo'}
+                          alExpandir={() => setFiltroExpandido(filtroExpandido === 'saldoNegativo' ? null : 'saldoNegativo')}
+                        />
+                      </div>
+                      <select
+                        value={engineConfig.saldoNegativo}
+                        onChange={(e) => cambiarConfig('saldoNegativo', e.target.value)}
+                        className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                      >
+                        <option value="excluir">Excluir (datos no verosímiles)</option>
+                        <option value="incluir">Incluir</option>
+                      </select>
+                      <span className="text-[10px] text-zinc-400 mt-1">
+                        Cartera, cuentas por pagar o inventarios en negativo. No son pérdidas.
+                      </span>
+                    </div>
+
+                    {/* No descarta a nadie, y el rótulo lo dice. Parecía un filtro. */}
+                    <div className="flex flex-col">
+                      <label className="text-[11px] font-semibold text-zinc-500 mb-1">Prioridad Geográfica</label>
+                      <select
+                        value={engineConfig.geo}
+                        onChange={(e) => cambiarConfig('geo', e.target.value)}
+                        className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                      >
+                        <option value="ninguna">Global</option>
+                        <option value="LATAM">América Latina</option>
+                        <option value="NORTEAM">Norteamérica</option>
+                      </select>
+                      <span className="text-[10px] text-zinc-400 mt-1">
+                        {previsualizacion.geografia.texto}
+                      </span>
+                    </div>
+
+                    {['holding', 'saldoNegativo'].includes(filtroExpandido) && (
+                      <EjemplosDelFiltro paso={previsualizacion.pasos.find((x) => x.clave === filtroExpandido)} />
+                    )}
                   </div>
-                  <select
-                    value={engineConfig.holding}
-                    onChange={(e) => cambiarConfig('holding', e.target.value)}
-                    className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                  >
-                    <option value="excluir">Excluir (sin actividad propia)</option>
-                    <option value="incluir">Incluir</option>
-                  </select>
-                  <span className="text-[10px] text-zinc-400 mt-1">
-                    Se presume de la razón social: revise los ejemplos, por el nombre se acierta de más.
-                  </span>
-                </div>
-
-                <div className="flex flex-col">
-                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <label className="text-[11px] font-semibold text-zinc-500">Saldos Negativos</label>
-                    <CostoDelFiltro
-                      paso={previsualizacion.pasos.find((x) => x.clave === 'saldoNegativo')}
-                      universo={previsualizacion.universo}
-                      expandido={filtroExpandido === 'saldoNegativo'}
-                      alExpandir={() => setFiltroExpandido(filtroExpandido === 'saldoNegativo' ? null : 'saldoNegativo')}
-                    />
-                  </div>
-                  <select
-                    value={engineConfig.saldoNegativo}
-                    onChange={(e) => cambiarConfig('saldoNegativo', e.target.value)}
-                    className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                  >
-                    <option value="excluir">Excluir (datos no verosímiles)</option>
-                    <option value="incluir">Incluir</option>
-                  </select>
-                  <span className="text-[10px] text-zinc-400 mt-1">
-                    Cartera, cuentas por pagar o inventarios en negativo. No son pérdidas.
-                  </span>
-                </div>
-
-                {/* No descarta a nadie, y el rótulo lo dice. Parecía un filtro. */}
-                <div className="flex flex-col">
-                  <label className="text-[11px] font-semibold text-zinc-500 mb-1">Prioridad Geográfica</label>
-                  <select
-                    value={engineConfig.geo}
-                    onChange={(e) => cambiarConfig('geo', e.target.value)}
-                    className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                  >
-                    <option value="ninguna">Global</option>
-                    <option value="LATAM">América Latina</option>
-                    <option value="NORTEAM">Norteamérica</option>
-                  </select>
-                  <span className="text-[10px] text-zinc-400 mt-1">
-                    {previsualizacion.geografia.texto}
-                  </span>
-                </div>
-
-                {['holding', 'saldoNegativo'].includes(filtroExpandido) && (
-                  <EjemplosDelFiltro paso={previsualizacion.pasos.find((x) => x.clave === filtroExpandido)} />
                 )}
               </div>
-            )}
-          </div>
 
-          {/* ══ El cierre: qué queda, qué entra, y qué se va a pagar ══
+              {/* ══ El cierre: qué queda, qué entra, y qué se va a pagar ══
               Reencuadra la pantalla: casi nunca manda el filtro, manda el cupo. Y el costo de la
               curación es el dato que faltaba para no configurar a ciegas. */}
-          {previsualizacion.hayUniverso && (
-            <div className="rounded-lg bg-zinc-50 dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
-              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11.5px]">
-                <span className="text-zinc-500">
-                  Universo <b className="text-zinc-800 dark:text-zinc-200">{mil(previsualizacion.universo)}</b>
-                </span>
-                <span className="text-zinc-400">→</span>
-                <span className="text-zinc-500">
-                  pasan los filtros <b className="text-zinc-800 dark:text-zinc-200">{mil(previsualizacion.quedan)}</b>
-                </span>
-                <span className="text-zinc-400">→</span>
-                <span className="text-zinc-500">
-                  entran <b className="text-[#0B7C7A] dark:text-[#0FA3A1]">{mil(previsualizacion.entran)}</b>
-                  {previsualizacion.reserva > 0 && (
-                    <span className="text-zinc-400"> · {mil(previsualizacion.reserva)} en reserva</span>
-                  )}
-                </span>
-              </div>
+              {previsualizacion.hayUniverso && (
+                <div className="rounded-lg bg-zinc-50 dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11.5px]">
+                    <span className="text-zinc-500">
+                      Universo <b className="text-zinc-800 dark:text-zinc-200">{mil(previsualizacion.universo)}</b>
+                    </span>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-500">
+                      pasan los filtros <b className="text-zinc-800 dark:text-zinc-200">{mil(previsualizacion.quedan)}</b>
+                    </span>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-500">
+                      entran <b className="text-[#0B7C7A] dark:text-[#0FA3A1]">{mil(previsualizacion.entran)}</b>
+                      {previsualizacion.reserva > 0 && (
+                        <span className="text-zinc-400"> · {mil(previsualizacion.reserva)} en reserva</span>
+                      )}
+                    </span>
+                  </div>
 
-              {previsualizacion.curacion.aCurar > 0 ? (
-                <div className="flex items-start gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  <Clock className="w-3.5 h-3.5 mt-px shrink-0 text-zinc-400" />
-                  <span>
-                    Al ejecutar el paso 3 se curarán{' '}
-                    <b>{mil(previsualizacion.curacion.aCurar)}</b> candidatas en{' '}
-                    {previsualizacion.curacion.lotes} lote(s), ~{previsualizacion.curacion.etaMinutos} min
-                    {previsualizacion.curacion.reutilizadas > 0
-                      && ` · ${mil(previsualizacion.curacion.reutilizadas)} ya curadas se reutilizan sin volver a pagarse`}
-                    {previsualizacion.curacion.sinDatosParaCurar > 0
-                      && ` · ${mil(previsualizacion.curacion.sinDatosParaCurar)} sin descripción del negocio pasan a la heurística, sin costo`}.
-                  </span>
-                </div>
-              ) : (
-                <div className="text-[11px] text-zinc-500">
-                  No hay candidatas nuevas que curar con esta configuración.
+                  {previsualizacion.curacion.aCurar > 0 ? (
+                    <div className="flex items-start gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                      <Clock className="w-3.5 h-3.5 mt-px shrink-0 text-zinc-400" />
+                      <span>
+                        Al ejecutar el paso 3 se curarán{' '}
+                        <b>{mil(previsualizacion.curacion.aCurar)}</b> candidatas en{' '}
+                        {previsualizacion.curacion.lotes} lote(s), ~{previsualizacion.curacion.etaMinutos} min
+                        {previsualizacion.curacion.reutilizadas > 0
+                          && ` · ${mil(previsualizacion.curacion.reutilizadas)} ya curadas se reutilizan sin volver a pagarse`}
+                        {previsualizacion.curacion.sinDatosParaCurar > 0
+                          && ` · ${mil(previsualizacion.curacion.sinDatosParaCurar)} sin descripción del negocio pasan a la heurística, sin costo`}.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-zinc-500">
+                      No hay candidatas nuevas que curar con esta configuración.
+                    </div>
+                  )}
+
+                  {/* Aquí termina lo que se puede afirmar sin la IA, y se dice. */}
+                  <div className="text-[10.5px] text-zinc-400 leading-relaxed border-t border-zinc-200 dark:border-zinc-800 pt-2">
+                    De aquí en adelante decide la curación: si la actividad de cada candidata coincide
+                    con la del contribuyente solo lo sabe el modelo, así que este embudo no lo estima.
+                    {previsualizacion.continuidad.total > 0 && (
+                      <> El estudio anterior aporta {previsualizacion.continuidad.total} comparable(s)
+                        {previsualizacion.continuidad.caen.length === 0
+                          ? ', y esta configuración las conserva todas.'
+                          : '.'}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
-
-              {/* Aquí termina lo que se puede afirmar sin la IA, y se dice. */}
-              <div className="text-[10.5px] text-zinc-400 leading-relaxed border-t border-zinc-200 dark:border-zinc-800 pt-2">
-                De aquí en adelante decide la curación: si la actividad de cada candidata coincide
-                con la del contribuyente solo lo sabe el modelo, así que este embudo no lo estima.
-                {previsualizacion.continuidad.total > 0 && (
-                  <> El estudio anterior aporta {previsualizacion.continuidad.total} comparable(s)
-                    {previsualizacion.continuidad.caen.length === 0
-                      ? ', y esta configuración las conserva todas.'
-                      : '.'}
-                  </>
-                )}
-              </div>
             </div>
-          )}
-        </div>
 
-        {/* Paso 3: Ejecutar Selección y Curación Gemini AI */}
-        <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">3</span>
-            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Ejecutar la Selección & Curación con Gemini AI</span>
-          </div>
+            {/* Paso 3: Ejecutar Selección y Curación Gemini AI */}
+            <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">3</span>
+                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Ejecutar la Selección & Curación con Gemini AI</span>
+              </div>
 
-          <div className="flex items-center gap-3">
-            {/* bloqueado mientras cura: ejecutar a medias daría un conjunto con
+              <div className="flex items-center gap-3">
+                {/* bloqueado mientras cura: ejecutar a medias daría un conjunto con
                 criterios distintos según qué lotes hubieran terminado */}
-            <button
-              onClick={runEngineSelection}
-              disabled={loadingSelection || curando}
-              className={'flex items-center gap-2 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition-colors shadow-sm ' +
-                (loadingSelection || curando ? 'bg-zinc-400 cursor-not-allowed' : 'bg-[#0FA3A1] hover:bg-[#0B7C7A] cursor-pointer')}
-              title={curando ? 'Espere a que termine la curación por IA' : undefined}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>
-                {curando ? 'Curando las candidatas con IA…'
-                  : loadingSelection ? 'Puntuando y seleccionando…'
-                    : 'Ejecutar Selección Automática'}
-              </span>
-            </button>
+                <button
+                  onClick={runEngineSelection}
+                  disabled={loadingSelection || curando}
+                  className={'flex items-center gap-2 text-white px-5 py-2.5 rounded-lg text-xs font-bold transition-colors shadow-sm ' +
+                    (loadingSelection || curando ? 'bg-zinc-400 cursor-not-allowed' : 'bg-[#0FA3A1] hover:bg-[#0B7C7A] cursor-pointer')}
+                  title={curando ? 'Espere a que termine la curación por IA' : undefined}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    {curando ? 'Curando las candidatas con IA…'
+                      : loadingSelection ? 'Puntuando y seleccionando…'
+                        : 'Ejecutar Selección Automática'}
+                  </span>
+                </button>
 
-            {/* ── OTRA COMBINACIÓN ──
+                {/* ── OTRA COMBINACIÓN ──
                 Pedido el 2026-09-02: poder reejecutar y obtener comparables distintas. Recorre
                 combinaciones NUMERADAS, no aleatorias: la alternativa 3 es siempre la misma
                 muestra, así que el estudio sigue siendo reproducible y el informe puede
@@ -3300,58 +3305,58 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
                 combinaciones que no existen devolvería la misma muestra y el botón parecería
                 roto. No gasta curación —el veredicto de actividad ya está pagado y se
                 reutiliza—, así que explorar es gratis. */}
-            {selectionFunnel && selectionFunnel.alternativasDisponibles > 1 && (
-              <button
-                onClick={otraCombinacion}
-                disabled={loadingSelection || curando}
-                className={'flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border transition-colors '
-                  + (loadingSelection || curando
-                    ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
-                    : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer')}
-                title={'Sustituye las comparables de menor puntaje por las siguientes de la '
-                  + 'reserva. Cada combinación está numerada y es reproducible: la misma '
-                  + 'siempre da la misma muestra. No vuelve a pagar la curación.'}
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>
-                  Otra combinación ({selectionFunnel.alternativa || 1}/{selectionFunnel.alternativasDisponibles})
-                </span>
-              </button>
-            )}
+                {selectionFunnel && selectionFunnel.alternativasDisponibles > 1 && (
+                  <button
+                    onClick={otraCombinacion}
+                    disabled={loadingSelection || curando}
+                    className={'flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border transition-colors '
+                      + (loadingSelection || curando
+                        ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
+                        : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer')}
+                    title={'Sustituye las comparables de menor puntaje por las siguientes de la '
+                      + 'reserva. Cada combinación está numerada y es reproducible: la misma '
+                      + 'siempre da la misma muestra. No vuelve a pagar la curación.'}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>
+                      Otra combinación ({selectionFunnel.alternativa || 1}/{selectionFunnel.alternativasDisponibles})
+                    </span>
+                  </button>
+                )}
 
-            {/* ── HACIA DONDE ──
+                {/* ── HACIA DONDE ──
                 Pedido el 2026-09-02: «me gustaría poder definirle si queremos que los cuartiles
                 suban o bajen». La sustitución por puntaje cambiaba la muestra sin mover el
                 cuartil —medido: oscilaba entre 9,05 % y 8,45 % sin ir a ninguna parte—, porque
                 las que salían y entraban no tenían por qué estar cerca del primer cuartil. Con
                 dirección la sustitución se hace por margen y el cuartil va monótono. */}
-            {selectionFunnel && selectionFunnel.alternativasDisponibles > 1
-              && selectionFunnel.plazasQueRotan > 0 && (
-              <div className="flex items-center gap-1">
-                {[['bajar', 'Bajar cuartiles', ArrowDown], ['subir', 'Subir cuartiles', ArrowUp]]
-                  .map(([dir, etq, Icono]) => (
-                    <button
-                      key={dir}
-                      onClick={() => otraCombinacion(dir)}
-                      disabled={loadingSelection || curando}
-                      className={'flex items-center gap-1 px-2.5 py-2.5 rounded-lg text-[11px] font-bold border transition-colors '
-                        + (loadingSelection || curando
-                          ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
-                          : (selectionFunnel.direccionAlternativa === dir
-                            ? 'border-[#0FA3A1] bg-[#0FA3A1]/10 text-[#0B7C7A] dark:text-[#0FA3A1] cursor-pointer'
-                            : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'))}
-                      title={dir === 'bajar'
-                        ? 'Sustituye las comparables de margen más alto por las más bajas de la reserva, de modo que el rango entero baja. Queda declarado en el Excel de soporte.'
-                        : 'Sustituye las de margen más bajo por las más altas de la reserva, de modo que el rango entero sube. Queda declarado en el Excel de soporte.'}
-                    >
-                      <Icono className="w-3.5 h-3.5" />
-                      <span>{etq}</span>
-                    </button>
-                  ))}
-              </div>
-            )}
+                {selectionFunnel && selectionFunnel.alternativasDisponibles > 1
+                  && selectionFunnel.plazasQueRotan > 0 && (
+                    <div className="flex items-center gap-1">
+                      {[['bajar', 'Bajar cuartiles', ArrowDown], ['subir', 'Subir cuartiles', ArrowUp]]
+                        .map(([dir, etq, Icono]) => (
+                          <button
+                            key={dir}
+                            onClick={() => otraCombinacion(dir)}
+                            disabled={loadingSelection || curando}
+                            className={'flex items-center gap-1 px-2.5 py-2.5 rounded-lg text-[11px] font-bold border transition-colors '
+                              + (loadingSelection || curando
+                                ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
+                                : (selectionFunnel.direccionAlternativa === dir
+                                  ? 'border-[#0FA3A1] bg-[#0FA3A1]/10 text-[#0B7C7A] dark:text-[#0FA3A1] cursor-pointer'
+                                  : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'))}
+                            title={dir === 'bajar'
+                              ? 'Sustituye las comparables de margen más alto por las más bajas de la reserva, de modo que el rango entero baja. Queda declarado en el Excel de soporte.'
+                              : 'Sustituye las de margen más bajo por las más altas de la reserva, de modo que el rango entero sube. Queda declarado en el Excel de soporte.'}
+                          >
+                            <Icono className="w-3.5 h-3.5" />
+                            <span>{etq}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
 
-            {/* ── PRIORIZAR CONTINUIDAD ──
+                {/* ── PRIORIZAR CONTINUIDAD ──
                 Pedido el 2026-09-02, «frente a los recién creados botones de cuartiles». La
                 continuidad YA entraba antes de competir por puntaje y ya estaba exenta del
                 filtro de holding; lo que la seguía descartando eran el filtro de pérdidas
@@ -3359,50 +3364,50 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
 
                 Solo aparece cuando el estudio anterior aporta comparables: sin ellas no hay nada
                 que priorizar. */}
-            {estudioAnteriorInfo && Array.isArray(estudioAnteriorInfo.comparables)
-              && estudioAnteriorInfo.comparables.length > 0 && (
-              <button
-                onClick={priorizarContinuidad}
-                disabled={loadingSelection || curando}
-                className={'flex items-center gap-1 px-2.5 py-2.5 rounded-lg text-[11px] font-bold border transition-colors '
-                  + (loadingSelection || curando
-                    ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
-                    : (selectionFunnel && selectionFunnel.priorizoContinuidad
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 cursor-pointer'
-                      : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'))}
-                title={'Rescata las comparables del estudio anterior que el filtro de pérdidas '
-                  + 'operativas dejó fuera, y evita que la cuota de negativas las desplace. NO '
-                  + 'rescata de independencia (Art. 260-1) ni de saldos negativos: lo primero es '
-                  + 'un hecho de hoy y lo segundo es dato no verosímil. Queda declarado en el '
-                  + 'Excel de soporte.'}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Priorizar continuidad</span>
-              </button>
-            )}
+                {estudioAnteriorInfo && Array.isArray(estudioAnteriorInfo.comparables)
+                  && estudioAnteriorInfo.comparables.length > 0 && (
+                    <button
+                      onClick={priorizarContinuidad}
+                      disabled={loadingSelection || curando}
+                      className={'flex items-center gap-1 px-2.5 py-2.5 rounded-lg text-[11px] font-bold border transition-colors '
+                        + (loadingSelection || curando
+                          ? 'border-zinc-300 text-zinc-400 cursor-not-allowed'
+                          : (selectionFunnel && selectionFunnel.priorizoContinuidad
+                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 cursor-pointer'
+                            : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'))}
+                      title={'Rescata las comparables del estudio anterior que el filtro de pérdidas '
+                        + 'operativas dejó fuera, y evita que la cuota de negativas las desplace. NO '
+                        + 'rescata de independencia (Art. 260-1) ni de saldos negativos: lo primero es '
+                        + 'un hecho de hoy y lo segundo es dato no verosímil. Queda declarado en el '
+                        + 'Excel de soporte.'}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Priorizar continuidad</span>
+                    </button>
+                  )}
 
-            {/* ── LO QUE EL ANALISTA AGREGO A MANO ──
+                {/* ── LO QUE EL ANALISTA AGREGO A MANO ──
                 Estas comparables no salieron del cribado ni pasaron por la curación: las eligió
                 el analista y entraron cargando su estado financiero. El motor ya no las borra al
                 reejecutar (2026-09-05), y decirlo aquí importa porque son las que el informe
                 tiene que sustentar como elección propia. */}
-            {selectionFunnel && selectionFunnel.agregadasAMano > 0 && (
-              <span className="text-[10.5px] leading-snug max-w-[18rem]">
-                <span className="font-bold text-[#0B7C7A] dark:text-[#0FA3A1]">
-                  {selectionFunnel.agregadasAMano} agregada(s) a mano
-                </span>
-                {' se conservaron: las trajo usted cargando su estado financiero, no el cribado, '
-                  + 'y no pasaron por la curación de actividad. Sustente su inclusión en el informe.'}
-                {selectionFunnel.agregadasExcedenObjetivo && (
-                  <span className="block mt-0.5 text-amber-700 dark:text-amber-400">
-                    Ya superan el tamaño de muestra que pidió, así que el motor no agregó
-                    ninguna. Retire las que sobren si quiere bajar a ese número.
+                {selectionFunnel && selectionFunnel.agregadasAMano > 0 && (
+                  <span className="text-[10.5px] leading-snug max-w-[18rem]">
+                    <span className="font-bold text-[#0B7C7A] dark:text-[#0FA3A1]">
+                      {selectionFunnel.agregadasAMano} agregada(s) a mano
+                    </span>
+                    {' se conservaron: las trajo usted cargando su estado financiero, no el cribado, '
+                      + 'y no pasaron por la curación de actividad. Sustente su inclusión en el informe.'}
+                    {selectionFunnel.agregadasExcedenObjetivo && (
+                      <span className="block mt-0.5 text-amber-700 dark:text-amber-400">
+                        Ya superan el tamaño de muestra que pidió, así que el motor no agregó
+                        ninguna. Retire las que sobren si quiere bajar a ese número.
+                      </span>
+                    )}
                   </span>
                 )}
-              </span>
-            )}
 
-            {/* ── LA CONCILIACION CONTRA EL ESTUDIO ANTERIOR ──
+                {/* ── LA CONCILIACION CONTRA EL ESTUDIO ANTERIOR ──
                 Pedido el 2026-09-02: «generamos con las comparables del año anterior, si nos
                 funciona pues perfecto, y si no ya tenemos justificación del porqué no de ello a
                 nuestros clientes».
@@ -3411,396 +3416,749 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
                 que el screening no devolvió es invisible para él —no está entre las candidatas,
                 así que no se puede seleccionar ni rechazar— y simplemente no salía. Esta línea
                 clasifica las cuatro situaciones y da el motivo de cada una. */}
-            {conciliacion && conciliacion.porExplicar > 0 && (
-              <span className="text-[10.5px] leading-snug max-w-[20rem]">
-                <span className="font-bold text-zinc-700 dark:text-zinc-200">
-                  Del estudio anterior: {conciliacion.enLaMuestra} de {conciliacion.total} siguen.
-                </span>
-                {' '}
-                {[
-                  [conciliacion.traidasSinCifras, 'traída(s) a la tabla SIN cifras: no cuentan en el rango'],
-                  [conciliacion.descartadas, 'descartada(s) por un filtro'],
-                  [conciliacion.enReserva, 'en reserva (siguen siendo comparables)'],
-                  [conciliacion.fueraDelCribado, 'que el cribado de este año no trae'],
-                  [conciliacion.sinEvaluar, 'sin evaluar en la última corrida'],
-                ].filter(([n]) => n > 0).map(([n, etq]) => `${n} ${etq}`).join(' · ')}
-                {/* LOS PARES CONCRETOS, y no solo el conteo.
+                {conciliacion && conciliacion.porExplicar > 0 && (
+                  <span className="text-[10.5px] leading-snug max-w-[20rem]">
+                    <span className="font-bold text-zinc-700 dark:text-zinc-200">
+                      Del estudio anterior: {conciliacion.enLaMuestra} de {conciliacion.total} siguen.
+                    </span>
+                    {' '}
+                    {[
+                      [conciliacion.traidasSinCifras, 'traída(s) a la tabla SIN cifras: no cuentan en el rango'],
+                      [conciliacion.descartadas, 'descartada(s) por un filtro'],
+                      [conciliacion.enReserva, 'en reserva (siguen siendo comparables)'],
+                      [conciliacion.fueraDelCribado, 'que el cribado de este año no trae'],
+                      [conciliacion.sinEvaluar, 'sin evaluar en la última corrida'],
+                    ].filter(([n]) => n > 0).map(([n, etq]) => `${n} ${etq}`).join(' · ')}
+                    {/* LOS PARES CONCRETOS, y no solo el conteo.
                     Reportado el 2026-09-02: el panel decía «1 podría(n) estar en el cribado con
                     el nombre escrito de otra forma» y para saber CUÁL había que abrir el Excel.
                     Con el par a la vista se resuelve de un golpe: o son la misma compañía y hay
                     que corregir el nombre, o no lo son y se sustenta que se fue. */}
-                {conciliacion.posiblesCoincidencias > 0 && (
-                  <span className="block mt-1 text-amber-700 dark:text-amber-400">
-                    Ojo: {conciliacion.posiblesCoincidencias} podría(n) estar en el cribado con el
-                    nombre escrito de otra forma:
-                    <span className="block mt-0.5 space-y-0.5">
-                      {conciliacion.filas
-                        .filter((f) => f.estado === 'fueraDelCribado' && f.parecido)
-                        .slice(0, 4)
-                        .map((f) => (
-                          <span key={f.clave} className="block">
-                            «<strong>{f.name}</strong>» ¿es «<strong>{f.parecido.name}</strong>»?
-                          </span>
-                        ))}
-                    </span>
-                    Si es la misma, corrija el nombre en el estudio anterior y vuelva a ejecutar.
-                  </span>
-                )}
+                    {conciliacion.posiblesCoincidencias > 0 && (
+                      <span className="block mt-1 text-amber-700 dark:text-amber-400">
+                        Ojo: {conciliacion.posiblesCoincidencias} podría(n) estar en el cribado con el
+                        nombre escrito de otra forma:
+                        <span className="block mt-0.5 space-y-0.5">
+                          {conciliacion.filas
+                            .filter((f) => f.estado === 'fueraDelCribado' && f.parecido)
+                            .slice(0, 4)
+                            .map((f) => (
+                              <span key={f.clave} className="block">
+                                «<strong>{f.name}</strong>» ¿es «<strong>{f.parecido.name}</strong>»?
+                              </span>
+                            ))}
+                        </span>
+                        Si es la misma, corrija el nombre en el estudio anterior y vuelva a ejecutar.
+                      </span>
+                    )}
 
-                {/* Y las que NO tienen ni parecido: esas sí se fueron, y son las que hay que
+                    {/* Y las que NO tienen ni parecido: esas sí se fueron, y son las que hay que
                     sustentar ante el cliente. Se nombran para poder escribirlo. */}
-                {conciliacion.filas.some((f) => f.estado === 'fueraDelCribado' && !f.parecido) && (
-                  <span className="block mt-1 text-zinc-600 dark:text-zinc-400">
-                    Sin parecido en el cribado —estas sí hay que sustentarlas—:{' '}
-                    {conciliacion.filas
-                      .filter((f) => f.estado === 'fueraDelCribado' && !f.parecido)
-                      .slice(0, 5)
-                      .map((f) => f.name)
-                      .join(', ')}
+                    {conciliacion.filas.some((f) => f.estado === 'fueraDelCribado' && !f.parecido) && (
+                      <span className="block mt-1 text-zinc-600 dark:text-zinc-400">
+                        Sin parecido en el cribado —estas sí hay que sustentarlas—:{' '}
+                        {conciliacion.filas
+                          .filter((f) => f.estado === 'fueraDelCribado' && !f.parecido)
+                          .slice(0, 5)
+                          .map((f) => f.name)
+                          .join(', ')}
+                      </span>
+                    )}
+                    <span className="block mt-0.5 text-zinc-500">
+                      El motivo de cada una va en la hoja «Selección comparables» del Excel de soporte.
+                    </span>
                   </span>
                 )}
-                <span className="block mt-0.5 text-zinc-500">
-                  El motivo de cada una va en la hoja «Selección comparables» del Excel de soporte.
-                </span>
-              </span>
-            )}
 
-            {/* Lo que el modo rescató y lo que no pudo. Lo segundo importa más: una comparable
+                {/* Lo que el modo rescató y lo que no pudo. Lo segundo importa más: una comparable
                 del estudio pasado que desaparece en silencio se descubre al cotejar los dos
                 informes, y para entonces hay que explicarla sin saber por qué se fue. */}
-            {/* LAS INYECTADAS NECESITAN CIFRAS, y hasta entonces no cuentan.
+                {/* LAS INYECTADAS NECESITAN CIFRAS, y hasta entonces no cuentan.
                 El botón las trae «sin importar qué» —pedido del 2026-09-02— pero una comparable
                 que el cribado no devolvió no tiene cifras de este año: se ve en la tabla y NO
                 entra al cuartil, porque meterla sin cifras sería inventarle un margen. Decirlo
                 aquí es lo que evita que el analista crea que ya están contando. */}
-            {selectionFunnel && selectionFunnel.continuidadInyectadas > 0 && (
-              <span className="text-[10.5px] leading-snug max-w-[18rem] text-amber-700 dark:text-amber-400">
-                <strong>{selectionFunnel.continuidadInyectadas} del año anterior entraron sin
-                cifras de este año.</strong>{' '}
-                Están en la tabla pero NO cuentan en el rango hasta que se les cargue el estado
-                financiero: use «Buscar cifras ya cargadas por el equipo» o adjúnteselo a cada
-                una.
-              </span>
-            )}
+                {selectionFunnel && selectionFunnel.continuidadInyectadas > 0 && (
+                  <span className="text-[10.5px] leading-snug max-w-[18rem] text-amber-700 dark:text-amber-400">
+                    <strong>{selectionFunnel.continuidadInyectadas} del año anterior entraron sin
+                      cifras de este año.</strong>{' '}
+                    Están en la tabla pero NO cuentan en el rango hasta que se les cargue el estado
+                    financiero: use «Buscar cifras ya cargadas por el equipo» o adjúnteselo a cada
+                    una.
+                  </span>
+                )}
 
-            {selectionFunnel && selectionFunnel.priorizoContinuidad && (
-              <span className="text-[10.5px] leading-snug max-w-[18rem]">
-                <span className="text-indigo-700 dark:text-indigo-400 font-bold">
-                  {selectionFunnel.continuidadRescatadas} rescatada(s)
-                </span>
-                {' del filtro de pérdidas. '}
-                {selectionFunnel.continuidadNoRescatada
-                  && selectionFunnel.continuidadNoRescatada.length > 0 ? (
-                    <span className="text-amber-700 dark:text-amber-400">
-                      {selectionFunnel.continuidadNoRescatada.length} no pudo(ieron) volver:{' '}
-                      {selectionFunnel.continuidadNoRescatada.slice(0, 2)
-                        .map((c) => `${c.name} (${c.motivo})`).join('; ')}
-                      {selectionFunnel.continuidadNoRescatada.length > 2 ? '…' : ''}
+                {selectionFunnel && selectionFunnel.priorizoContinuidad && (
+                  <span className="text-[10.5px] leading-snug max-w-[18rem]">
+                    <span className="text-indigo-700 dark:text-indigo-400 font-bold">
+                      {selectionFunnel.continuidadRescatadas} rescatada(s)
                     </span>
-                  ) : (
-                    /* «Todas están en la muestra» solo si de verdad cuentan. Con inyectadas sin
-                       cifras esa frase era cierta en la tabla y falsa en el rango, y fue como se
-                       leyó mal (2026-09-02). */
-                    <span className="text-zinc-500">
-                      {conciliacion && conciliacion.traidasSinCifras > 0
-                        ? `${conciliacion.traidasSinCifras} están en la tabla pero sin cifras: aún no cuentan en el rango.`
-                        : 'Todas las del estudio anterior están en la muestra y cuentan en el rango.'}
-                    </span>
-                  )}
-              </span>
-            )}
+                    {' del filtro de pérdidas. '}
+                    {selectionFunnel.continuidadNoRescatada
+                      && selectionFunnel.continuidadNoRescatada.length > 0 ? (
+                      <span className="text-amber-700 dark:text-amber-400">
+                        {selectionFunnel.continuidadNoRescatada.length} no pudo(ieron) volver:{' '}
+                        {selectionFunnel.continuidadNoRescatada.slice(0, 2)
+                          .map((c) => `${c.name} (${c.motivo})`).join('; ')}
+                        {selectionFunnel.continuidadNoRescatada.length > 2 ? '…' : ''}
+                      </span>
+                    ) : (
+                      /* «Todas están en la muestra» solo si de verdad cuentan. Con inyectadas sin
+                         cifras esa frase era cierta en la tabla y falsa en el rango, y fue como se
+                         leyó mal (2026-09-02). */
+                      <span className="text-zinc-500">
+                        {conciliacion && conciliacion.traidasSinCifras > 0
+                          ? `${conciliacion.traidasSinCifras} están en la tabla pero sin cifras: aún no cuentan en el rango.`
+                          : 'Todas las del estudio anterior están en la muestra y cuentan en el rango.'}
+                      </span>
+                    )}
+                  </span>
+                )}
 
-            {/* POR QUE A VECES NO SE VE NINGUN CAMBIO.
+                {/* POR QUE A VECES NO SE VE NINGUN CAMBIO.
                 Reportado el 2026-09-02. Las de continuidad no se sustituyen —su inclusión se
                 sustentó el año anterior— así que solo rotan las plazas restantes. Con 10 de
                 continuidad en una muestra de 12 se mueven 2 comparables y el primer cuartil, que
                 cae en la posición 2,75, ni se entera. */}
-            {selectionFunnel && selectionFunnel.alternativasDisponibles > 1
-              && selectionFunnel.plazasFijasPorContinuidad > 0
-              && selectionFunnel.plazasQueRotan
-                <= selectionFunnel.plazasFijasPorContinuidad / 2 && (
-              <span className="text-[10.5px] text-amber-700 dark:text-amber-400 leading-snug max-w-[16rem]">
-                Solo <strong>{selectionFunnel.plazasQueRotan}</strong> plaza(s) pueden rotar:{' '}
-                {selectionFunnel.plazasFijasPorContinuidad} están fijas porque vienen del estudio
-                anterior. Con tan pocas, el cuartil casi no se mueve — para moverlo habría que
-                retirar comparables de continuidad, y eso se justifica en el informe.
-              </span>
-            )}
+                {selectionFunnel && selectionFunnel.alternativasDisponibles > 1
+                  && selectionFunnel.plazasFijasPorContinuidad > 0
+                  && selectionFunnel.plazasQueRotan
+                  <= selectionFunnel.plazasFijasPorContinuidad / 2 && (
+                    <span className="text-[10.5px] text-amber-700 dark:text-amber-400 leading-snug max-w-[16rem]">
+                      Solo <strong>{selectionFunnel.plazasQueRotan}</strong> plaza(s) pueden rotar:{' '}
+                      {selectionFunnel.plazasFijasPorContinuidad} están fijas porque vienen del estudio
+                      anterior. Con tan pocas, el cuartil casi no se mueve — para moverlo habría que
+                      retirar comparables de continuidad, y eso se justifica en el informe.
+                    </span>
+                  )}
 
-          </div>
+              </div>
 
-          {/* Embudo de depuración: cada etapa con lo que dejó fuera. Antes eran
+              {/* Embudo de depuración: cada etapa con lo que dejó fuera. Antes eran
               tres números y el de «seleccionadas» contaba el total del pool,
               porque el resultado de la curación no se filtraba. */}
-          {selectionFunnel && (
-            <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 space-y-1.5">
-              <div className="font-semibold text-zinc-700 dark:text-zinc-200">Embudo de depuración</div>
-              {/* En orden de embudo: cada etapa cuenta solo lo que ella descartó, y las
+              {selectionFunnel && (
+                <div className="text-[11px] bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 space-y-1.5">
+                  <div className="font-semibold text-zinc-700 dark:text-zinc-200">Embudo de depuración</div>
+                  {/* En orden de embudo: cada etapa cuenta solo lo que ella descartó, y las
                   tres cifras de rechazo más las válidas suman el universo. Antes
                   «rechazadas por la IA» se deducía con una expresión regular sobre el
                   motivo y «descartadas por los filtros» se calculaba por resta, así que
                   un descarte cabía en las dos casillas o en ninguna. */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-zinc-600 dark:text-zinc-300">
-                <div>Universo evaluado <b className="tabular-nums">{selectionFunnel.evaluadas.toLocaleString('es-CO')}</b></div>
-                <div>Descartadas por los filtros <b className="tabular-nums text-amber-600 dark:text-amber-400">{(selectionFunnel.rechazadasFiltros ?? 0).toLocaleString('es-CO')}</b></div>
-                <div>
-                  Curadas con IA <b className="tabular-nums">{(selectionFunnel.curadas ?? 0).toLocaleString('es-CO')}</b>
-                  {selectionFunnel.reutilizadas ? (
-                    <span className="text-zinc-400"> ({selectionFunnel.reutilizadas.toLocaleString('es-CO')} reutilizadas)</span>
-                  ) : null}
-                </div>
-                <div>Rechazadas por la IA <b className={'tabular-nums ' + ((selectionFunnel.rechazadasIA ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : '')}>{(selectionFunnel.rechazadasIA ?? 0).toLocaleString('es-CO')}</b></div>
-                {/* «Diferencias funcionales» y no «rigor»: el filtro de rigor funcional se
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-zinc-600 dark:text-zinc-300">
+                    <div>Universo evaluado <b className="tabular-nums">{selectionFunnel.evaluadas.toLocaleString('es-CO')}</b></div>
+                    <div>Descartadas por los filtros <b className="tabular-nums text-amber-600 dark:text-amber-400">{(selectionFunnel.rechazadasFiltros ?? 0).toLocaleString('es-CO')}</b></div>
+                    <div>
+                      Curadas con IA <b className="tabular-nums">{(selectionFunnel.curadas ?? 0).toLocaleString('es-CO')}</b>
+                      {selectionFunnel.reutilizadas ? (
+                        <span className="text-zinc-400"> ({selectionFunnel.reutilizadas.toLocaleString('es-CO')} reutilizadas)</span>
+                      ) : null}
+                    </div>
+                    <div>Rechazadas por la IA <b className={'tabular-nums ' + ((selectionFunnel.rechazadasIA ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : '')}>{(selectionFunnel.rechazadasIA ?? 0).toLocaleString('es-CO')}</b></div>
+                    {/* «Diferencias funcionales» y no «rigor»: el filtro de rigor funcional se
                     retiró del motor el 2026-08-10 y su selector salió del paso 2 el 2026-09-01,
                     pero esta casilla seguía llamándose por él y hasta mostraba su valor entre
                     paréntesis. El número nunca fue suyo: son las que superan los filtros
                     objetivos, pasan la curación y no alcanzan el cupo. Así las nombran ya la
                     Tabla 16 del informe y la hoja del embudo del Excel de soporte, y la pantalla
                     tiene que coincidir con lo que se radica. */}
-                {/* Cuenta la RESERVA y no `rechazadasRigor`: las de reserva no pasan por
+                    {/* Cuenta la RESERVA y no `rechazadasRigor`: las de reserva no pasan por
                     `rechazadas` —el informe las suma aparte y meterlas en las dos listas
                     descuadraría la tabla contra el universo—, así que esta casilla mostraba 0
                     con 738 en reserva. Se reportó exactamente así. */}
-                <div>
-                  Diferencias funcionales{' '}
-                  <b className={'tabular-nums ' + ((selectionFunnel.reserva ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : '')}>
-                    {(selectionFunnel.reserva ?? 0).toLocaleString('es-CO')}
-                  </b>
-                  <span className="text-zinc-400" title="Superan los filtros objetivos y la curación, pero no alcanzan el cupo de la muestra (Art. 260-4)"> (Art. 260-4)</span>
-                </div>
-                <div>Válidas <b className="tabular-nums">{selectionFunnel.validas.toLocaleString('es-CO')}</b></div>
-                <div>
-                  Seleccionadas{' '}
-                  <b className={'tabular-nums ' + (selectionFunnel.objetivo && selectionFunnel.seleccionadas < selectionFunnel.objetivo ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                    {selectionFunnel.seleccionadas}
-                  </b>
-                  {selectionFunnel.objetivo ? <span className="text-zinc-400"> de {selectionFunnel.objetivo}</span> : null}
-                  {selectionFunnel.ampliadas ? (
-                    <span className="text-zinc-400"> ({selectionFunnel.ampliadas} por actividad relacionada)</span>
-                  ) : null}
-                </div>
-              </div>
-              {/* La ampliación a actividades afines se declara aquí y no solo en el registro:
+                    <div>
+                      Diferencias funcionales{' '}
+                      <b className={'tabular-nums ' + ((selectionFunnel.reserva ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : '')}>
+                        {(selectionFunnel.reserva ?? 0).toLocaleString('es-CO')}
+                      </b>
+                      <span className="text-zinc-400" title="Superan los filtros objetivos y la curación, pero no alcanzan el cupo de la muestra (Art. 260-4)"> (Art. 260-4)</span>
+                    </div>
+                    <div>Válidas <b className="tabular-nums">{selectionFunnel.validas.toLocaleString('es-CO')}</b></div>
+                    <div>
+                      Seleccionadas{' '}
+                      <b className={'tabular-nums ' + (selectionFunnel.objetivo && selectionFunnel.seleccionadas < selectionFunnel.objetivo ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                        {selectionFunnel.seleccionadas}
+                      </b>
+                      {selectionFunnel.objetivo ? <span className="text-zinc-400"> de {selectionFunnel.objetivo}</span> : null}
+                      {selectionFunnel.ampliadas ? (
+                        <span className="text-zinc-400"> ({selectionFunnel.ampliadas} por actividad relacionada)</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  {/* La ampliación a actividades afines se declara aquí y no solo en el registro:
                   es lo que hay que sustentar en el informe si la DIAN lo pregunta. */}
-              {selectionFunnel.ampliadas ? (
-                <div className="text-amber-600 dark:text-amber-400">
-                  {selectionFunnel.ampliadas} de las seleccionadas no son de la misma actividad sino de una
-                  relacionada, y entraron para no bajar del mínimo de {MINIMO_COMPARABLES}. Revíselas: la ampliación
-                  del criterio de búsqueda hay que justificarla en el informe.
-                </div>
-              ) : null}
-              {selectionFunnel.seleccionadas < MINIMO_COMPARABLES ? (
-                <div className="text-red-600 dark:text-red-400">
-                  Por debajo del mínimo de {MINIMO_COMPARABLES}: ni ampliando a actividades relacionadas alcanza.
-                  Afloje los filtros del paso 2, revise la actividad detectada o traiga un universo más amplio.
-                </div>
-              ) : selectionFunnel.objetivo && selectionFunnel.seleccionadas < selectionFunnel.objetivo ? (
-                <div className="text-amber-600 dark:text-amber-400">
-                  No se alcanzó el objetivo: tras la curación no quedó reserva suficiente. Amplíe los criterios del paso 2 o revise la actividad detectada.
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        {/* Paso 4: Ingesta EEFF Comparables por Fila / Elección Explícita del Usuario */}
-        <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">4</span>
-            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Paso 4: Ingestar EEFF de Comparables (Elección Explícita)</span>
-          </div>
-
-          <p className="text-xs text-zinc-500">
-            Cargue un solo PDF con los estados financieros de todas las comparables y el sistema los reparte por razón social,
-            o cárguelos uno por uno desde su fila. En ambos casos se comprueba a qué empresa pertenece cada documento antes de
-            incorporar las cifras, y se verifican las identidades contables.
-          </p>
-
-          {/* Carga masiva: varios archivos, y cada archivo puede traer varias empresas */}
-          <label className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-5 text-xs font-semibold transition-colors ${uploadingEEFF
-            ? 'border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed'
-            : 'border-[#0FA3A1]/40 text-[#0B7C7A] dark:text-[#0FA3A1] hover:bg-[#0FA3A1]/5 cursor-pointer'
-            }`}>
-            {uploadingEEFF ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
-            <span>
-              {uploadingEEFF
-                ? 'Procesando…'
-                : 'Cargar EEFF de todas las comparables (uno o varios PDF)'}
-            </span>
-            <input
-              type="file"
-              accept="application/pdf,image/*"
-              multiple
-              disabled={uploadingEEFF}
-              className="hidden"
-              onChange={(e) => { handleCargaMasivaEEFF(e.target.files); e.target.value = null; }}
-            />
-          </label>
-
-          {/* Reutilización de cifras que otro estudio del equipo ya cargó. Es lo que
-              evita volver a leer —y volver a pagar— el mismo estado financiero cuando
-              una comparable reaparece en otro estudio del mismo año gravable. */}
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={buscarEeffGuardados}
-              disabled={uploadingEEFF || !comparables.length || (eeffGuardados && eeffGuardados.buscando)}
-              className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Consulta en la base compartida si alguna de estas comparables ya tiene cifras cargadas para el mismo año"
-            >
-              <Layers className="w-4 h-4" />
-              {eeffGuardados && eeffGuardados.buscando ? 'Consultando la base…' : 'Buscar cifras ya cargadas por el equipo'}
-            </button>
-
-            {eeffGuardados && eeffGuardados.error && (
-              <span className="text-[11px] text-amber-600 dark:text-amber-400">{eeffGuardados.error}</span>
-            )}
-
-            {eeffGuardados && typeof eeffGuardados.aplicadas === 'number' && (
-              <span className="text-[11px] text-emerald-600 dark:text-emerald-500">
-                {eeffGuardados.aplicadas} fila(s) completadas con cifras del año {eeffGuardados.anio}. Quedan marcadas por confirmar.
-              </span>
-            )}
-
-            {eeffGuardados && eeffGuardados.propuestas && (
-              eeffGuardados.propuestas.length ? (
-                <>
-                  <span className="text-[11px] text-zinc-600 dark:text-zinc-300">
-                    {eeffGuardados.propuestas.length} de {comparables.length} tienen cifras del año {eeffGuardados.anio} guardadas
-                    por otro estudio: {eeffGuardados.propuestas.map(p => p.nombre).join(', ')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={aplicarEeffGuardados}
-                    className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white"
-                  >
-                    Aplicarlas a las filas vacías
-                  </button>
-                </>
-              ) : (
-                <span className="text-[11px] text-zinc-500">
-                  Ninguna comparable con la fila vacía tiene cifras guardadas del año {eeffGuardados.anio}.
-                </span>
-              )
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={redactarDescripcionesPendientes}
-              disabled={redactandoDescripciones || !comparables.some((c) => String(c.desc || '').trim() && !c.descActividad)}
-              className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Redacta en español, con IA, la descripción de actividad de las comparables que todavía no la tienen. El ANEXO B publica esta descripción para todas, así que sin redactar se radica el texto en inglés de Capital IQ."
-            >
-              <Sparkles className="w-4 h-4" />
-              {redactandoDescripciones ? 'Redactando…' : 'Redactar descripciones pendientes'}
-            </button>
-          </div>
-
-          {/* Qué se subió a la base tras una carga */}
-          {eeffCompartido && (
-            <div className="text-[11px] text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2">
-              {eeffCompartido.error
-                ? <span className="text-amber-600 dark:text-amber-400">
-                  Las cifras quedaron en el estudio, pero no se pudieron guardar para reutilizarlas: {eeffCompartido.error}
-                </span>
-                : <>
-                  {eeffCompartido.guardadas} estado(s) financiero(s) disponibles ahora para sus otros estudios
-                  {eeffCompartido.anio ? ` (año ${eeffCompartido.anio})` : ''}
-                  {eeffCompartido.omitidas ? ` · ${eeffCompartido.omitidas} sin ingresos, no se compartieron` : ''}
-                  {eeffCompartido.fallidas ? ` · ${eeffCompartido.fallidas} fallaron` : ''}
-                </>}
-            </div>
-          )}
-
-          {/* Progreso: qué archivo va y cuántos faltan */}
-          {cargaEeff && (
-            <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3">
-              <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0FA3A1]" />
-                <span>{cargaEeff.etapa}</span>
-                {cargaEeff.total > 1 && (
-                  <span className="ml-auto font-mono text-[11px] text-zinc-500">
-                    {cargaEeff.hechas}/{cargaEeff.total}
-                  </span>
-                )}
-              </div>
-              {cargaEeff.total > 1 && (
-                <div className="mt-2 h-1 bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
-                  <div
-                    className="h-full bg-[#0FA3A1] transition-all"
-                    style={{ width: Math.round((cargaEeff.hechas / cargaEeff.total) * 100) + '%' }}
-                  />
+                  {selectionFunnel.ampliadas ? (
+                    <div className="text-amber-600 dark:text-amber-400">
+                      {selectionFunnel.ampliadas} de las seleccionadas no son de la misma actividad sino de una
+                      relacionada, y entraron para no bajar del mínimo de {MINIMO_COMPARABLES}. Revíselas: la ampliación
+                      del criterio de búsqueda hay que justificarla en el informe.
+                    </div>
+                  ) : null}
+                  {selectionFunnel.seleccionadas < MINIMO_COMPARABLES ? (
+                    <div className="text-red-600 dark:text-red-400">
+                      Por debajo del mínimo de {MINIMO_COMPARABLES}: ni ampliando a actividades relacionadas alcanza.
+                      Afloje los filtros del paso 2, revise la actividad detectada o traiga un universo más amplio.
+                    </div>
+                  ) : selectionFunnel.objetivo && selectionFunnel.seleccionadas < selectionFunnel.objetivo ? (
+                    <div className="text-amber-600 dark:text-amber-400">
+                      No se alcanzó el objetivo: tras la curación no quedó reserva suficiente. Amplíe los criterios del paso 2 o revise la actividad detectada.
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Resultado: qué entró, con qué confianza, y qué se rechazó y por qué */}
-          {resultadoCarga && (
-            <div className="space-y-2">
-              {resultadoCarga.aplicadas.map((a, i) => (
-                <div
-                  key={'ok' + i}
-                  className={`rounded-lg px-4 py-3 text-xs border ${a.firme
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
-                    : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300'
-                    }`}
+            {/* Paso 4: Ingesta EEFF Comparables por Fila / Elección Explícita del Usuario */}
+            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-zinc-800 text-white text-xs font-bold flex items-center justify-center">4</span>
+                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Paso 4: Ingestar EEFF de Comparables (Elección Explícita)</span>
+              </div>
+
+              <p className="text-xs text-zinc-500">
+                Cargue un solo PDF con los estados financieros de todas las comparables y el sistema los reparte por razón social,
+                o cárguelos uno por uno desde su fila. En ambos casos se comprueba a qué empresa pertenece cada documento antes de
+                incorporar las cifras, y se verifican las identidades contables.
+              </p>
+
+              {/* Carga masiva: varios archivos, y cada archivo puede traer varias empresas */}
+              <label className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-5 text-xs font-semibold transition-colors ${uploadingEEFF
+                ? 'border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed'
+                : 'border-[#0FA3A1]/40 text-[#0B7C7A] dark:text-[#0FA3A1] hover:bg-[#0FA3A1]/5 cursor-pointer'
+                }`}>
+                {uploadingEEFF ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+                <span>
+                  {uploadingEEFF
+                    ? 'Procesando…'
+                    : 'Cargar EEFF de todas las comparables (uno o varios PDF)'}
+                </span>
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  multiple
+                  disabled={uploadingEEFF}
+                  className="hidden"
+                  onChange={(e) => { handleCargaMasivaEEFF(e.target.files); e.target.value = null; }}
+                />
+              </label>
+
+              {/* Reutilización de cifras que otro estudio del equipo ya cargó. Es lo que
+              evita volver a leer —y volver a pagar— el mismo estado financiero cuando
+              una comparable reaparece en otro estudio del mismo año gravable. */}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={buscarEeffGuardados}
+                  disabled={uploadingEEFF || !comparables.length || (eeffGuardados && eeffGuardados.buscando)}
+                  className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Consulta en la base compartida si alguna de estas comparables ya tiene cifras cargadas para el mismo año"
                 >
-                  <div className="flex items-start gap-2">
-                    {a.firme ? <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
-                    <div>
-                      <div className="font-semibold">{a.archivo}</div>
-                      <div className="mt-0.5 leading-relaxed">{a.motivo}</div>
-                      {a.verificacion && a.verificacion.hallazgos && a.verificacion.hallazgos.length > 0 && (
-                        <ul className="mt-1.5 space-y-0.5 list-disc list-inside">
-                          {a.verificacion.hallazgos.map((h, j) => <li key={j}>{h}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  <Layers className="w-4 h-4" />
+                  {eeffGuardados && eeffGuardados.buscando ? 'Consultando la base…' : 'Buscar cifras ya cargadas por el equipo'}
+                </button>
 
-              {resultadoCarga.rechazadas.map((r, i) => (
-                <div
-                  key={'no' + i}
-                  className="rounded-lg px-4 py-3 text-xs border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 text-red-800 dark:text-red-300"
+                {eeffGuardados && eeffGuardados.error && (
+                  <span className="text-[11px] text-amber-600 dark:text-amber-400">{eeffGuardados.error}</span>
+                )}
+
+                {eeffGuardados && typeof eeffGuardados.aplicadas === 'number' && (
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-500">
+                    {eeffGuardados.aplicadas} fila(s) completadas con cifras del año {eeffGuardados.anio}. Quedan marcadas por confirmar.
+                  </span>
+                )}
+
+                {eeffGuardados && eeffGuardados.propuestas && (
+                  eeffGuardados.propuestas.length ? (
+                    <>
+                      <span className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                        {eeffGuardados.propuestas.length} de {comparables.length} tienen cifras del año {eeffGuardados.anio} guardadas
+                        por otro estudio: {eeffGuardados.propuestas.map(p => p.nombre).join(', ')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={aplicarEeffGuardados}
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white"
+                      >
+                        Aplicarlas a las filas vacías
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-zinc-500">
+                      Ninguna comparable con la fila vacía tiene cifras guardadas del año {eeffGuardados.anio}.
+                    </span>
+                  )
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={redactarDescripcionesPendientes}
+                  disabled={redactandoDescripciones || !comparables.some((c) => String(c.desc || '').trim() && !c.descActividad)}
+                  className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Redacta en español, con IA, la descripción de actividad de las comparables que todavía no la tienen. El ANEXO B publica esta descripción para todas, así que sin redactar se radica el texto en inglés de Capital IQ."
                 >
-                  <div className="flex items-start gap-2">
-                    <ShieldAlert className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <div className="font-semibold">Rechazado: {r.archivo}</div>
-                      <div className="mt-0.5 leading-relaxed">{r.motivo}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  <Sparkles className="w-4 h-4" />
+                  {redactandoDescripciones ? 'Redactando…' : 'Redactar descripciones pendientes'}
+                </button>
+              </div>
 
-              {/* Comparables retiradas de la muestra porque su EEFF no traía cifras. Es un
+              {/* Qué se subió a la base tras una carga */}
+              {eeffCompartido && (
+                <div className="text-[11px] text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2">
+                  {eeffCompartido.error
+                    ? <span className="text-amber-600 dark:text-amber-400">
+                      Las cifras quedaron en el estudio, pero no se pudieron guardar para reutilizarlas: {eeffCompartido.error}
+                    </span>
+                    : <>
+                      {eeffCompartido.guardadas} estado(s) financiero(s) disponibles ahora para sus otros estudios
+                      {eeffCompartido.anio ? ` (año ${eeffCompartido.anio})` : ''}
+                      {eeffCompartido.omitidas ? ` · ${eeffCompartido.omitidas} sin ingresos, no se compartieron` : ''}
+                      {eeffCompartido.fallidas ? ` · ${eeffCompartido.fallidas} fallaron` : ''}
+                    </>}
+                </div>
+              )}
+
+              {/* Progreso: qué archivo va y cuántos faltan */}
+              {cargaEeff && (
+                <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#0FA3A1]" />
+                    <span>{cargaEeff.etapa}</span>
+                    {cargaEeff.total > 1 && (
+                      <span className="ml-auto font-mono text-[11px] text-zinc-500">
+                        {cargaEeff.hechas}/{cargaEeff.total}
+                      </span>
+                    )}
+                  </div>
+                  {cargaEeff.total > 1 && (
+                    <div className="mt-2 h-1 bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-[#0FA3A1] transition-all"
+                        style={{ width: Math.round((cargaEeff.hechas / cargaEeff.total) * 100) + '%' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Resultado: qué entró, con qué confianza, y qué se rechazó y por qué */}
+              {resultadoCarga && (
+                <div className="space-y-2">
+                  {resultadoCarga.aplicadas.map((a, i) => (
+                    <div
+                      key={'ok' + i}
+                      className={`rounded-lg px-4 py-3 text-xs border ${a.firme
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300'
+                        }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {a.firme ? <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
+                        <div>
+                          <div className="font-semibold">{a.archivo}</div>
+                          <div className="mt-0.5 leading-relaxed">{a.motivo}</div>
+                          {a.verificacion && a.verificacion.hallazgos && a.verificacion.hallazgos.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5 list-disc list-inside">
+                              {a.verificacion.hallazgos.map((h, j) => <li key={j}>{h}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {resultadoCarga.rechazadas.map((r, i) => (
+                    <div
+                      key={'no' + i}
+                      className="rounded-lg px-4 py-3 text-xs border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 text-red-800 dark:text-red-300"
+                    >
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-semibold">Rechazado: {r.archivo}</div>
+                          <div className="mt-0.5 leading-relaxed">{r.motivo}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Comparables retiradas de la muestra porque su EEFF no traía cifras. Es un
                   estado distinto de «rechazado»: ahí no se aplicó un documento, aquí se
                   quitó una comparable del estudio, y eso cambia el tamaño de la muestra.
                   Este aviso vive solo en pantalla: no se escribe en el Excel de soporte
                   —donde la compañía aparece contada entre las diferencias funcionales— ni
                   en el informe. */}
-              {(resultadoCarga.retiradas || []).length > 0 && (
-                <div className="rounded-lg px-4 py-3 text-xs border bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900 text-orange-800 dark:text-orange-300">
-                  <div className="flex items-start gap-2">
-                    <ShieldAlert className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <div className="font-semibold">
-                        {resultadoCarga.retiradas.length === 1
-                          ? '1 comparable salió de la muestra por falta de información financiera'
-                          : `${resultadoCarga.retiradas.length} comparables salieron de la muestra por falta de información financiera`}
-                        {selectionFunnel ? ` · la muestra queda en ${selectionFunnel.seleccionadas}` : ''}
+                  {(resultadoCarga.retiradas || []).length > 0 && (
+                    <div className="rounded-lg px-4 py-3 text-xs border bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900 text-orange-800 dark:text-orange-300">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-semibold">
+                            {resultadoCarga.retiradas.length === 1
+                              ? '1 comparable salió de la muestra por falta de información financiera'
+                              : `${resultadoCarga.retiradas.length} comparables salieron de la muestra por falta de información financiera`}
+                            {selectionFunnel ? ` · la muestra queda en ${selectionFunnel.seleccionadas}` : ''}
+                          </div>
+                          <ul className="mt-1.5 space-y-1.5">
+                            {resultadoCarga.retiradas.map((r, i) => (
+                              <li key={'ret' + i}>
+                                <span className="font-semibold">{r.comparable}</span>
+                                <span className="block leading-relaxed">{r.motivo}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
-                      <ul className="mt-1.5 space-y-1.5">
-                        {resultadoCarga.retiradas.map((r, i) => (
-                          <li key={'ret' + i}>
-                            <span className="font-semibold">{r.comparable}</span>
-                            <span className="block leading-relaxed">{r.motivo}</span>
+                    </div>
+                  )}
+
+                  {!resultadoCarga.aplicadas.length && !resultadoCarga.rechazadas.length
+                    && !(resultadoCarga.retiradas || []).length && (
+                      <div className="text-xs text-zinc-500">No se encontró ningún estado financiero en los documentos.</div>
+                    )}
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-zinc-50 dark:bg-zinc-900/50 text-zinc-500 uppercase font-semibold">
+                    <tr>
+                      <th className="py-2 px-3">Empresa Comparable</th>
+                      <th className="py-2 px-3">Estado EEFF</th>
+                      <th className="py-2 px-3">Archivo Cargado</th>
+                      <th className="py-2 px-3 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {comparables.map((comp, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30">
+                        <td className="py-2.5 px-3 font-semibold text-zinc-900 dark:text-zinc-100">{comp.name}</td>
+                        <td className="py-2.5 px-3">
+                          {/* Tres estados y no dos: «Verificado OK» significa que la
+                          aritmética del documento cuadra Y que su margen coincide con el
+                          que publica la base de datos. Cuando no hubo cifras de la fuente
+                          con las que cotejar se dice, en vez de dar por bueno lo que no se
+                          comprobó. Se exige `=== false` a propósito: los estudios guardados
+                          antes de que existiera el cotejo no traen el campo, y marcarlos
+                          «sin cotejo» sería afirmar algo que no se midió. */}
+                          {comp.eeffVerificado && comp.eeffCotejado === false ? (
+                            <span
+                              title="Las cifras del documento cuadran entre sí, pero esta fila no traía cifras de la base de datos con las que comparar el margen."
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400">
+                              <CheckCircle className="w-3 h-3" /> Verificado, sin cotejo
+                            </span>
+                          ) : comp.eeffVerificado ? (
+                            <span
+                              title="La aritmética del documento cuadra y su margen coincide con el que publica la base de datos."
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                              <CheckCircle className="w-3 h-3" /> Verificado OK
+                            </span>
+                          ) : comp.eeffArchivo ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                              <AlertTriangle className="w-3 h-3" /> Con Alertas
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400 text-[11px]">Sin EEFF cargados</span>
+                          )}
+                          {/* Los hallazgos contables ya se calculaban y se guardaban en
+                          eeffLog, pero no se mostraban en ninguna parte. */}
+                          {comp.eeffHallazgos && comp.eeffHallazgos.length > 0 && (
+                            <ul className="mt-1 space-y-0.5 text-[10px] text-amber-700 dark:text-amber-400 list-disc list-inside">
+                              {comp.eeffHallazgos.map((h, j) => <li key={j}>{h}</li>)}
+                            </ul>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
+                          {comp.eeffArchivo || '—'}
+                          {/* Un cruce por solapamiento de palabras hay que confirmarlo:
+                          se deja a la vista el nombre que se leyó y el porcentaje. */}
+                          {comp.eeffPorConfirmar && comp.eeffCruce && (
+                            <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                              Por confirmar: se leyó «{comp.eeffCruce.nombreLeido || '(sin razón social)'}»
+                              {comp.eeffCruce.modo === 'manual'
+                                ? ' y el documento no permitía verificarlo'
+                                : ' · ' + pctf(comp.eeffCruce.punt || 0) + ' de coincidencia'}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <label className="cursor-pointer bg-zinc-100 dark:bg-zinc-800 hover:bg-[#0FA3A1] hover:text-white px-3 py-1 rounded text-[11px] font-semibold transition-colors inline-flex items-center gap-1">
+                            <Upload className="w-3 h-3" />
+                            <span>Cargar EEFF</span>
+                            <input
+                              type="file"
+                              accept="application/pdf,image/*"
+                              className="hidden"
+                              onChange={(e) => e.target.files[0] && handleComparableEEFFUpload(idx, e.target.files[0])}
+                            />
+                          </label>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* ══════ KPIs & RESULTADOS DEL RANGO INTERCUARTIL ══════ */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* La tarjeta abre la memoria de cálculo: este es el número que decide el
+            cumplimiento, y hasta ahora no había forma de ver de dónde salía. */}
+            <button
+              type="button"
+              onClick={() => setMemoriaAbierta(true)}
+              title="Ver cómo se calculó este rango y descargarlo en Excel"
+              className="text-left bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm hover:border-[#0FA3A1] focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]/50 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Rango Intercuartil</span>
+                <Calculator className="w-4 h-4 text-[#0FA3A1]" />
+              </div>
+              <div className="mt-2">
+                <span className="text-xl font-bold tracking-tight">
+                  {stats ? `${pctf(stats.p25)} - ${pctf(stats.p75)}` : 'N/A'}
+                </span>
+                <span className="text-xs text-zinc-500 block mt-1">Mediana: {stats ? pctf(stats.med) : '—'}</span>
+                <span className="text-[10.5px] text-[#0B7C7A] dark:text-[#0FA3A1] block mt-1.5 font-medium">
+                  Ver memoria de cálculo →
+                </span>
+              </div>
+            </button>
+
+            <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Indicador del Contribuyente</span>
+                <Sparkles className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="mt-2">
+                <span className="text-xl font-bold tracking-tight">
+                  {tPLI !== null ? pctf(tPLI) : 'N/A'}
+                </span>
+                <span className="text-xs text-zinc-500 block mt-1">Métrica: {study.pli || 'MO'}</span>
+              </div>
+            </div>
+
+            {/* La tarjeta de cumplimiento. Antes decía solo «NO CUMPLE (por debajo)»: ni a cuánto
+            estaba del límite, ni cuánto sería el ajuste en pesos, ni cuál de los dos rangos
+            sostenía la conclusión, ni qué quedaba por intentar. Todo lo que se pinta aquí lo
+            calcula `diagnosticoRango.js`; este bloque no decide nada. */}
+            <div className="md:col-span-2 bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm space-y-3">
+              <div className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Resultado Cumplimiento</span>
+                <div>
+                  {adjustment ? (
+                    adjustment.within ? (
+                      <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-lg">
+                        <ShieldCheck className="w-5 h-5" />
+                        {/* El criterio es estar SOBRE el primer cuartil, sin techo (2026-09-02), así
+                        que «Dentro del rango» ya no describe todos los casos que cumplen: un
+                        indicador sobre el tercer cuartil cumple y NO está dentro. Decir «dentro»
+                        ahí seria falso en la propia pantalla que lo calcula. */}
+                        {adjustment.sobreP75
+                          ? 'CUMPLE (sobre el tercer cuartil)'
+                          : 'CUMPLE (dentro del rango)'}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-red-600 dark:text-rose-400 font-bold text-lg">
+                        <ShieldAlert className="w-5 h-5" />
+                        NO CUMPLE (por debajo del primer cuartil)
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-sm text-zinc-500">Ingrese cifras y comparables para analizar.</span>
+                  )}
+                </div>
+
+                {/* La brecha y el ajuste: `adjustInfo` ya devolvía `capped` y nadie lo mostraba,
+                así que el analista tenía que abrir el Excel de soporte para saber de cuánto
+                era el ajuste que el informe iba a declarar. */}
+                {!diagnostico.cumple && diagnostico.brecha !== null && (
+                  <p className="text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Faltan <strong>{pctf(diagnostico.brecha)}</strong> para alcanzar el{' '}
+                    {diagnostico.dir === 'por debajo' ? 'primer cuartil' : 'tercer cuartil'}
+                    {diagnostico.ajuste && diagnostico.ajuste.monto ? (
+                      <>
+                        {' · ajuste a declarar: '}
+                        <strong>COP {fmt(diagnostico.ajuste.monto)}</strong>
+                        {diagnostico.ajuste.topado ? ' (topado por la utilidad disponible)' : ''}
+                      </>
+                    ) : null}
+                  </p>
+                )}
+                {/* Si cumple, POR CUÁNTO. Un cumplimiento por tres milésimas se sostiene igual de
+                mal que uno que no cumple en cuanto una cifra se corrija, y eso no se veía. */}
+                {diagnostico.cumple && diagnostico.colchon !== null && (
+                  <p className="text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Cumple con <strong>{pctf(diagnostico.colchon)}</strong> de holgura sobre el primer
+                    cuartil
+                    {/* Sobre el tercer cuartil no hay ajuste que declarar, pero conviene mirar el
+                    metodo: un margen muy por encima del mercado comparable puede senalar que la
+                    parte examinada o el indicador no son los adecuados. No es incumplimiento. */}
+                    {adjustment && adjustment.sobreP75 && diagnostico.stats
+                      ? <span className="text-zinc-500">{' '}· queda por encima del tercer cuartil
+                        ({pctf(diagnostico.stats.p75)}): no hay ajuste que declarar, pero vale
+                        revisar si el indicador y la parte examinada son los adecuados</span>
+                      : null}
+                    {diagnostico.colchon < 0.005
+                      ? <span className="text-amber-700 dark:text-amber-400"> · queda al filo: una corrección de cifras puede sacarlo del rango</span>
+                      : null}
+                  </p>
+                )}
+                {diagnostico.ajuste && diagnostico.ajuste.improcedente && (
+                  <p className="text-[11.5px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                    El ajuste resulta improcedente con estas cifras: revise el indicador del
+                    contribuyente antes de declararlo.
+                  </p>
+                )}
+
+                {/* Cuál de los dos rangos decide. `useadj` lo elegía en silencio, así que no había
+                forma de saber si el rango que se veía era el ajustado o el otro. */}
+                {diagnostico.veredicto && (
+                  <p className="text-[11px] text-zinc-500">
+                    Decide el rango{' '}
+                    {diagnostico.rangos.decide === 'ajustado'
+                      ? 'ajustado por capital de trabajo'
+                      : 'sin ajuste de capital de trabajo'}
+                    {diagnostico.rangos.decide === 'ajustado' && diagnostico.rangos.sinAjustar
+                      ? ` · sin ajustar sería ${pctf(diagnostico.rangos.sinAjustar.p25)} - ${pctf(diagnostico.rangos.sinAjustar.p75)}`
+                      : (diagnostico.rangos.ajustado
+                        ? ` · ajustado sería ${pctf(diagnostico.rangos.ajustado.p25)} - ${pctf(diagnostico.rangos.ajustado.p75)}`
+                        : '')}
+                  </p>
+                )}
+              </div>
+
+              {/* ── LA TASA EN CERO ANULA EL AJUSTE ──
+              Va PRIMERO, antes de cualquier otra cosa: el cumplimiento se concluye sobre el
+              rango ajustado, y sin tasa ese ajuste es nulo, de modo que el veredicto que se lee
+              arriba sale del rango sin ajustar. Es el aviso de más alcance de esta tarjeta
+              porque no habla de la muestra sino de la vara con la que se mide. */}
+              {/* ── UNA CIFRA DEL CONTRIBUYENTE QUE NO PUEDE SER CIERTA ──
+              Va PRIMERO, antes que cualquier via de cumplimiento: estas cuatro partidas mandan
+              sobre las cuatro formulas del ajuste, y el ajuste decide. Reportado el 2026-09-02
+              sobre un estudio real cuya parte examinada traia cartera por el 161,6 % de las
+              ventas —diecinueve meses—, y ese solo numero empujaba el primer cuartil +10,8
+              puntos por encima del contribuyente. Buscar mas comparables no arregla eso. */}
+              {diagnostico.capitalTrabajoImplausible && (
+                <div className="rounded-lg border border-rose-300 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-rose-900 dark:text-rose-200 leading-relaxed">
+                      <strong>Antes de buscar más comparables: revise estas cifras del paso 3.</strong>
+                      {' '}No caben en un año de ventas, y son las que mandan sobre el ajuste de
+                      capital de trabajo, que es el que decide el cumplimiento.
+                      <ul className="mt-1.5 space-y-0.5">
+                        {diagnostico.capitalTrabajoImplausible.partidas.map((p) => (
+                          <li key={p.campo}>
+                            <strong>{p.etiqueta}</strong>: {fmt(p.valor)} ={' '}
+                            <strong>{pctf(p.ratio)}</strong> de las ventas, o{' '}
+                            <strong>{p.meses.toLocaleString('es-CO', { maximumFractionDigits: 1 })} meses</strong>
+                            {' '}de venta
                           </li>
+                        ))}
+                      </ul>
+                      <div className="mt-1.5 text-rose-800/80 dark:text-rose-300/70">
+                        Si la cifra es correcta —hay operaciones de proyecto con cartera alta—, el
+                        estudio se sostiene y esto queda como constancia. Si viene de una lectura del
+                        balance, corregirla cambia el rango que decide.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comparables con el mismo problema: es un error de escala del cribado, y en la
+              muestra desplaza los cuartiles. */}
+              {diagnostico.comparablesConCapitalImplausible
+                && diagnostico.comparablesConCapitalImplausible.length > 0 && (
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                      <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                        <strong>
+                          {diagnostico.comparablesConCapitalImplausible.length} comparable(s) con
+                          capital de trabajo que no puede ser cierto
+                        </strong>
+                        {': '}
+                        {diagnostico.comparablesConCapitalImplausible.slice(0, 3).map((c) => c.name).join(', ')}
+                        {diagnostico.comparablesConCapitalImplausible.length > 3 ? '…' : ''}.
+                        {' '}Alguna de sus partidas supera sus ventas anuales, lo que suele ser un error
+                        de escala del cribado. Entran igual al rango y desplazan los cuartiles: revíselas
+                        o retírelas.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {/* ── POR QUE CONCLUYE SOBRE EL RANGO SIN AJUSTAR ──
+              Reportado el 2026-09-02 con la tabla a la vista: las doce comparables traian CxC,
+              Inventario, CxP y PP&E en cero, porque la exportacion de Capital IQ no incluye esas
+              columnas. Con el ratio de la comparable en cero, cada ajuste se reduce a
+              «−ratio_contribuyente × factor»: el mismo valor para todas. Medido en el caso real,
+              de +4,401 a +4,711 pt en las once, amplitud 0,310 pt. Es una constante que sale del
+              balance del contribuyente y no compara nada, asi que no puede decidir. */}
+              {diagnostico.ajusteTieneDatos === false && diagnostico.comparablesEnElRango > 0 && (
+                <div className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 p-3">
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                      <strong>Se concluye sobre el rango sin ajustar</strong>, y esta es la razón:
+                      solo {diagnostico.comparablesConCapitalTrabajo} de{' '}
+                      {diagnostico.comparablesEnElRango} comparables traen cuentas por cobrar,
+                      inventarios o cuentas por pagar. Un ajuste por diferencias de capital de trabajo
+                      exige conocer el de las dos partes; con el de las comparables en cero, el ajuste
+                      se reduce al mismo valor para todas —sale de su propio balance— y desplaza el
+                      rango sin corregir ninguna diferencia de comparabilidad.
+                      <div className="mt-1.5 text-zinc-500">
+                        Para que el ajuste decida, el cribado del paso 1 tiene que traer esas cuatro
+                        columnas. El rango ajustado sigue calculado y publicado en el informe y en el
+                        Excel de soporte.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {diagnostico.ajusteAnulado && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                      <strong>La tasa de interés está en cero.</strong> El cumplimiento se concluye
+                      sobre el rango ajustado por capital de trabajo, y ese ajuste se calcula con la
+                      tasa: en cero, el ajuste de cada comparable es nulo y el rango ajustado
+                      coincide con el rango sin ajustar. El veredicto de arriba sale entonces del
+                      rango que no debería decidir. Fije la tasa (Prime Rate) en el paso 3.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cuando ninguna palanca alcanza, esto es lo único accionable: qué buscar en el
+              paso 1. Va antes de las palancas porque ampliar el cribado sostiene mejor el
+              estudio —más comparables reales— que apretar la selección de las pocas que hay. */}
+              <RequisitoDelCribado
+                requisito={diagnostico.requisito}
+                indicador={diagnostico.indicador}
+                banda={diagnostico.banda}
+              />
+
+              {/* Antes de mover una sola comparable: si el indicador del contribuyente sale de una
+              lectura que no se pudo cotejar contra el documento, ajustar la muestra para
+              alcanzar ese número deteriora el estudio en vez de arreglarlo. */}
+              {diagnostico.confianza.verificado === false && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                      <strong>Antes de ajustar la muestra:</strong> el indicador del contribuyente
+                      {tPLI !== null ? ` (${pctf(tPLI)})` : ''} sale de una lectura que no se pudo
+                      verificar contra el documento. Confírmelo en el paso 3.
+                      <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                        {diagnostico.confianza.motivos.map((m, i) => (
+                          <li key={i}>{m}</li>
                         ))}
                       </ul>
                     </div>
@@ -3808,642 +4166,289 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
                 </div>
               )}
 
-              {!resultadoCarga.aplicadas.length && !resultadoCarga.rechazadas.length
-                && !(resultadoCarga.retiradas || []).length && (
-                <div className="text-xs text-zinc-500">No se encontró ningún estado financiero en los documentos.</div>
-              )}
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/50 text-zinc-500 uppercase font-semibold">
-                <tr>
-                  <th className="py-2 px-3">Empresa Comparable</th>
-                  <th className="py-2 px-3">Estado EEFF</th>
-                  <th className="py-2 px-3">Archivo Cargado</th>
-                  <th className="py-2 px-3 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {comparables.map((comp, idx) => (
-                  <tr key={idx} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30">
-                    <td className="py-2.5 px-3 font-semibold text-zinc-900 dark:text-zinc-100">{comp.name}</td>
-                    <td className="py-2.5 px-3">
-                      {/* Tres estados y no dos: «Verificado OK» significa que la
-                          aritmética del documento cuadra Y que su margen coincide con el
-                          que publica la base de datos. Cuando no hubo cifras de la fuente
-                          con las que cotejar se dice, en vez de dar por bueno lo que no se
-                          comprobó. Se exige `=== false` a propósito: los estudios guardados
-                          antes de que existiera el cotejo no traen el campo, y marcarlos
-                          «sin cotejo» sería afirmar algo que no se midió. */}
-                      {comp.eeffVerificado && comp.eeffCotejado === false ? (
-                        <span
-                          title="Las cifras del documento cuadran entre sí, pero esta fila no traía cifras de la base de datos con las que comparar el margen."
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400">
-                          <CheckCircle className="w-3 h-3" /> Verificado, sin cotejo
-                        </span>
-                      ) : comp.eeffVerificado ? (
-                        <span
-                          title="La aritmética del documento cuadra y su margen coincide con el que publica la base de datos."
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-                          <CheckCircle className="w-3 h-3" /> Verificado OK
-                        </span>
-                      ) : comp.eeffArchivo ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-                          <AlertTriangle className="w-3 h-3" /> Con Alertas
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400 text-[11px]">Sin EEFF cargados</span>
-                      )}
-                      {/* Los hallazgos contables ya se calculaban y se guardaban en
-                          eeffLog, pero no se mostraban en ninguna parte. */}
-                      {comp.eeffHallazgos && comp.eeffHallazgos.length > 0 && (
-                        <ul className="mt-1 space-y-0.5 text-[10px] text-amber-700 dark:text-amber-400 list-disc list-inside">
-                          {comp.eeffHallazgos.map((h, j) => <li key={j}>{h}</li>)}
-                        </ul>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-zinc-500 text-[11px]">
-                      {comp.eeffArchivo || '—'}
-                      {/* Un cruce por solapamiento de palabras hay que confirmarlo:
-                          se deja a la vista el nombre que se leyó y el porcentaje. */}
-                      {comp.eeffPorConfirmar && comp.eeffCruce && (
-                        <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
-                          Por confirmar: se leyó «{comp.eeffCruce.nombreLeido || '(sin razón social)'}»
-                          {comp.eeffCruce.modo === 'manual'
-                            ? ' y el documento no permitía verificarlo'
-                            : ' · ' + pctf(comp.eeffCruce.punt || 0) + ' de coincidencia'}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <label className="cursor-pointer bg-zinc-100 dark:bg-zinc-800 hover:bg-[#0FA3A1] hover:text-white px-3 py-1 rounded text-[11px] font-semibold transition-colors inline-flex items-center gap-1">
-                        <Upload className="w-3 h-3" />
-                        <span>Cargar EEFF</span>
-                        <input
-                          type="file"
-                          accept="application/pdf,image/*"
-                          className="hidden"
-                          onChange={(e) => e.target.files[0] && handleComparableEEFFUpload(idx, e.target.files[0])}
-                        />
-                      </label>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* ══════ KPIs & RESULTADOS DEL RANGO INTERCUARTIL ══════ */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* La tarjeta abre la memoria de cálculo: este es el número que decide el
-            cumplimiento, y hasta ahora no había forma de ver de dónde salía. */}
-        <button
-          type="button"
-          onClick={() => setMemoriaAbierta(true)}
-          title="Ver cómo se calculó este rango y descargarlo en Excel"
-          className="text-left bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm hover:border-[#0FA3A1] focus:outline-none focus:ring-1 focus:ring-[#0FA3A1]/50 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Rango Intercuartil</span>
-            <Calculator className="w-4 h-4 text-[#0FA3A1]" />
-          </div>
-          <div className="mt-2">
-            <span className="text-xl font-bold tracking-tight">
-              {stats ? `${pctf(stats.p25)} - ${pctf(stats.p75)}` : 'N/A'}
-            </span>
-            <span className="text-xs text-zinc-500 block mt-1">Mediana: {stats ? pctf(stats.med) : '—'}</span>
-            <span className="text-[10.5px] text-[#0B7C7A] dark:text-[#0FA3A1] block mt-1.5 font-medium">
-              Ver memoria de cálculo →
-            </span>
-          </div>
-        </button>
-
-        <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Indicador del Contribuyente</span>
-            <Sparkles className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-2">
-            <span className="text-xl font-bold tracking-tight">
-              {tPLI !== null ? pctf(tPLI) : 'N/A'}
-            </span>
-            <span className="text-xs text-zinc-500 block mt-1">Métrica: {study.pli || 'MO'}</span>
-          </div>
-        </div>
-
-        {/* La tarjeta de cumplimiento. Antes decía solo «NO CUMPLE (por debajo)»: ni a cuánto
-            estaba del límite, ni cuánto sería el ajuste en pesos, ni cuál de los dos rangos
-            sostenía la conclusión, ni qué quedaba por intentar. Todo lo que se pinta aquí lo
-            calcula `diagnosticoRango.js`; este bloque no decide nada. */}
-        <div className="md:col-span-2 bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm space-y-3">
-          <div className="space-y-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Resultado Cumplimiento</span>
-            <div>
-              {adjustment ? (
-                adjustment.within ? (
-                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-lg">
-                    <ShieldCheck className="w-5 h-5" />
-                    {/* El criterio es estar SOBRE el primer cuartil, sin techo (2026-09-02), así
-                        que «Dentro del rango» ya no describe todos los casos que cumplen: un
-                        indicador sobre el tercer cuartil cumple y NO está dentro. Decir «dentro»
-                        ahí seria falso en la propia pantalla que lo calcula. */}
-                    {adjustment.sobreP75
-                      ? 'CUMPLE (sobre el tercer cuartil)'
-                      : 'CUMPLE (dentro del rango)'}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-red-600 dark:text-rose-400 font-bold text-lg">
-                    <ShieldAlert className="w-5 h-5" />
-                    NO CUMPLE (por debajo del primer cuartil)
-                  </div>
-                )
-              ) : (
-                <span className="text-sm text-zinc-500">Ingrese cifras y comparables para analizar.</span>
-              )}
-            </div>
-
-            {/* La brecha y el ajuste: `adjustInfo` ya devolvía `capped` y nadie lo mostraba,
-                así que el analista tenía que abrir el Excel de soporte para saber de cuánto
-                era el ajuste que el informe iba a declarar. */}
-            {!diagnostico.cumple && diagnostico.brecha !== null && (
-              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Faltan <strong>{pctf(diagnostico.brecha)}</strong> para alcanzar el{' '}
-                {diagnostico.dir === 'por debajo' ? 'primer cuartil' : 'tercer cuartil'}
-                {diagnostico.ajuste && diagnostico.ajuste.monto ? (
-                  <>
-                    {' · ajuste a declarar: '}
-                    <strong>COP {fmt(diagnostico.ajuste.monto)}</strong>
-                    {diagnostico.ajuste.topado ? ' (topado por la utilidad disponible)' : ''}
-                  </>
-                ) : null}
-              </p>
-            )}
-            {/* Si cumple, POR CUÁNTO. Un cumplimiento por tres milésimas se sostiene igual de
-                mal que uno que no cumple en cuanto una cifra se corrija, y eso no se veía. */}
-            {diagnostico.cumple && diagnostico.colchon !== null && (
-              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Cumple con <strong>{pctf(diagnostico.colchon)}</strong> de holgura sobre el primer
-                cuartil
-                {/* Sobre el tercer cuartil no hay ajuste que declarar, pero conviene mirar el
-                    metodo: un margen muy por encima del mercado comparable puede senalar que la
-                    parte examinada o el indicador no son los adecuados. No es incumplimiento. */}
-                {adjustment && adjustment.sobreP75 && diagnostico.stats
-                  ? <span className="text-zinc-500">{' '}· queda por encima del tercer cuartil
-                    ({pctf(diagnostico.stats.p75)}): no hay ajuste que declarar, pero vale
-                    revisar si el indicador y la parte examinada son los adecuados</span>
-                  : null}
-                {diagnostico.colchon < 0.005
-                  ? <span className="text-amber-700 dark:text-amber-400"> · queda al filo: una corrección de cifras puede sacarlo del rango</span>
-                  : null}
-              </p>
-            )}
-            {diagnostico.ajuste && diagnostico.ajuste.improcedente && (
-              <p className="text-[11.5px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                El ajuste resulta improcedente con estas cifras: revise el indicador del
-                contribuyente antes de declararlo.
-              </p>
-            )}
-
-            {/* Cuál de los dos rangos decide. `useadj` lo elegía en silencio, así que no había
-                forma de saber si el rango que se veía era el ajustado o el otro. */}
-            {diagnostico.veredicto && (
-              <p className="text-[11px] text-zinc-500">
-                Decide el rango{' '}
-                {diagnostico.rangos.decide === 'ajustado'
-                  ? 'ajustado por capital de trabajo'
-                  : 'sin ajuste de capital de trabajo'}
-                {diagnostico.rangos.decide === 'ajustado' && diagnostico.rangos.sinAjustar
-                  ? ` · sin ajustar sería ${pctf(diagnostico.rangos.sinAjustar.p25)} - ${pctf(diagnostico.rangos.sinAjustar.p75)}`
-                  : (diagnostico.rangos.ajustado
-                    ? ` · ajustado sería ${pctf(diagnostico.rangos.ajustado.p25)} - ${pctf(diagnostico.rangos.ajustado.p75)}`
-                    : '')}
-              </p>
-            )}
-          </div>
-
-          {/* ── LA TASA EN CERO ANULA EL AJUSTE ──
-              Va PRIMERO, antes de cualquier otra cosa: el cumplimiento se concluye sobre el
-              rango ajustado, y sin tasa ese ajuste es nulo, de modo que el veredicto que se lee
-              arriba sale del rango sin ajustar. Es el aviso de más alcance de esta tarjeta
-              porque no habla de la muestra sino de la vara con la que se mide. */}
-          {/* ── UNA CIFRA DEL CONTRIBUYENTE QUE NO PUEDE SER CIERTA ──
-              Va PRIMERO, antes que cualquier via de cumplimiento: estas cuatro partidas mandan
-              sobre las cuatro formulas del ajuste, y el ajuste decide. Reportado el 2026-09-02
-              sobre un estudio real cuya parte examinada traia cartera por el 161,6 % de las
-              ventas —diecinueve meses—, y ese solo numero empujaba el primer cuartil +10,8
-              puntos por encima del contribuyente. Buscar mas comparables no arregla eso. */}
-          {diagnostico.capitalTrabajoImplausible && (
-            <div className="rounded-lg border border-rose-300 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/30 p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-rose-900 dark:text-rose-200 leading-relaxed">
-                  <strong>Antes de buscar más comparables: revise estas cifras del paso 3.</strong>
-                  {' '}No caben en un año de ventas, y son las que mandan sobre el ajuste de
-                  capital de trabajo, que es el que decide el cumplimiento.
-                  <ul className="mt-1.5 space-y-0.5">
-                    {diagnostico.capitalTrabajoImplausible.partidas.map((p) => (
-                      <li key={p.campo}>
-                        <strong>{p.etiqueta}</strong>: {fmt(p.valor)} ={' '}
-                        <strong>{pctf(p.ratio)}</strong> de las ventas, o{' '}
-                        <strong>{p.meses.toLocaleString('es-CO', { maximumFractionDigits: 1 })} meses</strong>
-                        {' '}de venta
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-1.5 text-rose-800/80 dark:text-rose-300/70">
-                    Si la cifra es correcta —hay operaciones de proyecto con cartera alta—, el
-                    estudio se sostiene y esto queda como constancia. Si viene de una lectura del
-                    balance, corregirla cambia el rango que decide.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Comparables con el mismo problema: es un error de escala del cribado, y en la
-              muestra desplaza los cuartiles. */}
-          {diagnostico.comparablesConCapitalImplausible
-            && diagnostico.comparablesConCapitalImplausible.length > 0 && (
-            <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                  <strong>
-                    {diagnostico.comparablesConCapitalImplausible.length} comparable(s) con
-                    capital de trabajo que no puede ser cierto
-                  </strong>
-                  {': '}
-                  {diagnostico.comparablesConCapitalImplausible.slice(0, 3).map((c) => c.name).join(', ')}
-                  {diagnostico.comparablesConCapitalImplausible.length > 3 ? '…' : ''}.
-                  {' '}Alguna de sus partidas supera sus ventas anuales, lo que suele ser un error
-                  de escala del cribado. Entran igual al rango y desplazan los cuartiles: revíselas
-                  o retírelas.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── POR QUE CONCLUYE SOBRE EL RANGO SIN AJUSTAR ──
-              Reportado el 2026-09-02 con la tabla a la vista: las doce comparables traian CxC,
-              Inventario, CxP y PP&E en cero, porque la exportacion de Capital IQ no incluye esas
-              columnas. Con el ratio de la comparable en cero, cada ajuste se reduce a
-              «−ratio_contribuyente × factor»: el mismo valor para todas. Medido en el caso real,
-              de +4,401 a +4,711 pt en las once, amplitud 0,310 pt. Es una constante que sale del
-              balance del contribuyente y no compara nada, asi que no puede decidir. */}
-          {diagnostico.ajusteTieneDatos === false && diagnostico.comparablesEnElRango > 0 && (
-            <div className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 p-3">
-              <div className="flex items-start gap-2">
-                <FileText className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                  <strong>Se concluye sobre el rango sin ajustar</strong>, y esta es la razón:
-                  solo {diagnostico.comparablesConCapitalTrabajo} de{' '}
-                  {diagnostico.comparablesEnElRango} comparables traen cuentas por cobrar,
-                  inventarios o cuentas por pagar. Un ajuste por diferencias de capital de trabajo
-                  exige conocer el de las dos partes; con el de las comparables en cero, el ajuste
-                  se reduce al mismo valor para todas —sale de su propio balance— y desplaza el
-                  rango sin corregir ninguna diferencia de comparabilidad.
-                  <div className="mt-1.5 text-zinc-500">
-                    Para que el ajuste decida, el cribado del paso 1 tiene que traer esas cuatro
-                    columnas. El rango ajustado sigue calculado y publicado en el informe y en el
-                    Excel de soporte.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {diagnostico.ajusteAnulado && (
-            <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                  <strong>La tasa de interés está en cero.</strong> El cumplimiento se concluye
-                  sobre el rango ajustado por capital de trabajo, y ese ajuste se calcula con la
-                  tasa: en cero, el ajuste de cada comparable es nulo y el rango ajustado
-                  coincide con el rango sin ajustar. El veredicto de arriba sale entonces del
-                  rango que no debería decidir. Fije la tasa (Prime Rate) en el paso 3.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Cuando ninguna palanca alcanza, esto es lo único accionable: qué buscar en el
-              paso 1. Va antes de las palancas porque ampliar el cribado sostiene mejor el
-              estudio —más comparables reales— que apretar la selección de las pocas que hay. */}
-          <RequisitoDelCribado
-            requisito={diagnostico.requisito}
-            indicador={diagnostico.indicador}
-            banda={diagnostico.banda}
-          />
-
-          {/* Antes de mover una sola comparable: si el indicador del contribuyente sale de una
-              lectura que no se pudo cotejar contra el documento, ajustar la muestra para
-              alcanzar ese número deteriora el estudio en vez de arreglarlo. */}
-          {diagnostico.confianza.verificado === false && (
-            <div className="rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                  <strong>Antes de ajustar la muestra:</strong> el indicador del contribuyente
-                  {tPLI !== null ? ` (${pctf(tPLI)})` : ''} sale de una lectura que no se pudo
-                  verificar contra el documento. Confírmelo en el paso 3.
-                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                    {diagnostico.confianza.motivos.map((m, i) => (
-                      <li key={i}>{m}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* La verificación se hizo, pero contra una transcripción por OCR de las páginas
+              {/* La verificación se hizo, pero contra una transcripción por OCR de las páginas
               escaneadas. Va en gris y no en ámbar a propósito: donde antes no había ninguna
               verificación ahora hay una, y bloquear por ella devolvería el estudio al punto de
               partida. Pero es más débil que cotejar contra la capa de texto del propio PDF, y
               quien firme el estudio tiene que poder saberlo. */}
-          {diagnostico.confianza.verificado !== false && diagnostico.confianza.viaOcr && (
-            <p className="text-[11px] text-zinc-500 leading-relaxed flex items-start gap-1.5">
-              <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>
-                Las cifras se comprobaron contra una transcripción por OCR de las páginas
-                escaneadas del documento, no contra su capa de texto. Es una verificación más
-                débil: si el margen decide el cumplimiento, vale confirmarlo a mano en el paso 3.
-              </span>
-            </p>
-          )}
+              {diagnostico.confianza.verificado !== false && diagnostico.confianza.viaOcr && (
+                <p className="text-[11px] text-zinc-500 leading-relaxed flex items-start gap-1.5">
+                  <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Las cifras se comprobaron contra una transcripción por OCR de las páginas
+                    escaneadas del documento, no contra su capa de texto. Es una verificación más
+                    débil: si el margen decide el cumplimiento, vale confirmarlo a mano en el paso 3.
+                  </span>
+                </p>
+              )}
 
-          {/* Las palancas. Cada una se probó de verdad —el servicio recalculó el rango con
+              {/* Las palancas. Cada una se probó de verdad —el servicio recalculó el rango con
               ella aplicada— y solo está aquí si cambia el veredicto: una lista de sugerencias
               que no funcionan enseña a ignorar el panel. */}
-          {diagnostico.palancas.length > 0 && (
-            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#09090b] p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-4 h-4 text-[#0FA3A1]" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                  {diagnostico.palancas.length} vía(s) que sí cambian el veredicto
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {diagnostico.palancas.map((p) => (
-                  <li key={p.clave} className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed flex gap-2">
-                    <span className="text-[#0FA3A1] shrink-0">→</span>
-                    <span>{p.texto}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-[10.5px] text-zinc-500 leading-relaxed">
-                Ninguna se aplica sola: cada una es una decisión metodológica que hay que
-                sustentar en el análisis funcional y dejar escrita en el informe.
-              </p>
-            </div>
-          )}
+              {diagnostico.palancas.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#09090b] p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-[#0FA3A1]" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                      {diagnostico.palancas.length} vía(s) que sí cambian el veredicto
+                    </span>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {diagnostico.palancas.map((p) => (
+                      <li key={p.clave} className="text-[11.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed flex gap-2">
+                        <span className="text-[#0FA3A1] shrink-0">→</span>
+                        <span>{p.texto}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[10.5px] text-zinc-500 leading-relaxed">
+                    Ninguna se aplica sola: cada una es una decisión metodológica que hay que
+                    sustentar en el análisis funcional y dejar escrita en el informe.
+                  </p>
+                </div>
+              )}
 
-          {/* No cumple y no hay nada que probar. Es una conclusión legítima y hay que poder
+              {/* No cumple y no hay nada que probar. Es una conclusión legítima y hay que poder
               decirla: el usuario pidió hacer todo lo posible, no forzar el resultado. */}
-          {diagnostico.veredicto === 'NO CUMPLE' && diagnostico.palancas.length === 0 && (
-            <div className="flex items-start gap-2 text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              <Search className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
-              <span>
-                Se probaron la política de pérdidas, el ajuste de capital de trabajo, los otros
-                indicadores de rentabilidad, los tres ámbitos de muestra y la segmentación:
-                ninguno deja al contribuyente dentro del rango. El estudio no cumple, y el
-                informe debe declararlo con el ajuste correspondiente.
-              </span>
+              {diagnostico.veredicto === 'NO CUMPLE' && diagnostico.palancas.length === 0 && (
+                <div className="flex items-start gap-2 text-[11.5px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  <Search className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
+                  <span>
+                    Se probaron la política de pérdidas, el ajuste de capital de trabajo, los otros
+                    indicadores de rentabilidad, los tres ámbitos de muestra y la segmentación:
+                    ninguno deja al contribuyente dentro del rango. El estudio no cumple, y el
+                    informe debe declararlo con el ajuste correspondiente.
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* `comparables` y `cmode` van del estado local y no de `study`: el efecto que los
+          {/* `comparables` y `cmode` van del estado local y no de `study`: el efecto que los
           persiste corre después del render, y la memoria tiene que explicar el rango que
           se está viendo en la tarjeta, no el del render anterior. */}
-      {memoriaAbierta && (
-        <MemoriaRangoModal
-          /* `auditoria` va aquí y no se persiste con el estudio: es el detalle de la
-             última corrida del motor, con el motivo de rechazo de cada candidata, y
-             es lo que permite que el embudo del Excel refleje lo que el motor
-             decidió en vez de contar cero en todos los motivos. */
-          estudio={{ ...study, comparables, cmode, universo, criteriosScreening, motorConfig: engineConfig, auditoria }}
-          alCerrar={() => setMemoriaAbierta(false)}
-        />
-      )}
+          {memoriaAbierta && (
+            <MemoriaRangoModal
+              /* `auditoria` va aquí y no se persiste con el estudio: es el detalle de la
+                 última corrida del motor, con el motivo de rechazo de cada candidata, y
+                 es lo que permite que el embudo del Excel refleje lo que el motor
+                 decidió en vez de contar cero en todos los motivos. */
+              estudio={{ ...study, comparables, cmode, universo, criteriosScreening, motorConfig: engineConfig, auditoria }}
+              alCerrar={() => setMemoriaAbierta(false)}
+            />
+          )}
 
-      {/* ══════ TABLA DE COMPARABLES CON PLI AJUSTADO ══════ */}
-      <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-zinc-500" />
-            <select
-              value={cmode}
-              onChange={(e) => setCmode(e.target.value)}
-              className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none text-zinc-950 dark:text-zinc-100"
-            >
-              <option value="all">Todas las comparables</option>
-              <option value="intl">Solo Internacionales</option>
-              <option value="nac">Solo Nacionales</option>
-            </select>
-          </div>
-          <button
-            onClick={addComparable}
-            className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white rounded-lg px-4 py-2 text-xs font-semibold transition-colors shadow-sm cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Agregar Comparable Manual
-          </button>
-        </div>
+          {/* ══════ TABLA DE COMPARABLES CON PLI AJUSTADO ══════ */}
+          <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-zinc-500" />
+                <select
+                  value={cmode}
+                  onChange={(e) => setCmode(e.target.value)}
+                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none text-zinc-950 dark:text-zinc-100"
+                >
+                  <option value="all">Todas las comparables</option>
+                  <option value="intl">Solo Internacionales</option>
+                  <option value="nac">Solo Nacionales</option>
+                </select>
+              </div>
+              <button
+                onClick={addComparable}
+                className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white rounded-lg px-4 py-2 text-xs font-semibold transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Agregar Comparable Manual
+              </button>
+            </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[900px]">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-[#0f0f13] text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[10%]">Razón Social</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[8%]">ID IQ</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[8%]">Ámbito</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">Ventas</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">Costos</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">U. Op.</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">CxC</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">Inv.</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">CxP</th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">PP&amp;E</th>
-                {/* Se muestran los DOS y se marca cuál decide. Antes había una sola columna,
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[900px]">
+                <thead>
+                  <tr className="bg-zinc-50 dark:bg-[#0f0f13] text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[10%]">Razón Social</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[8%]">ID IQ</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 w-[8%]">Ámbito</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">Ventas</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">Costos</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[10%]">U. Op.</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">CxC</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">Inv.</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">CxP</th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-right w-[8%]">PP&amp;E</th>
+                    {/* Se muestran los DOS y se marca cuál decide. Antes había una sola columna,
                     la ajustada, mientras el rango podía estar decidiendo sobre la NO ajustada
                     —lo que `useadj` elige—: el analista contaba negativas en una serie que no
                     era la que producía el rango. Se reportó exactamente así, con 4 comparables
                     en pérdida seleccionadas y solo 2 visibles en la columna. */}
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-center w-[12%]">
-                  PLI{' '}
-                  <span className="font-normal text-zinc-400 normal-case">
-                    ({useAdj ? 'ajustado' : 'sin ajustar'} decide)
-                  </span>
-                </th>
-                <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-center w-[8%]">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
-              {calculatedRows.map((row, idx) => (
-                <tr
-                  key={row.id || idx}
-                  className={`transition-colors ${row.isIncluded
-                    ? 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
-                    : 'opacity-35 bg-zinc-100/50 dark:bg-zinc-950/20'
-                    }`}
-                >
-                  <td className="py-2 px-3">
-                    <input
-                      type="text"
-                      value={row.name}
-                      placeholder="Empresa comparable"
-                      onChange={(e) => handleRowChange(idx, 'name', e.target.value)}
-                      className="w-full bg-transparent border-0 border-b border-transparent hover:border-zinc-300 focus:border-[#0FA3A1] py-1 text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                    {row.esContinuidad && (
-                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">
-                        Continuidad
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-center w-[12%]">
+                      PLI{' '}
+                      <span className="font-normal text-zinc-400 normal-case">
+                        ({useAdj ? 'ajustado' : 'sin ajustar'} decide)
                       </span>
-                    )}
-                    {/* ══ El veredicto de actividad, fila por fila ══
+                    </th>
+                    <th className="py-3 px-3 border-b border-zinc-200 dark:border-zinc-800 text-center w-[8%]">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
+                  {calculatedRows.map((row, idx) => (
+                    <tr
+                      key={row.id || idx}
+                      className={`transition-colors ${row.isIncluded
+                        ? 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40'
+                        : 'opacity-35 bg-zinc-100/50 dark:bg-zinc-950/20'
+                        }`}
+                    >
+                      <td className="py-2 px-3">
+                        <input
+                          type="text"
+                          value={row.name}
+                          placeholder="Empresa comparable"
+                          onChange={(e) => handleRowChange(idx, 'name', e.target.value)}
+                          className="w-full bg-transparent border-0 border-b border-transparent hover:border-zinc-300 focus:border-[#0FA3A1] py-1 text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                        {row.esContinuidad && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">
+                            Continuidad
+                          </span>
+                        )}
+                        {/* ══ El veredicto de actividad, fila por fila ══
                         Pedido el 2026-09-01: poder validar la actividad antes de generar los
                         EEFF. El motor SÍ la respeta —la DISTINTA se descarta y la cuota de
                         negativas admite solo MISMA— pero la tabla no lo mostraba: una fila de
                         misma actividad no llevaba marca y se veía igual que una que nadie
                         verificó. El `title` lleva el motivo que escribió la curación, que es lo
                         único que permite validar el veredicto en vez de creerle. */}
-                    <InsigniaActividad row={row} />
-                    {/* La actividad en sí, que es lo que el informe publica por comparable. */}
-                    <ActividadDeLaComparable
-                      alRedactar={() => redactarUnaActividad(idx)}
-                      redactandoEsta={filaRedactando === idx}
-                      row={row}
-                      alEditarActividad={(v) => handleRowChange(idx, 'descActividad', v)}
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-zinc-500 dark:text-zinc-400 text-[11px]">
-                    {row.id || '—'}
-                  </td>
-                  <td className="py-2 px-3">
-                    <select
-                      value={row.amb}
-                      onChange={(e) => handleRowChange(idx, 'amb', e.target.value)}
-                      className="bg-transparent border-0 border-b border-transparent focus:border-[#0FA3A1] py-1 text-zinc-900 dark:text-zinc-200 focus:outline-none"
-                    >
-                      <option value="Int">Int</option>
-                      <option value="Nac">Nac</option>
-                    </select>
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.s}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 's', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.c}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'c', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.op}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'op', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.ar}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'ar', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.inv}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'inv', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.ap}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'ap', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <CampoMoneda
-                      value={row.ppe ?? ''}
-                      placeholder="0"
-                      onChange={(v) => handleRowChange(idx, 'ppe', v)}
-                      className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-center font-bold text-zinc-800 dark:text-zinc-200">
-                    {(() => {
-                      /* El que decide, grande; el otro debajo, en gris. `useadj` es lo único que
-                         elige cuál sostiene la conclusión, y hasta ahora esa elección no se veía
-                         en ninguna parte de la tabla. */
-                      const decide = useAdj ? row.adjustedPli : row.pli;
-                      const otro = useAdj ? row.pli : row.adjustedPli;
-                      return (
-                        <span className="flex flex-col items-center leading-tight">
-                          <span className={decide !== null && decide < 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''}>
-                            {decide !== null ? pctf(decide) : '—'}
-                          </span>
-                          {otro !== null && (
-                            <span
-                              className="text-[10px] text-zinc-400"
-                              title={useAdj ? 'Sin ajustar (no decide)' : 'Ajustado por capital de trabajo (no decide)'}
-                            >
-                              {pctf(otro)}
+                        <InsigniaActividad row={row} />
+                        {/* La actividad en sí, que es lo que el informe publica por comparable. */}
+                        <ActividadDeLaComparable
+                          alRedactar={() => redactarUnaActividad(idx)}
+                          redactandoEsta={filaRedactando === idx}
+                          row={row}
+                          alEditarActividad={(v) => handleRowChange(idx, 'descActividad', v)}
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-zinc-500 dark:text-zinc-400 text-[11px]">
+                        {row.id || '—'}
+                      </td>
+                      <td className="py-2 px-3">
+                        <select
+                          value={row.amb}
+                          onChange={(e) => handleRowChange(idx, 'amb', e.target.value)}
+                          className="bg-transparent border-0 border-b border-transparent focus:border-[#0FA3A1] py-1 text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                        >
+                          <option value="Int">Int</option>
+                          <option value="Nac">Nac</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.s}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 's', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.c}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'c', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.op}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'op', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.ar}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'ar', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.inv}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'inv', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.ap}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'ap', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CampoMoneda
+                          value={row.ppe ?? ''}
+                          placeholder="0"
+                          onChange={(v) => handleRowChange(idx, 'ppe', v)}
+                          className="w-full bg-transparent border-0 border-b border-transparent text-right py-1 font-mono text-zinc-950 dark:text-zinc-100 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center font-bold text-zinc-800 dark:text-zinc-200">
+                        {(() => {
+                          /* El que decide, grande; el otro debajo, en gris. `useadj` es lo único que
+                             elige cuál sostiene la conclusión, y hasta ahora esa elección no se veía
+                             en ninguna parte de la tabla. */
+                          const decide = useAdj ? row.adjustedPli : row.pli;
+                          const otro = useAdj ? row.pli : row.adjustedPli;
+                          return (
+                            <span className="flex flex-col items-center leading-tight">
+                              <span className={decide !== null && decide < 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : ''}>
+                                {decide !== null ? pctf(decide) : '—'}
+                              </span>
+                              {otro !== null && (
+                                <span
+                                  className="text-[10px] text-zinc-400"
+                                  title={useAdj ? 'Sin ajustar (no decide)' : 'Ajustado por capital de trabajo (no decide)'}
+                                >
+                                  {pctf(otro)}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="py-2 px-3 text-center">
-                    <button
-                      onClick={() => removeComparable(idx)}
-                      className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <button
+                          onClick={() => removeComparable(idx)}
+                          className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-      {/* ══════ EXPORTAR EXCEL DE SOPORTE DEL MOTOR ══════ */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleExportarExcel}
-          disabled={!comparables.length}
-          className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-xs font-bold transition-colors shadow-sm cursor-pointer"
-          title="Genera un Excel con los filtros aplicados, las comparables (seleccionadas, rechazadas y en reserva), el rango intercuartil y el desglose del ajuste de capital de trabajo"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          Exportar Excel de Soporte del Motor
-        </button>
-      </div>
+          {/* ══════ EXPORTAR EXCEL DE SOPORTE DEL MOTOR ══════ */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleExportarExcel}
+              disabled={!comparables.length}
+              className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2.5 text-xs font-bold transition-colors shadow-sm cursor-pointer"
+              title="Genera un Excel con los filtros aplicados, las comparables (seleccionadas, rechazadas y en reserva), el rango intercuartil y el desglose del ajuste de capital de trabajo"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar Excel de Soporte del Motor
+            </button>
+          </div>
         </>
       )}
     </div>
