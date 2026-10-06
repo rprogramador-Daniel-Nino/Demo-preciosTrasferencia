@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo,
+  construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
 } from './prestamoTasasPrompts.js';
 
 /* ══════ construirPromptTasasPrestamo ══════ */
@@ -96,4 +96,26 @@ test('parsearRespuestaTasasPrestamo: una fecha sin sofr en la respuesta (posteri
 
 test('parsearRespuestaTasasPrestamo: sin ningún objeto JSON en el texto, lanza (como extraerJSON)', () => {
   assert.throws(() => parsearRespuestaTasasPrestamo('esto no es JSON', [], []));
+});
+
+/* ══════ fusionarTasasPrestamo ══════ */
+
+test('fusionarTasasPrestamo: sin nada previo, adopta todo lo que trajo la búsqueda', () => {
+  const nuevo = parsearRespuestaTasasPrestamo(RESPUESTA_COMPLETA, [{}], []);
+  const fusion = fusionarTasasPrestamo(null, nuevo);
+  assert.strictEqual(fusion.porFecha['2020-10-27'].prime.valor, 3.250);
+  assert.strictEqual(fusion.riesgoPais.valor, 2.845);
+});
+
+test('fusionarTasasPrestamo: un valor editado a mano nunca se pisa con un resultado nuevo de IA', () => {
+  const actual = {
+    riesgoPais: { valor: 9.999, editadoManualmente: true },
+    porFecha: { '2020-10-27': { prime: { valor: 1.111, editadoManualmente: true } } },
+  };
+  const nuevo = parsearRespuestaTasasPrestamo(RESPUESTA_COMPLETA, [{}], []);
+  const fusion = fusionarTasasPrestamo(actual, nuevo);
+  assert.strictEqual(fusion.riesgoPais.valor, 9.999, 'el riesgo país editado a mano se conserva');
+  assert.strictEqual(fusion.porFecha['2020-10-27'].prime.valor, 1.111, 'el prime editado a mano se conserva');
+  // los campos que SÍ trajo la IA sin que el analista los hubiera tocado antes, sí se adoptan
+  assert.strictEqual(fusion.porFecha['2020-10-27'].sofr.valor, 0.090);
 });

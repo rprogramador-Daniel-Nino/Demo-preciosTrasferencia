@@ -99,3 +99,33 @@ export function parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQ
 
   return { porFecha, riesgoPais };
 }
+
+/**
+ * Fusiona un resultado nuevo de `parsearRespuestaTasasPrestamo` sobre el
+ * `estudio.tasasPrestamo` actual, sin pisar ningún valor que el analista ya haya editado a
+ * mano (`editadoManualmente: true`) — "Buscar con IA" nunca sobreescribe una corrección
+ * humana en silencio. Lo que sí trae el resultado nuevo se adopta con
+ * `editadoManualmente: false`, para que una futura búsqueda SÍ pueda refrescarlo si todavía
+ * nadie lo tocó.
+ */
+export function fusionarTasasPrestamo(actual, nuevo) {
+  const a = actual || {};
+  const adoptar = (campoActual, campoNuevo) => (
+    campoActual?.editadoManualmente ? campoActual : { ...campoNuevo, editadoManualmente: false }
+  );
+
+  const porFecha = { ...a.porFecha };
+  Object.entries(nuevo?.porFecha || {}).forEach(([fecha, valores]) => {
+    const actualFecha = a.porFecha?.[fecha] || {};
+    const filaFusionada = {};
+    SERIES.forEach((serie) => {
+      filaFusionada[serie] = adoptar(actualFecha[serie], valores[serie]);
+    });
+    porFecha[fecha] = filaFusionada;
+  });
+
+  return {
+    riesgoPais: adoptar(a.riesgoPais, nuevo?.riesgoPais),
+    porFecha,
+  };
+}
