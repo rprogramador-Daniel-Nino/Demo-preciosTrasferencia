@@ -5,6 +5,8 @@
  * volver a editar una etapa ya confirmada revierte esa confirmación y las que le siguen.
  */
 
+import { serieDisponible } from './prestamoTasasCalculo.js';
+
 export const NUMERO_ETAPA = {
   contribuyente: 1,
   Operaciones: 2,
@@ -34,12 +36,52 @@ export function contribuyenteCompleto(study) {
    candidatas, ver MotorComparables.jsx. */
 export const CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES = ['actividad_especifica'];
 
+/* Un valor de tasa "lleno" es un número real — ni `null`/`undefined` (sin capturar) ni un
+   string vacío del input. No exige `confiable`: un valor traído por IA y marcado "sin
+   verificar" sí cuenta para avanzar, el candado es sobre llenado, no sobre certeza. */
+const valorDeTasaValido = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/* En un estudio de tipo préstamo, la etapa de Motor de Comparables no se puede confirmar
+   sin que las 4 tasas (PRIME/SOFR/TMC/Moody's) de CADA fecha de pacto, más el Riesgo País
+   del estudio, estén llenas — es el dato que sostiene las Tablas 6/18/19/20 del informe
+   (Fase 4). SOFR se excluye del requisito cuando la fecha es anterior a `FECHA_INICIO_SOFR`
+   (`prestamoTasasCalculo.js`): esa serie no existía, así que no se le puede pedir al
+   analista un dato que no puede conseguir. */
+/* Fechas únicas directo de `study.prestamos`, sin pasar por `fechasPactoUnicas`
+   (`tablasPrestamoTasas.js`): esa exige `tipo_estudio === 'prestamo'` de puertas adentro
+   (vía `tienePrestamos`), y este candado —igual que `operacionesPrestamoCompleto`, su
+   precedente— debe depender solo de `study.prestamos`, no del tipo de estudio: es
+   `motorComparableCompleto` quien decide SI aplicar este requisito según `tipo_estudio`. */
+function fechasPactoDirecto(study) {
+  if (!Array.isArray(study?.prestamos)) return [];
+  const vistas = new Set();
+  const fechas = [];
+  study.prestamos.forEach((p) => {
+    if (p?.fechaPacto && !vistas.has(p.fechaPacto)) { vistas.add(p.fechaPacto); fechas.push(p.fechaPacto); }
+  });
+  return fechas;
+}
+
+export function prestamoTasasCompleto(study) {
+  if (!study || !valorDeTasaValido(study.tasasPrestamo?.riesgoPais?.valor)) return false;
+  return fechasPactoDirecto(study).every((fecha) => {
+    const t = study.tasasPrestamo?.porFecha?.[fecha];
+    if (!t) return false;
+    return ['prime', 'tmc', 'sofr']
+      .filter((serie) => serieDisponible(serie, fecha))
+      .every((serie) => valorDeTasaValido(t[serie]?.valor))
+      && valorDeTasaValido(t.moodys?.valor);
+  });
+}
+
 export function motorComparableCompleto(study) {
   if (!study) return false;
-  return CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES.every((campo) => {
+  const actividadOk = CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES.every((campo) => {
     const valor = study[campo];
     return typeof valor === 'string' && valor.trim().length > 0;
   });
+  if (!actividadOk) return false;
+  return study.tipo_estudio === 'prestamo' ? prestamoTasasCompleto(study) : true;
 }
 
 /* En un estudio de tipo préstamo, la etapa de Ingesta de Operaciones no se puede confirmar

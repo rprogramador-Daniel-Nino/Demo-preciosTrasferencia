@@ -3,9 +3,26 @@ import assert from 'node:assert';
 import {
   NUMERO_ETAPA, TOTAL_ETAPAS, CAMPOS_OBLIGATORIOS_CONTRIBUYENTE,
   contribuyenteCompleto, CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, motorComparableCompleto,
-  operacionesPrestamoCompleto,
+  operacionesPrestamoCompleto, prestamoTasasCompleto,
   estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
 } from './flujoEstudio.js';
+
+const PRESTAMO_BASE = { tipo_estudio: 'prestamo', actividad_especifica: 'Comercio de vehículos' };
+const PRESTAMOS_DOS_FECHAS = [
+  { fechaPacto: '2020-10-27' },
+  { fechaPacto: '2022-07-07' },
+];
+const TASAS_COMPLETAS = {
+  riesgoPais: { valor: 2.845 },
+  porFecha: {
+    '2020-10-27': {
+      prime: { valor: 3.25 }, tmc: { valor: 1.75 }, sofr: { valor: 0.09 }, moodys: { valor: 1.56 },
+    },
+    '2022-07-07': {
+      prime: { valor: 4.75 }, tmc: { valor: 7.5 }, sofr: { valor: 1.54 }, moodys: { valor: 1.19 },
+    },
+  },
+};
 
 test('NUMERO_ETAPA enumera las 6 etapas del sidebar en el mismo orden en que aparecen', () => {
   /* Layout.jsx numera sus botones "1. Contribuyente" ... "6. Generador Word": este mapa es
@@ -57,6 +74,79 @@ test('motorComparableCompleto falla sin actividad económica específica, con es
   assert.strictEqual(motorComparableCompleto({ actividad_especifica: '   ' }), false);
   assert.strictEqual(motorComparableCompleto({}), false);
   assert.strictEqual(motorComparableCompleto(null), false);
+});
+
+test('motorComparableCompleto para estándar/segmentación sigue exigiendo solo actividad_especifica', () => {
+  /* No se rompe el comportamiento actual: sin tipo_estudio === 'prestamo', nunca se exige
+     prestamoTasasCompleto. */
+  assert.strictEqual(motorComparableCompleto({ actividad_especifica: 'Desarrollo de software' }), true);
+  assert.strictEqual(
+    motorComparableCompleto({ tipo_estudio: 'estandar', actividad_especifica: 'Desarrollo de software' }),
+    true,
+  );
+});
+
+test('motorComparableCompleto en préstamo exige también las tasas completas', () => {
+  assert.strictEqual(motorComparableCompleto({ ...PRESTAMO_BASE, prestamos: PRESTAMOS_DOS_FECHAS }), false);
+  assert.strictEqual(
+    motorComparableCompleto({
+      ...PRESTAMO_BASE, prestamos: PRESTAMOS_DOS_FECHAS, tasasPrestamo: TASAS_COMPLETAS,
+    }),
+    true,
+  );
+});
+
+test('motorComparableCompleto en préstamo sigue exigiendo actividad_especifica', () => {
+  assert.strictEqual(
+    motorComparableCompleto({
+      tipo_estudio: 'prestamo', prestamos: PRESTAMOS_DOS_FECHAS, tasasPrestamo: TASAS_COMPLETAS,
+    }),
+    false,
+  );
+});
+
+test('prestamoTasasCompleto: falso sin tasasPrestamo, o con riesgoPais sin llenar', () => {
+  assert.strictEqual(prestamoTasasCompleto({ prestamos: PRESTAMOS_DOS_FECHAS }), false);
+  assert.strictEqual(
+    prestamoTasasCompleto({ prestamos: PRESTAMOS_DOS_FECHAS, tasasPrestamo: { porFecha: TASAS_COMPLETAS.porFecha } }),
+    false,
+  );
+});
+
+test('prestamoTasasCompleto: falso si a alguna fecha le falta cualquiera de las 4 tasas', () => {
+  const incompleto = {
+    prestamos: PRESTAMOS_DOS_FECHAS,
+    tasasPrestamo: {
+      riesgoPais: { valor: 2.845 },
+      porFecha: {
+        '2020-10-27': TASAS_COMPLETAS.porFecha['2020-10-27'],
+        '2022-07-07': { prime: { valor: 4.75 }, tmc: { valor: 7.5 }, moodys: { valor: 1.19 } }, // sin sofr
+      },
+    },
+  };
+  assert.strictEqual(prestamoTasasCompleto(incompleto), false);
+});
+
+test('prestamoTasasCompleto: verdadero con todas las fechas llenas', () => {
+  assert.strictEqual(
+    prestamoTasasCompleto({ prestamos: PRESTAMOS_DOS_FECHAS, tasasPrestamo: TASAS_COMPLETAS }),
+    true,
+  );
+});
+
+test('prestamoTasasCompleto: no exige sofr si la única fecha de pacto es anterior a abril de 2018', () => {
+  const prestamoViejo = {
+    prestamos: [{ fechaPacto: '2015-01-15' }],
+    tasasPrestamo: {
+      riesgoPais: { valor: 2.845 },
+      porFecha: { '2015-01-15': { prime: { valor: 3 }, tmc: { valor: 2 }, moodys: { valor: 1 } } },
+    },
+  };
+  assert.strictEqual(prestamoTasasCompleto(prestamoViejo), true);
+});
+
+test('prestamoTasasCompleto: falso sin estudio', () => {
+  assert.strictEqual(prestamoTasasCompleto(null), false);
 });
 
 test('operacionesPrestamoCompleto exige al menos una fila de préstamo detectada', () => {
