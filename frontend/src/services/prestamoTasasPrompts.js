@@ -20,6 +20,21 @@ import { serieDisponible } from './prestamoTasasCalculo.js';
 
 const SERIES = ['prime', 'sofr', 'tmc', 'moodys'];
 
+/* Un estudio con muchos préstamos de fechas distintas puede tener más de 8 fechas de pacto
+   únicas. Pedirlas todas en un solo prompt arriesga el corte de `GEMINI_CORTE_MS` (50 s,
+   `functions/index.js`) y repite el problema de contaminación de citas entre series que ya
+   tiene documentado `analisisMercadoPrompts.js` con 8 series en una sola llamada. */
+export const TAMANO_LOTE_FECHAS = 8;
+
+export function trocearFechas(fechasPacto) {
+  const fechas = fechasPacto || [];
+  const lotes = [];
+  for (let i = 0; i < fechas.length; i += TAMANO_LOTE_FECHAS) {
+    lotes.push(fechas.slice(i, i + TAMANO_LOTE_FECHAS));
+  }
+  return lotes;
+}
+
 export function construirPromptTasasPrestamo(fechasPacto, anioInforme) {
   const listaFechas = (fechasPacto || []).map((f) => `- ${f}`).join('\n');
   return `Eres un asistente de investigación de precios de transferencia. Para cada una de
@@ -97,6 +112,22 @@ export function parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQ
     fuenteUrl: rp.fuenteUrl || null,
   };
 
+  return { porFecha, riesgoPais };
+}
+
+/**
+ * Une los resultados de varios lotes (`trocearFechas`) en uno solo: cada lote pide fechas
+ * distintas, así que `porFecha` simplemente se junta. `riesgoPais` se pide en cada lote
+ * (es la misma pregunta, "Riesgo País del año del informe", repetida), así que se queda con
+ * el primero que de verdad trajo un valor confiable, o si ninguno fue confiable, el primero
+ * que trajo un valor a secas — nunca inventa uno si ningún lote trajo nada.
+ */
+export function combinarResultadosTasas(resultados) {
+  const lista = resultados || [];
+  const porFecha = Object.assign({}, ...lista.map((r) => r.porFecha || {}));
+  const riesgoPais = lista.map((r) => r.riesgoPais).find((rp) => rp?.confiable)
+    || lista.map((r) => r.riesgoPais).find((rp) => esNumero(rp?.valor))
+    || { valor: null, confiable: false, fuenteUrl: null };
   return { porFecha, riesgoPais };
 }
 

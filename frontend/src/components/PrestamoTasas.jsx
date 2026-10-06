@@ -3,6 +3,7 @@ import { Search, Loader2, CheckCircle2, AlertTriangle, ExternalLink } from 'luci
 import { consultarGeminiConBusqueda } from '../services/comparablesEngine';
 import {
   construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
+  trocearFechas, combinarResultadosTasas,
 } from '../services/prestamoTasasPrompts';
 import { FECHA_INICIO_SOFR } from '../services/prestamoTasasCalculo';
 import {
@@ -32,30 +33,59 @@ export default function PrestamoTasas({ study, updateStudy }) {
 
   const guardarTasas = (siguiente) => updateStudy({ tasasPrestamo: siguiente });
 
+  /* '' -> null (campo vacío); cualquier otra cosa no numérica -> null también, nunca NaN
+     guardado en el estudio (un <input type="number"> ya filtra casi todo, pero no pegar un
+     texto suelto). Al corregir a mano, se limpian `confiable`/`fuenteUrl` del fetch de IA
+     anterior: de lo contrario el valor nuevo se quedaría con el badge y la fuente de un
+     número que ya no es el que hay en el campo. */
+  const valorDesdeInput = (crudo) => {
+    if (crudo === '') return null;
+    const n = Number(crudo);
+    return Number.isFinite(n) ? n : null;
+  };
+
   const handleCambiarValor = (fecha, serie, crudo) => {
-    const valor = crudo === '' ? null : Number(crudo);
+    const valor = valorDesdeInput(crudo);
     const porFechaActual = tasas.porFecha?.[fecha] || {};
     guardarTasas({
       ...tasas,
       porFecha: {
         ...tasas.porFecha,
-        [fecha]: { ...porFechaActual, [serie]: { ...porFechaActual[serie], valor, editadoManualmente: true } },
+        [fecha]: {
+          ...porFechaActual,
+          [serie]: { valor, editadoManualmente: true, confiable: false, fuenteUrl: null },
+        },
       },
     });
   };
 
   const handleCambiarRiesgoPais = (crudo) => {
-    const valor = crudo === '' ? null : Number(crudo);
-    guardarTasas({ ...tasas, riesgoPais: { ...tasas.riesgoPais, valor, editadoManualmente: true } });
+    const valor = valorDesdeInput(crudo);
+    guardarTasas({
+      ...tasas,
+      riesgoPais: { valor, editadoManualmente: true, confiable: false, fuenteUrl: null },
+    });
   };
 
   const handleBuscarConIA = async () => {
     setBuscando(true);
-    setMensaje('Buscando PRIME, SOFR, TMC, Moody\'s y Riesgo País con Inteligencia Artificial...');
+    const lotes = trocearFechas(fechas);
     try {
-      const prompt = construirPromptTasasPrestamo(fechas, study.anio);
-      const { texto, groundingChunks, webSearchQueries } = await consultarGeminiConBusqueda(prompt);
-      const resultado = parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries);
+      const resultadosPorLote = [];
+      for (let i = 0; i < lotes.length; i++) {
+        if (lotes.length > 1) {
+          setMensaje(`Buscando tasas con Inteligencia Artificial... lote ${i + 1} de ${lotes.length}`);
+        } else {
+          setMensaje('Buscando PRIME, SOFR, TMC, Moody\'s y Riesgo País con Inteligencia Artificial...');
+        }
+        const prompt = construirPromptTasasPrestamo(lotes[i], study.anio);
+        // Secuencial, no en paralelo: son varias fechas pidiendo lo mismo con
+        // Google Search, y no hay necesidad de disparar varias búsquedas a la vez.
+        // eslint-disable-next-line no-await-in-loop
+        const { texto, groundingChunks, webSearchQueries } = await consultarGeminiConBusqueda(prompt);
+        resultadosPorLote.push(parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries));
+      }
+      const resultado = combinarResultadosTasas(resultadosPorLote);
       guardarTasas(fusionarTasasPrestamo(tasas, resultado));
       setMensaje('✅ Tasas encontradas. Revise cada valor y su fuente antes de confirmar la etapa.');
     } catch (err) {

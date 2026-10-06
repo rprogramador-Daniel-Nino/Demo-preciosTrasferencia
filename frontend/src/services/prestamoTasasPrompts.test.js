@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
+  trocearFechas, combinarResultadosTasas, TAMANO_LOTE_FECHAS,
 } from './prestamoTasasPrompts.js';
 
 /* ══════ construirPromptTasasPrestamo ══════ */
@@ -118,4 +119,47 @@ test('fusionarTasasPrestamo: un valor editado a mano nunca se pisa con un result
   assert.strictEqual(fusion.porFecha['2020-10-27'].prime.valor, 1.111, 'el prime editado a mano se conserva');
   // los campos que SÍ trajo la IA sin que el analista los hubiera tocado antes, sí se adoptan
   assert.strictEqual(fusion.porFecha['2020-10-27'].sofr.valor, 0.090);
+});
+
+/* ══════ trocearFechas ══════ */
+
+test('trocearFechas: con 8 fechas o menos, un solo lote', () => {
+  const fechas = Array.from({ length: 8 }, (_, i) => `2020-01-${String(i + 1).padStart(2, '0')}`);
+  assert.deepStrictEqual(trocearFechas(fechas), [fechas]);
+});
+
+test('trocearFechas: con más de 8, trocea en varios lotes de hasta 8', () => {
+  const fechas = Array.from({ length: 10 }, (_, i) => `2020-01-${String(i + 1).padStart(2, '0')}`);
+  const lotes = trocearFechas(fechas);
+  assert.strictEqual(lotes.length, 2);
+  assert.strictEqual(lotes[0].length, TAMANO_LOTE_FECHAS);
+  assert.strictEqual(lotes[1].length, 2);
+  assert.deepStrictEqual(lotes.flat(), fechas, 'ninguna fecha se pierde ni se duplica');
+});
+
+test('trocearFechas: vacío da un arreglo vacío de lotes', () => {
+  assert.deepStrictEqual(trocearFechas([]), []);
+});
+
+/* ══════ combinarResultadosTasas ══════ */
+
+test('combinarResultadosTasas: une el porFecha de varios lotes sin perder ninguna fecha', () => {
+  const lote1 = { porFecha: { '2020-01-01': { prime: { valor: 1 } } }, riesgoPais: { valor: 2.845 } };
+  const lote2 = { porFecha: { '2020-01-02': { prime: { valor: 2 } } }, riesgoPais: { valor: 2.845 } };
+  const combinado = combinarResultadosTasas([lote1, lote2]);
+  assert.deepStrictEqual(Object.keys(combinado.porFecha).sort(), ['2020-01-01', '2020-01-02']);
+  assert.strictEqual(combinado.riesgoPais.valor, 2.845);
+});
+
+test('combinarResultadosTasas: si un lote no trajo riesgoPais confiable, usa el de otro lote que sí', () => {
+  const sinRiesgo = { porFecha: {}, riesgoPais: { valor: null, confiable: false } };
+  const conRiesgo = { porFecha: {}, riesgoPais: { valor: 2.845, confiable: true } };
+  const combinado = combinarResultadosTasas([sinRiesgo, conRiesgo]);
+  assert.strictEqual(combinado.riesgoPais.valor, 2.845);
+});
+
+test('combinarResultadosTasas: con una lista vacía, da porFecha vacío y riesgoPais sin valor', () => {
+  const combinado = combinarResultadosTasas([]);
+  assert.deepStrictEqual(combinado.porFecha, {});
+  assert.strictEqual(combinado.riesgoPais.valor, null);
 });
