@@ -11,7 +11,10 @@ import { registrarUsoIA } from './gastoIA.js';
    traduce al nombre de operación que ve el contador de gasto en IA del header. Un valor
    que no está aquí (o el valor por defecto, 'curación IA') cae en Motor de Selección
    Automática, que es su llamador real. */
-const ETIQUETAS_GASTO_IA = { marcado: 'Subir otra plantilla Word' };
+const ETIQUETAS_GASTO_IA = {
+  marcado: 'Subir otra plantilla Word',
+  tasasPrestamo: 'Tasas de préstamo — Fase 4',
+};
 
 /**
  * Normaliza nombres de empresas para cruces de continuidad
@@ -1956,6 +1959,61 @@ export async function consultarGemini(prompt, opciones = {}) {
       if (!transitorio || intento === reintentos) break;
       /* espera creciente con jitter, para que los lotes en vuelo no vuelvan a
          chocar todos en el mismo instante */
+      const espera = pausaBaseMs * (2 ** intento) * (0.75 + Math.random() * 0.5);
+      console.warn(`[${etiqueta}] ${status ? 'HTTP ' + status : 'fallo de red'}; ` +
+        `reintento ${intento + 1} de ${reintentos} en ${Math.round(espera / 1000)} s`);
+      await dormir(espera);
+    }
+  }
+  if (ultimo && ultimo.response && ultimo.status === undefined) ultimo.status = ultimo.response.status;
+  throw ultimo;
+}
+
+/* `gemini-3.5-flash` (el modelo de `consultarGemini`) nunca devuelve `groundingMetadata`
+   con `google_search` + salida JSON en texto — confirmado en vivo el 2026-08-05
+   (`functions/analisisSectorActualizar.js:22-29`). `gemini-3-flash-preview` sí trae
+   `webSearchQueries` de forma consistente: es el modelo que necesita cualquier llamada que
+   dependa de verificar que una cifra vino de una búsqueda real y no de la memoria del
+   modelo — el caso de la Fase 4 de préstamos. */
+const GEMINI_MODELO_BUSQUEDA = 'gemini-3-flash-preview';
+
+/**
+ * Como `consultarGemini`, pero con la tool de Google Search activada y devolviendo también
+ * lo que confirma que la respuesta vino de una búsqueda real, no de memoria:
+ * `groundingChunks`/`webSearchQueries` (`candidate.groundingMetadata`). Quien llama decide
+ * el criterio de "confiable" — aquí no se filtra nada, por si algún llamador futuro necesita
+ * el criterio contrario.
+ *
+ * No reemplaza a `consultarGemini`: esa se usa para curación/redacción sin búsqueda, esta
+ * para cuando hace falta citar una fuente real (tasas de mercado, Fase 4 de préstamos).
+ */
+export async function consultarGeminiConBusqueda(prompt, opciones = {}) {
+  const {
+    reintentos = CURACION_REINTENTOS, pausaBaseMs = CURACION_PAUSA_BASE_MS,
+    modelo = GEMINI_MODELO_BUSQUEDA, etiqueta = 'tasasPrestamo',
+  } = opciones;
+  let ultimo;
+  for (let intento = 0; intento <= reintentos; intento++) {
+    try {
+      const respuesta = await axios.post('/api/gemini', {
+        model: modelo,
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }],
+      });
+      registrarUsoIA(ETIQUETAS_GASTO_IA[etiqueta] || 'Motor de Selección Automática', respuesta.data, modelo);
+      const candidato = respuesta.data?.candidates?.[0];
+      const texto = (candidato?.content?.parts || []).map(p => p.text || '').join('');
+      if (!texto) throw new Error('Respuesta vacía de Gemini');
+      return {
+        texto,
+        groundingChunks: candidato?.groundingMetadata?.groundingChunks || [],
+        webSearchQueries: candidato?.groundingMetadata?.webSearchQueries || [],
+      };
+    } catch (err) {
+      ultimo = err;
+      const status = err?.response?.status;
+      const transitorio = (status === undefined || ESTADOS_REINTENTABLES.has(status)) && !esCuotaAgotada(err);
+      if (!transitorio || intento === reintentos) break;
       const espera = pausaBaseMs * (2 ** intento) * (0.75 + Math.random() * 0.5);
       console.warn(`[${etiqueta}] ${status ? 'HTTP ' + status : 'fallo de red'}; ` +
         `reintento ${intento + 1} de ${reintentos} en ${Math.round(espera / 1000)} s`);

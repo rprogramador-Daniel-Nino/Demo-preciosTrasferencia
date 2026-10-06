@@ -11,7 +11,7 @@ import {
   elegirHoja, encontrarFilaEncabezados, COLUMNAS_IQ, importCapitalIQExcel,
   regionDe, perfilDe, tokensSignificativos, coincidenciaActividad, extraerJSON,
   parsearCriteriosScreening, leerCriteriosScreeningDeArchivo, CURACION_LOTE, enriquecerUniverso,
-  MINIMO_COMPARABLES, gradoDeActividad, consultarGemini, claveDeCruce,
+  MINIMO_COMPARABLES, gradoDeActividad, consultarGemini, consultarGeminiConBusqueda, claveDeCruce,
 } from './comparablesEngine.js';
 import { num } from '../utils/calculations.js';
 
@@ -1938,6 +1938,81 @@ test('consultarGemini deja elegir el modelo, para no divergir del resto del sist
   try {
     await consultarGemini('x', { modelo: 'gemini-3.5-flash' });
     assert.deepStrictEqual(cuerpos, [{ url: '/api/gemini', model: 'gemini-3.5-flash' }]);
+  } finally {
+    axios.post = original;
+  }
+});
+
+/* --- `consultarGeminiConBusqueda` — Fase 4 de préstamos: búsqueda con grounding --- */
+
+test('consultarGeminiConBusqueda manda tools:google_search y usa gemini-3-flash-preview por defecto', async () => {
+  const original = axios.post;
+  const cuerpos = [];
+  axios.post = async (url, body) => {
+    cuerpos.push({ url, body });
+    return { data: { candidates: [{ content: { parts: [{ text: 'ok' }] } }] } };
+  };
+  try {
+    await consultarGeminiConBusqueda('un prompt cualquiera');
+    assert.strictEqual(cuerpos[0].url, '/api/gemini');
+    assert.strictEqual(cuerpos[0].body.model, 'gemini-3-flash-preview');
+    assert.deepStrictEqual(cuerpos[0].body.tools, [{ google_search: {} }]);
+  } finally {
+    axios.post = original;
+  }
+});
+
+test('consultarGeminiConBusqueda: con groundingChunks, los devuelve junto con el texto', async () => {
+  const original = axios.post;
+  axios.post = async () => ({
+    data: {
+      candidates: [{
+        content: { parts: [{ text: '{"ok":true}' }] },
+        groundingMetadata: {
+          groundingChunks: [{ web: { uri: 'https://fred.stlouisfed.org/x' } }],
+          webSearchQueries: ['PRIME rate 27 octubre 2020'],
+        },
+      }],
+    },
+  });
+  try {
+    const r = await consultarGeminiConBusqueda('x');
+    assert.strictEqual(r.texto, '{"ok":true}');
+    assert.strictEqual(r.groundingChunks.length, 1);
+    assert.deepStrictEqual(r.webSearchQueries, ['PRIME rate 27 octubre 2020']);
+  } finally {
+    axios.post = original;
+  }
+});
+
+test('consultarGeminiConBusqueda: sin groundingMetadata, devuelve arreglos vacíos en vez de reventar', async () => {
+  const original = axios.post;
+  axios.post = async () => ({ data: { candidates: [{ content: { parts: [{ text: 'sin grounding' }] } }] } });
+  try {
+    const r = await consultarGeminiConBusqueda('x');
+    assert.strictEqual(r.texto, 'sin grounding');
+    assert.deepStrictEqual(r.groundingChunks, []);
+    assert.deepStrictEqual(r.webSearchQueries, []);
+  } finally {
+    axios.post = original;
+  }
+});
+
+test('consultarGeminiConBusqueda: reintenta un 504 transitorio igual que consultarGemini', async () => {
+  const original = axios.post;
+  let intentos = 0;
+  axios.post = async () => {
+    if (++intentos === 1) {
+      const err = new Error('Request failed with status code 504');
+      err.response = { status: 504, data: {} };
+      throw err;
+    }
+    return { data: { candidates: [{ content: { parts: [{ text: 'ok tras reintento' }] } }] } };
+  };
+  try {
+    const r = await consultarGeminiConBusqueda('x', { pausaBaseMs: 0 });
+    assert.strictEqual(r.texto, 'ok tras reintento');
+    assert.strictEqual(intentos, 2);
   } finally {
     axios.post = original;
   }
