@@ -379,6 +379,29 @@ export default function App() {
     };
   }, [study, activeStudyId, usuario, estudioAjeno]);
 
+  /* `estadoGuardado` pasa a 'guardando' en el mismo instante en que cambia `study` (línea
+     241), antes de que arranque siquiera el debounce de `RETARDO_GUARDADO` (1500 ms) — así
+     que cubre toda la ventana real en la que un cambio reciente todavía no llegó a
+     localStorage ni a Firestore. Un cierre de pestaña o una recarga (F5, Ctrl+Shift+R) en
+     esa ventana no da tiempo a que el guardado termine, y como hoy no hay ningún aviso, se
+     pierde en silencio lo último que se escribió — reportado en vivo tras usar Ctrl+Shift+R
+     justo después de editar la vista nueva de tasas de préstamo, pero el riesgo es el mismo
+     para cualquier campo del wizard, no uno nuevo de esa vista.
+
+     El diálogo nativo de `beforeunload` (no `window.confirm`/`alert`, que el usuario ya pidió
+     no usar: esto es la confirmación de navegación propia del navegador) es la única
+     protección real contra ese caso, porque corre sin esperar a React. */
+  useEffect(() => {
+    if (estadoGuardado !== 'guardando') return undefined;
+    const avisar = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [estadoGuardado]);
+
   /* Mismo candado que `updateStudyDeEtapa` (activeStudyId contra el sello del estudio
      activo, ver más abajo), sin su lógica de reversión de etapas: el gasto de IA es un
      contador pasivo, no una edición del analista, y no debe revertir la confirmación de
