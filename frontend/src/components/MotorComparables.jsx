@@ -2585,9 +2585,7 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-emerald-500 font-bold text-lg">🟢</span>
-            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-              Actividad Económica Detectada de la Empresa *
-            </h3>
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Actividad Económica Detectada de la Empresa *</h3>
           </div>
           <button
             onClick={() => { setEditingAct(!editingAct); setActInput(actividad); }}
