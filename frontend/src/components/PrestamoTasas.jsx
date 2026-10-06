@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Loader2, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Search, Loader2, CheckCircle2, AlertTriangle, ExternalLink, BookOpen, FileUp } from 'lucide-react';
 import { consultarGeminiConBusqueda } from '../services/comparablesEngine';
+import { parsePriorStudyFile } from '../services/priorStudyParser';
 import {
   construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
   trocearFechas, combinarResultadosTasas,
@@ -26,12 +27,55 @@ const pct = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(3).r
 export default function PrestamoTasas({ study, updateStudy }) {
   const [buscando, setBuscando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [cargandoInformeAnterior, setCargandoInformeAnterior] = useState(false);
+  const [mensajeInformeAnterior, setMensajeInformeAnterior] = useState('');
 
   const tasas = study.tasasPrestamo || { riesgoPais: {}, porFecha: {} };
   const fechas = fechasPactoUnicas(study);
   const completo = prestamoTasasCompleto(study);
 
   const guardarTasas = (siguiente) => updateStudy({ tasasPrestamo: siguiente });
+
+  /* El banner equivalente del motor de márgenes (`MotorComparables.jsx`) quedó oculto
+     para préstamo: lee el mismo documento pero su razón de ser es la continuidad de
+     comparables de margen, que no existe aquí. La actividad económica y el vinculado que
+     ese mismo documento trae SÍ hacen falta en un estudio de préstamo —la actividad
+     alimenta el apartado sectorial (III.C, `analisisMercado.js`) igual que en cualquier
+     otro estudio, y es además obligatoria para avanzar de etapa
+     (`CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES`)—, así que este es el punto de ingesta
+     propio de préstamo: mismo parser, sin la parte de comparables de margen ni el
+     catálogo de continuidad, que aquí no aplican. */
+  const handleCargarInformeAnterior = async (file) => {
+    if (!file) return;
+    setCargandoInformeAnterior(true);
+    setMensajeInformeAnterior('🤖 Leyendo documento con Inteligencia Artificial...');
+    try {
+      const result = await parsePriorStudyFile(file);
+      if (!result) {
+        setMensajeInformeAnterior('⚠ No se pudo leer el documento.');
+        return;
+      }
+      updateStudy({
+        ...(result.actividad_especifica ? { actividad_especifica: result.actividad_especifica } : {}),
+        estudioAnterior: {
+          fuente: result.filename,
+          actividad: result.actividad_especifica,
+          anio: result.anio_gravable || null,
+          vinculado: result.vinculado || null,
+          capital_pagado: result.capital_pagado || null,
+          total_acciones: result.total_acciones || null,
+          accionistas: result.accionistas || [],
+          comparables: result.comparables || [],
+        },
+      });
+      setMensajeInformeAnterior('✅ Actividad económica y datos del vinculado extraídos. Revíselos antes de continuar.');
+    } catch (err) {
+      console.error('Error leyendo documentación del año anterior (préstamo):', err);
+      setMensajeInformeAnterior('⚠ No se pudo leer el documento automáticamente. Puede escribir la actividad económica a mano abajo.');
+    } finally {
+      setCargandoInformeAnterior(false);
+    }
+  };
 
   /* '' -> null (campo vacío); cualquier otra cosa no numérica -> null también, nunca NaN
      guardado en el estudio (un <input type="number"> ya filtra casi todo, pero no pegar un
@@ -116,6 +160,39 @@ export default function PrestamoTasas({ study, updateStudy }) {
         >
           Tasas de préstamo* — obligatorias para avanzar a la siguiente etapa
         </p>
+      </div>
+
+      <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-[#0FA3A1]" />
+          <h3 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">
+            Documentación para el análisis de mercado
+          </h3>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Cargue el informe, certificado o documento del año anterior (.pdf, .docx, .json, .txt)
+          con el que el sistema reconoce la actividad económica de la empresa y el vinculado del
+          exterior — alimenta el apartado sectorial que se redacta en una etapa posterior, igual
+          que en los demás tipos de estudio.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 bg-[#0FA3A1] hover:bg-[#0B7C7A] text-white px-4 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-sm">
+            <FileUp className="w-4 h-4" />
+            <span>{cargandoInformeAnterior ? 'Analizando con Gemini AI...' : '📎 Cargar documento del año anterior'}</span>
+            <input
+              type="file"
+              accept=".pdf,.docx,.doc,.json,.txt"
+              disabled={cargandoInformeAnterior}
+              onChange={(e) => e.target.files[0] && handleCargarInformeAnterior(e.target.files[0])}
+              className="hidden"
+            />
+          </label>
+          {mensajeInformeAnterior && (
+            <span className="text-xs font-medium text-[#0FA3A1] bg-[#0FA3A1]/10 px-3 py-1.5 rounded-lg">
+              {mensajeInformeAnterior}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
