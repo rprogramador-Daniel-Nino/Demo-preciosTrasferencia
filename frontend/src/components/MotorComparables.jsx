@@ -2633,7 +2633,9 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
         )}
       </div>
 
-      {/* ══════ WIZARD DE SELECCIÓN AUTOMÁTICA (TOP-N) ══════ */}
+      {study.tipo_estudio !== 'prestamo' && (
+        <>
+        {/* ══════ WIZARD DE SELECCIÓN AUTOMÁTICA (TOP-N) ══════ */}
       <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
@@ -4442,6 +4444,8 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
           Exportar Excel de Soporte del Motor
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }
