@@ -14,6 +14,7 @@ import {
   MINIMO_COMPARABLES, gradoDeActividad, consultarGemini, consultarGeminiConBusqueda, claveDeCruce,
 } from './comparablesEngine.js';
 import { num } from '../utils/calculations.js';
+import { cargarEstudio, obtenerEstado } from './gastoIA.js';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1995,6 +1996,34 @@ test('consultarGeminiConBusqueda: sin groundingMetadata, devuelve arreglos vací
     assert.deepStrictEqual(r.webSearchQueries, []);
   } finally {
     axios.post = original;
+  }
+});
+
+test('consultarGeminiConBusqueda: registra el gasto de IA del estudio abierto, con la etiqueta de Fase 4', async () => {
+  /* El badge "Gasto en IA de este estudio" (GastoIABadge.jsx) lee el store externo de
+     gastoIA.js, que cualquier función de servicio alimenta llamando registrarUsoIA — sin
+     props, sin que el componente nuevo necesite enterarse de qué estudio está abierto (ver
+     el comentario de cabecera de gastoIA.js). Esta prueba confirma que la llamada de
+     "Buscar con IA" de la Fase 4 de préstamos de verdad llega a ese store, no solo que
+     `registrarUsoIA` se invoca. */
+  cargarEstudio(null); // arranca en limpio, como si se acabara de abrir un estudio
+  const original = axios.post;
+  axios.post = async () => ({
+    data: {
+      candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+      usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 },
+    },
+  });
+  try {
+    await consultarGeminiConBusqueda('buscar tasas de préstamo');
+    const { operaciones, totalUSD } = obtenerEstado();
+    assert.strictEqual(operaciones.length, 1);
+    assert.strictEqual(operaciones[0].etiqueta, 'Tasas de préstamo — Fase 4');
+    assert.strictEqual(operaciones[0].modelo, 'gemini-3-flash-preview');
+    assert.ok(totalUSD > 0, 'el gasto acumulado del estudio sube con esta llamada');
+  } finally {
+    axios.post = original;
+    cargarEstudio(null); // no contaminar las pruebas que corran después
   }
 });
 
