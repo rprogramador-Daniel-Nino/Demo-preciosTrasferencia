@@ -2477,7 +2477,18 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
   return (
     <div className="space-y-6">
 
-      {/* ══════ BANNER: INGESTA DEL ESTUDIO DEL AÑO ANTERIOR ══════ */}
+      {/* ══════ BANNER: INGESTA DEL ESTUDIO DEL AÑO ANTERIOR ══════
+          Lee el informe de margen del año anterior con Gemini (OCR) para heredar
+          actividad, comparables de continuidad y composición accionaria. Las dos
+          primeras cosas son del motor de márgenes y no existen en un estudio de
+          préstamo (que compara tasas, no empresas); además esa lectura puede tardar
+          más de los 50 s a los que `/api/gemini` se corta a sí mismo (ver
+          GEMINI_CORTE_MS en functions/index.js) en informes largos, y dejar este
+          botón visible en la pantalla de préstamo —donde nada lo necesita— solo
+          exponía ese riesgo sin ningún beneficio real. Reportado el 2026-10-06: un
+          estudio de préstamo se quedaba «atascado» mientras esta lectura reintentaba
+          contra un documento que tardaba demasiado. */}
+      {study.tipo_estudio !== 'prestamo' && (
       <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
           <div className="flex items-center gap-2">
@@ -2579,6 +2590,7 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
           </div>
         )}
       </div>
+      )}
 
       {/* ══════ BANNER: ACTIVIDAD DE LA EMPRESA ══════ */}
       <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm space-y-3">
