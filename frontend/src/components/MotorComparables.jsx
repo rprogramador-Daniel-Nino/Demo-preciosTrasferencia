@@ -697,6 +697,25 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
 
 
   useEffect(() => {
+    /* Este efecto republica en el estudio el estado local del motor DE MÁRGENES
+       (config, cribado, comparables, veredicto de IA…) cada vez que cualquiera de esas
+       piezas cambia. Para préstamo ninguna de ellas existe —el motor de márgenes está
+       oculto en esa pantalla (ver el `tipo_estudio` más abajo en el render)—, y
+       `estudioAnteriorInfo` en particular es un estado LOCAL de este componente que
+       nunca se entera de lo que `PrestamoTasas.jsx` escribe directo al estudio: sin
+       este corte, cada vez que `actividad` cambiaba (incluida la vuelta que dispara el
+       propio `PrestamoTasas` al fijar `actividad_especifica`) este efecto volvía a
+       publicar `estudioAnteriorInfo` —siempre `null` aquí, porque nada lo llena para
+       préstamo— y borraba en silencio el vinculado y la actividad que el analista
+       acababa de cargar. Encima, cada una de esas publicaciones reinicia el
+       autoguardado (`estadoGuardado` en App.jsx) y, si la etapa «comparables» ya
+       estaba confirmada, el candado de `updateStudyDeEtapa` la revertía por un cambio
+       de contenido que ni siquiera era real. Reportado el 2026-10-07: un estudio de
+       préstamo se quedaba «guardando…» sin resolverse nunca. Lo que SÍ hace falta
+       persistir en préstamo (`actividad_especifica`) ya lo escriben directo el botón
+       «Guardar Actividad» de este mismo archivo y la ingesta de `PrestamoTasas.jsx`,
+       así que no depende de este efecto en absoluto. */
+    if (study.tipo_estudio === 'prestamo') return;
     updateStudy({
       /* El aviso de «no extraído» no se guarda: el apartado sectorial del informe se
          redacta con este campo, y con el aviso dentro el documento declararía como
@@ -739,7 +758,7 @@ export default function MotorComparables({ study, updateStudy, estudioId, usuari
       iaMatch,
       eeffImagenesComparables,
     });
-  }, [actividad, estudioAnteriorInfo, engineConfig, universo, comparables, cmode, criteriosScreening, dbConsulta, iaMatch, selectionFunnel, cribadoIQ, eeffImagenesComparables, matrizRechazo]);
+  }, [study.tipo_estudio, actividad, estudioAnteriorInfo, engineConfig, universo, comparables, cmode, criteriosScreening, dbConsulta, iaMatch, selectionFunnel, cribadoIQ, eeffImagenesComparables, matrizRechazo]);
 
   // Handle Prior Study Ingestion (.pdf, .docx, .json, .txt)
   const handlePriorStudyUpload = async (file) => {
