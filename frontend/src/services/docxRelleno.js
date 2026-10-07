@@ -58,11 +58,19 @@ import { zonaQueAbre, cierraSeccionMacro } from './plantillaMarcador.js';
 import { FORMULAS, ROTULOS_FORMULA, ooxmlDeFormula } from './formulasOmml.js';
 import {
   filasOperacionesDeIngreso, filasOperacionAnalizar, filasTransaccionesIntercompania,
-  filasMetodoAplicable, filasCompaniasVinculadas, filasCriteriosVinculacion,
+  filasMetodoAplicable, filasMetodoAplicablePrestamo, filasCompaniasVinculadas, filasCriteriosVinculacion,
   filasOperacionAdicional, filasOperacionAdicionalFicha, tieneOperacionAdicional,
   NOMBRES_TABLA_ADICIONAL, NOMBRES_TABLA_TRANSACCIONES,
 } from './tablasOperaciones.js';
 import { tienePrestamos, filasPrestamoConVinculado, NOMBRES_TABLA_PRESTAMO } from './tablasPrestamos.js';
+/* Fase 5 de los estudios tipo préstamo: las Tablas 6/20 (rango intercuartil, 7 columnas,
+   una fila por préstamo) y su "Conclusión" en esta misma ruta. No se reimplementa nada del
+   cálculo —`filasTablaRangoIntercuartil` y `conclusionRangoIntercuartilPrestamo` ya están
+   verificados contra el informe real en `tablasPrestamoTasas.test.js`—, solo se vuelca a
+   OOXML, igual que la Fase 3 (`docxRellenoPrestamoColumnas.js`) hizo con sus dos tablas. */
+import {
+  filasTablaRangoIntercuartil, conclusionRangoIntercuartilPrestamo,
+} from './tablasPrestamoTasas.js';
 /* Fase 3 de los estudios tipo préstamo (Tabla "Transacciones Intercompañías" y "Histórico de
    la deuda..."): archivo nuevo, no toca nada de este. Ver su cabecera para el porqué del orden
    quitar-antes/insertar-después alrededor de `actualizarTablasOperacionesOoxml`, más abajo. */
@@ -1477,6 +1485,72 @@ function saltarHuecosOoxml(texto, cursor) {
   return c;
 }
 
+/* La misma `<w:pPr>` que usa el resto de este generador para prosa nueva (ver el
+   comentario junto a `PPR_PROSA`, al inicio del archivo). */
+function generarParrafoOoxml(texto) {
+  return `<w:p>${PPR_PROSA}<w:r><w:t xml:space="preserve">${escaparXml(texto)}</w:t></w:r></w:p>`;
+}
+
+const RX_PARRAFO_SIMPLE = /<w:p(?:\s[^>]*)?>(?:(?!<\/w:p>)[\s\S])*?<\/w:p>/;
+
+/**
+ * Reemplaza los párrafos de la "Conclusión" que sigue a la Tabla 6/20 de un estudio de
+ * préstamo, justo después de haber sustituido esa tabla (`desde` es dónde termina la ya
+ * reescrita). Localiza el encabezado "Conclusión" —saltando los huecos de maquetación
+ * habituales, igual que `localizarBloqueTabla`— y toma hasta 3 párrafos de texto después de
+ * él, que son los que trae el informe real de referencia.
+ *
+ * Si no encuentra el encabezado, si no hay párrafos que tomar, o si `conclusion` viene nula
+ * o pide revisión manual (`requiereAjuste`, ver `conclusionRangoIntercuartilPrestamo`), deja
+ * la plantilla exactamente como está y avisa: una conclusión tributaria no verificada no se
+ * inventa, mismo criterio que ya aplica el sistema cuando SOFR no existía para una fecha o
+ * cuando `groundingChunks` viene vacío.
+ */
+function actualizarConclusionRangoPrestamoOoxml(xml, desde, conclusion, avisos) {
+  const anotar = (m) => { if (Array.isArray(avisos)) avisos.push(m); };
+  const sinConclusionEncontrada = () => anotar('no se encontró el encabezado «Conclusión» '
+    + 'después del rango intercuartil: redáctela a mano si la plantilla no la trae ahí');
+
+  const cursorEncabezado = saltarHuecosOoxml(xml, desde);
+  const restoEncabezado = xml.slice(cursorEncabezado);
+  if (!/^<w:p(?:\s[^>]*)?>/.test(restoEncabezado)) { sinConclusionEncontrada(); return xml; }
+  const mEncabezado = RX_PARRAFO_SIMPLE.exec(restoEncabezado);
+  if (!mEncabezado || claveTitulo(textoPlanoOoxml(mEncabezado[0])) !== 'conclusion') {
+    sinConclusionEncontrada();
+    return xml;
+  }
+
+  let cursor = cursorEncabezado + mEncabezado[0].length;
+  const inicioParrafos = cursor;
+  let tomados = 0;
+  for (let i = 0; i < 3; i++) {
+    const c2 = saltarHuecosOoxml(xml, cursor);
+    const resto2 = xml.slice(c2);
+    if (!/^<w:p(?:\s[^>]*)?>/.test(resto2)) break;
+    const m2 = RX_PARRAFO_SIMPLE.exec(resto2);
+    if (!m2) break;
+    cursor = c2 + m2[0].length;
+    tomados += 1;
+  }
+  if (!tomados) {
+    anotar('la «Conclusión» no trae párrafos de texto después del encabezado: revísela a mano');
+    return xml;
+  }
+
+  if (!conclusion || conclusion.requiereAjuste || !conclusion.parrafos) {
+    anotar(conclusion && conclusion.requiereAjuste
+      ? 'la tasa pactada queda ' + conclusion.posicion + ' del rango, del lado que sí erosiona '
+        + 'base gravable: la «Conclusión» se deja como la trajo la plantilla, revise si '
+        + 'corresponde un ajuste'
+      : 'no se pudo determinar una sola posición frente al rango para redactar la «Conclusión»: '
+        + 'se deja como la trajo la plantilla, revísela a mano');
+    return xml;
+  }
+
+  const nuevo = conclusion.parrafos.map(generarParrafoOoxml).join('');
+  return xml.slice(0, inicioParrafos) + nuevo + xml.slice(cursor);
+}
+
 /**
  * Tablas cuyo título no las precede, sino que es su PRIMERA FILA.
  *
@@ -2698,11 +2772,28 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
   }
 
   // 4. Método de Precios de Transferencia Aplicable
-  reemplazar(
-    'Método de Precios de Transferencia',
-    (b) => emitir(b, filasMetodoAplicable(estudio)),
-    { numeros: [4] }
-  );
+  if (estudio.tipo_estudio === 'prestamo') {
+    /* Puede aparecer dos veces —Tabla 5 y Tabla 17 en el informe real de referencia—, una
+       por cada operación de préstamo que declare el estudio (reflejada y no reflejada en
+       el Estado de Resultados). El `{numeros:[4]}` de abajo es para la Tabla 4 del motor de
+       márgenes; ninguna de las dos numeraciones de préstamo coincide con eso, así que por
+       defecto solo se sustituiría la primera (`ocurrencia` cae a 0) y la segunda se
+       quedaría con el método del motor de márgenes que trajera la plantilla. */
+    const bloquesMetodo = candidatosBloqueTabla(doc.xml, 'Método de Precios de Transferencia');
+    for (let idx = bloquesMetodo.length - 1; idx >= 0; idx--) {
+      reemplazar(
+        'Método de Precios de Transferencia',
+        (b) => emitir(b, filasMetodoAplicablePrestamo(estudio)),
+        { ocurrencia: idx }
+      );
+    }
+  } else {
+    reemplazar(
+      'Método de Precios de Transferencia',
+      (b) => emitir(b, filasMetodoAplicable(estudio)),
+      { numeros: [4] }
+    );
+  }
 
   /* 6. Composición accionaria. Sólo si el estudio trae una propia —el certificado de la
      Sección 1 o la heredada del informe del año anterior—; si no, la tabla de la plantilla se
@@ -2971,6 +3062,70 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
    * ocurrencias que declare el documento y distinguirlas por FORMA —la horizontal tiene 4
    * columnas (contribuyente + 3 percentiles), la vertical 3 (etiqueta + no ajustado +
    * ajustado)—, no por número ni por posición fija. */
+  if (estudio.tipo_estudio === 'prestamo') {
+    /* El método PC de un préstamo compara tasas por fecha de pacto, no márgenes: la tabla
+       "Rango Intercuartil"/"Tabla de rangos" no es ni la horizontal ni la vertical de
+       arriba, es la de 7 columnas —una fila por préstamo— que ya calculó y verificó
+       `tablasPrestamoTasas.js` contra el informe real de referencia. El informe la repite
+       dos veces con el MISMO contenido (Tabla 6 bajo "Otras operaciones" y Tabla 20 bajo la
+       operación reflejada en el Estado de Resultados), así que todas las ocurrencias se
+       sustituyen con la misma tabla, y se le pega debajo la "Conclusión" cuando el sistema
+       puede redactarla con confianza. */
+    const pctPrestamo = (v) => (v === null || v === undefined || !Number.isFinite(Number(v))
+      ? '—' : Number(v).toFixed(3).replace('.', ',') + '%');
+
+    doc.aplicar((xmlActual) => {
+      const bloques = [
+        ...localizarBloquesTabla(xmlActual, 'Rango Intercuartil'),
+        ...localizarBloquesTabla(xmlActual, 'Tabla de rangos'),
+      ].sort((a, b) => a.inicio - b.inicio);
+      const sinSolape = [];
+      for (const b of bloques) {
+        const anterior = sinSolape[sinSolape.length - 1];
+        if (anterior && b.inicio < anterior.fin) continue;
+        sinSolape.push(b);
+      }
+      if (!sinSolape.length) {
+        if (Array.isArray(avisos)) avisos.push('Rango Intercuartil');
+        return xmlActual;
+      }
+
+      const tablaPrestamo = filasTablaRangoIntercuartil(estudio, estudio.tasasPrestamo);
+      const filasOoxml = (tablaPrestamo ? tablaPrestamo.filas : []).map((f) => [
+        f.vinculado, f.fechaPacto, f.valorDesembolsoMoneda, f.tasaEA,
+        f.rango ? pctPrestamo(f.rango.minimo) : '—',
+        f.rango ? pctPrestamo(f.rango.mediana) : '—',
+        f.rango ? pctPrestamo(f.rango.superior) : '—',
+      ]);
+      if (!filasOoxml.length || tablaSinDatos({ filas: filasOoxml.map((f) => f.slice(3)) })) {
+        if (Array.isArray(avisos)) avisos.push('Rango Intercuartil');
+        return xmlActual;
+      }
+
+      const encabezados = [
+        'Vinculado', 'Fecha original en la que se pactó', 'Valor en USD de desembolso',
+        'E. A', 'RANGO MINIMO', 'RANGO MEDIANA', 'RANGO SUPERIOR',
+      ];
+      const conclusion = conclusionRangoIntercuartilPrestamo(estudio, estudio.tasasPrestamo);
+
+      let salida = xmlActual;
+      /* De atrás hacia adelante, como en Transacciones Inter compañía: sustituir uno mueve
+         los offsets de los que van después. */
+      for (const bloque of [...sinSolape].sort((a, b) => b.inicio - a.inicio)) {
+        const nuevo = generarTablaOoxml(
+          tituloDe(bloque, /tabla de rangos/i.test(bloque.titulo) ? 'Tabla de rangos' : 'Rango intercuartil'),
+          encabezados, filasOoxml
+        );
+        let fin = bloque.fin;
+        if (/FUENTE/i.test(nuevo)) fin = finDeFuenteSiguienteOoxml(salida, fin);
+        salida = salida.slice(0, bloque.inicio) + nuevo + salida.slice(fin);
+        salida = actualizarConclusionRangoPrestamoOoxml(
+          salida, bloque.inicio + nuevo.length, conclusion, avisos
+        );
+      }
+      return salida;
+    });
+  } else {
   doc.aplicar((xmlActual) => {
     /* Una misma tabla puede calzar por las DOS vías de `candidatosBloqueTabla`: el
        párrafo que la precede («Tabla 21. Rango Intercuartil») Y su propia primera fila
@@ -3051,7 +3206,12 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
     return salida;
   });
 
-  /* La frase que comenta el rango, debajo de la tabla, y el año que menciona.
+  /* La frase que comenta el rango, debajo de la tabla, y el año que menciona. SOLO para el
+     motor de márgenes: un préstamo no tiene esta frase —tiene su propia "Conclusión", ya
+     resuelta arriba por `actualizarConclusionRangoPrestamoOoxml`— y dejar esto corriendo
+     igual arriesgaba corromper esa conclusión nueva si alguna de sus anclas (poco probable,
+     pero no imposible en una redacción libre) calzara por accidente con palabras del texto
+     que se acaba de escribir.
 
      Primero por las palabras que introducen cada cifra (`prosaRangoInforme.js`), que es la
      misma función que atiende la ruta de plantilla PDF: así las dos rutas producen la misma
@@ -3082,6 +3242,7 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
      porque entonces el aviso sería el mismo recado dos veces en el panel. */
   if (!reporteProsa.anioPuesto) {
     doc.aplicar((x) => actualizarAnioConclusionRango(x, year, avisos));
+  }
   }
 
   /* Las otras frases que citan cifras de una tabla: cuántas comparables se identificaron y

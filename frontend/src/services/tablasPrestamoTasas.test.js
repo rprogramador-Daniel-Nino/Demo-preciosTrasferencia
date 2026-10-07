@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   fechasPactoUnicas, filasTablaRangoIntercuartil, filasTablaTasasSeleccionadas,
-  filasTablaAnalisisTasasAjustadas, NOMBRE_TABLA_RANGO_INTERCUARTIL_PRESTAMO,
+  filasTablaAnalisisTasasAjustadas, conclusionRangoIntercuartilPrestamo,
+  NOMBRE_TABLA_RANGO_INTERCUARTIL_PRESTAMO,
   NOMBRE_TABLA_TASAS_SELECCIONADAS, NOMBRE_TABLA_ANALISIS_TASAS_AJUSTADAS,
 } from './tablasPrestamoTasas.js';
 
@@ -140,4 +141,109 @@ test('filasTablaAnalisisTasasAjustadas: omite SOFR (no 3 filas) si la fecha es a
   const t = filasTablaAnalisisTasasAjustadas(estudioViejo, tasas);
   assert.strictEqual(t.filas.length, 2, 'solo PRIME y TMC; SOFR no existía en esa fecha');
   assert.ok(!t.filas.some((f) => f.tasa === 'SOFR'));
+});
+
+/* ══════ conclusionRangoIntercuartilPrestamo ══════
+   Verificado contra la "Conclusión" del documento real (Autoland 2025): tasa pactada por
+   debajo del rango, operación de egreso -> redacción favorable, sin ajuste. El caso
+   desfavorable (fuera de rango del lado que sí erosiona base) NO se redacta solo: el
+   sistema nunca inventa una conclusión tributaria, declara que hace falta revisión manual
+   (mismo criterio que SOFR no disponible o groundingChunks vacío en otras partes del
+   sistema). */
+
+const ESTUDIO_UN_PRESTAMO = {
+  ent: 'Autoland SAS', vinc: 'Inversiones San Jeronimo SpA', anio: 2025,
+  tipo_estudio: 'prestamo',
+  prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.' }],
+};
+const TASAS_UNA_FECHA = {
+  riesgoPais: { valor: 2.845 },
+  porFecha: {
+    '2020-10-27': {
+      prime: { valor: 3.250 }, tmc: { valor: 1.750 }, sofr: { valor: 0.090 },
+      moodys: { valor: 1.560 },
+    },
+  },
+};
+
+test('conclusión: tasa pactada por debajo del rango en un egreso es favorable y nombra al vinculado', () => {
+  const c = conclusionRangoIntercuartilPrestamo(ESTUDIO_UN_PRESTAMO, TASAS_UNA_FECHA);
+  assert.strictEqual(c.posicion, 'debajo');
+  assert.strictEqual(c.requiereAjuste, false);
+  assert.strictEqual(c.parrafos.length, 3);
+  assert.ok(c.parrafos[0].includes('Autoland SAS'));
+  assert.ok(c.parrafos[0].includes('Inversiones San Jeronimo SpA'));
+  assert.ok(c.parrafos[0].includes('por debajo del rango intercuartil'));
+  assert.ok(c.parrafos[2].includes('2025'));
+  assert.ok(c.parrafos[2].includes('deducción'));
+});
+
+test('conclusión: tasa pactada dentro del rango es favorable para egreso o ingreso', () => {
+  const estudio = {
+    ...ESTUDIO_UN_PRESTAMO,
+    prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '6,500% E.A.' }], // entre 5,411% y 7,061%
+  };
+  const c = conclusionRangoIntercuartilPrestamo(estudio, TASAS_UNA_FECHA);
+  assert.strictEqual(c.posicion, 'dentro');
+  assert.strictEqual(c.requiereAjuste, false);
+  assert.ok(c.parrafos[0].includes('dentro del rango intercuartil'));
+});
+
+test('conclusión: egreso con tasa pactada por encima del rango exige revisión, no se inventa redacción', () => {
+  const estudio = {
+    ...ESTUDIO_UN_PRESTAMO,
+    prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '50% E.A.' }],
+  };
+  const c = conclusionRangoIntercuartilPrestamo(estudio, TASAS_UNA_FECHA);
+  assert.strictEqual(c.posicion, 'encima');
+  assert.strictEqual(c.requiereAjuste, true);
+  assert.strictEqual(c.parrafos, null);
+});
+
+test('conclusión: ingreso (estudio.egreso === false) invierte qué posición es favorable', () => {
+  const estudioIngreso = {
+    ...ESTUDIO_UN_PRESTAMO,
+    egreso: false,
+    prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '50% E.A.' }],
+  };
+  const c = conclusionRangoIntercuartilPrestamo(estudioIngreso, TASAS_UNA_FECHA);
+  assert.strictEqual(c.posicion, 'encima');
+  assert.strictEqual(c.requiereAjuste, false, 'por encima del rango favorece a un ingreso');
+  assert.ok(c.parrafos[2].includes('ingreso'));
+
+  const debajoDesfavorable = conclusionRangoIntercuartilPrestamo({
+    ...ESTUDIO_UN_PRESTAMO, egreso: false,
+  }, TASAS_UNA_FECHA);
+  assert.strictEqual(debajoDesfavorable.requiereAjuste, true, 'por debajo del rango erosiona un ingreso');
+});
+
+test('conclusión: nula cuando los préstamos quedan con posiciones mixtas entre sí', () => {
+  const estudio = {
+    ent: 'Autoland SAS', vinc: 'Inversiones San Jeronimo SpA', anio: 2025,
+    prestamos: [
+      { fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.' }, // debajo
+      { fechaPacto: '2022-07-07', tasaEA: '50% E.A.' }, // encima
+    ],
+  };
+  const tasas = {
+    riesgoPais: { valor: 2.845 },
+    porFecha: {
+      '2020-10-27': {
+        prime: { valor: 3.250 }, tmc: { valor: 1.750 }, sofr: { valor: 0.090 }, moodys: { valor: 1.560 },
+      },
+      '2022-07-07': {
+        prime: { valor: 4.750 }, tmc: { valor: 7.500 }, sofr: { valor: 1.540 }, moodys: { valor: 1.190 },
+      },
+    },
+  };
+  assert.strictEqual(conclusionRangoIntercuartilPrestamo(estudio, tasas), null);
+});
+
+test('conclusión: nula cuando falta alguna tasa para calcular el rango de un préstamo', () => {
+  assert.strictEqual(conclusionRangoIntercuartilPrestamo(ESTUDIO_UN_PRESTAMO, { riesgoPais: {}, porFecha: {} }), null);
+});
+
+test('conclusión: nula cuando no hay E.A. legible para comparar contra el rango', () => {
+  const estudio = { ...ESTUDIO_UN_PRESTAMO, prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '' }] };
+  assert.strictEqual(conclusionRangoIntercuartilPrestamo(estudio, TASAS_UNA_FECHA), null);
 });

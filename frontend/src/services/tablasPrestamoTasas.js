@@ -145,3 +145,87 @@ export function filasTablaAnalisisTasasAjustadas(estudio, tasasPrestamo) {
   });
   return { nombre: NOMBRE_TABLA_ANALISIS_TASAS_AJUSTADAS, filas };
 }
+
+/* El primer número que trae el texto, sin importar lo que lo rodee: `tasaEA` llega del
+   Excel como "4,540% E.A." (coma decimal, símbolo de porcentaje y el sufijo "E.A."), nunca
+   como un número limpio. */
+function numeroDesdeTexto(texto) {
+  const m = /-?\d+(?:[.,]\d+)?/.exec(String(texto || '').replace(',', '.'));
+  return m ? Number(m[0].replace(',', '.')) : null;
+}
+
+/**
+ * La "Conclusión" que sigue a la Tabla 6/20, verificada contra el informe real de
+ * referencia (Autoland 2025): si la tasa pactada queda por debajo o por encima del rango
+ * intercuartil es FAVORABLE o DESFAVORABLE según el sentido de la operación —un egreso
+ * (`estudio.egreso !== false`, mismo criterio que ya usa `tablasPrestamoColumnas.js`)
+ * erosiona base gravable si paga MÁS que el mercado (por encima), un ingreso si recibe
+ * MENOS (por debajo)—. Dentro del rango es favorable para cualquiera de los dos sentidos.
+ *
+ * Por decisión explícita: la redacción favorable SÍ se genera (su texto está verificado
+ * contra el informe real), pero el caso desfavorable nunca se inventa — es una conclusión
+ * tributaria real, con un ajuste que depende de criterio profesional, no de una fórmula.
+ * Ahí se devuelve `{posicion, requiereAjuste:true, parrafos:null}` para que quien llama
+ * deje la plantilla como está y avise que hace falta redactarla a mano, mismo criterio que
+ * ya usa el sistema para SOFR no disponible o un `groundingChunks` vacío: declarar el hueco
+ * en vez de rellenarlo con algo no verificado.
+ *
+ * `null` cuando no se puede calcular una posición para TODOS los préstamos —falta el rango
+ * de alguna fecha, no hay E.A. legible, o los préstamos quedan en posiciones distintas entre
+ * sí (la conclusión del documento real habla en singular de "la tasa pactada", no por
+ * préstamo)—: en cualquiera de esos casos no hay una sola conclusión que redactar.
+ */
+export function conclusionRangoIntercuartilPrestamo(estudio, tasasPrestamo) {
+  const tabla = filasTablaRangoIntercuartil(estudio, tasasPrestamo);
+  if (!tabla || !tabla.filas.length) return null;
+
+  const posiciones = tabla.filas.map((f) => {
+    if (!f.rango) return null;
+    const pactada = numeroDesdeTexto(f.tasaEA);
+    if (pactada === null) return null;
+    if (pactada < f.rango.minimo) return 'debajo';
+    if (pactada > f.rango.superior) return 'encima';
+    return 'dentro';
+  });
+  if (posiciones.some((p) => p === null)) return null;
+
+  const unica = new Set(posiciones);
+  if (unica.size > 1) return null;
+  const posicion = [...unica][0];
+
+  const esEgreso = estudio.egreso !== false;
+  const requiereAjuste = posicion === 'debajo' ? !esEgreso : posicion === 'encima' ? esEgreso : false;
+  if (requiereAjuste) return { posicion, requiereAjuste: true, parrafos: null };
+
+  const ent = estudio.ent || 'La Compañía';
+  const vinc = estudio.vinc || 'su compañía vinculada';
+  const anio = estudio.anio || new Date().getFullYear();
+  const tipoDeuda = esEgreso ? 'endeudamiento pasivo - deducción' : 'endeudamiento activo - ingreso';
+
+  const parrafo1 = posicion === 'dentro'
+    ? `Los resultados presentados anteriormente, permiten evidenciar que la tasa pactada por `
+      + `${ent} e ${vinc} se encuentra dentro del rango intercuartil, lo cual indica que la `
+      + `operación cumple con el principio de plena competencia y no supone un deterioro en `
+      + `base impositiva con relevancia en este estudio en la medida que se trata de una `
+      + `operación de ${tipoDeuda}.`
+    : `Los resultados presentados anteriormente, permiten evidenciar que la tasa pactada por `
+      + `${ent} e ${vinc} se encuentra por ${posicion} del rango intercuartil, lo cual, desde `
+      + `el punto de vista impositivo, no supone un deterioro en base impositiva con relevancia `
+      + `en este estudio en la medida que se trata de una operación de ${tipoDeuda}.`;
+
+  const parrafo2 = `En este sentido, no se considera necesario hacer un ajuste que signifique `
+    + `una mayor deducción en la medida que no hay una afectación al principio de plena `
+    + `competencia con afectación a los fines del impuesto sobre la renta, es posible inferir `
+    + `que las mismas fueron pactadas cumpliendo con el principio de operador independiente o `
+    + `Arm's Length.`;
+
+  const parrafo3 = esEgreso
+    ? `Durante el año gravable ${anio} la Compañía causó egreso por intereses, sobre el préstamo `
+      + `otorgado de su compañía vinculada ${vinc}; por lo tanto, existió un gasto el cual fue `
+      + `tomado como deducción en la Renta del año gravable ${anio}.`
+    : `Durante el año gravable ${anio} la Compañía causó ingreso por intereses, sobre el préstamo `
+      + `otorgado a su compañía vinculada ${vinc}; por lo tanto, existió un ingreso el cual fue `
+      + `incluido en la Renta del año gravable ${anio}.`;
+
+  return { posicion, requiereAjuste: false, parrafos: [parrafo1, parrafo2, parrafo3] };
+}

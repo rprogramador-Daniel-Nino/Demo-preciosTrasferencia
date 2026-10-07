@@ -4808,3 +4808,84 @@ test('actualizarTablasOperacionesOoxml borra la tabla de préstamo si el estudio
   assert.ok(!salida.includes('Préstamo con su vinculado'));
   assert.ok(salida.includes('Prosa que sigue.'), 'no debe borrar lo que sigue en el documento');
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Fase 5 de los estudios tipo préstamo (ruta de plantilla subida): Tabla 5/17 (método),
+   Tabla 6/20 (rango intercuartil) y su Conclusión. Verificado contra el informe real de
+   referencia (Informe Local_Autoland 2025.docx) — mismos títulos, mismas cifras.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const ESTUDIO_PRESTAMO_DOCX = {
+  tipo_estudio: 'prestamo', ent: 'Autoland SAS', vinc: 'Inversiones San Jeronimo SpA', anio: 2025,
+  vinc_tipo: 'Intereses Sobre Préstamos (42)',
+  prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.', valorDesembolsoMoneda: 3000000 }],
+  tasasPrestamo: {
+    riesgoPais: { valor: 2.845 },
+    porFecha: {
+      '2020-10-27': {
+        prime: { valor: 3.250 }, tmc: { valor: 1.750 }, sofr: { valor: 0.090 }, moodys: { valor: 1.560 },
+      },
+    },
+  },
+};
+
+test('préstamo: el Método de Precios de Transferencia se sustituye en sus DOS apariciones con PC', () => {
+  const xml = conTabla('<w:p><w:t>Tabla 5. Método de Precios de Transferencia Aplicable</w:t></w:p>')
+    + conTabla('<w:p><w:t>Tabla 17. Método de Precios de Transferencia Aplicable</w:t></w:p>');
+  const salida = actualizarTablasOperacionesOoxml(xml, ESTUDIO_PRESTAMO_DOCX, []);
+  const apariciones = (salida.match(/>PC</g) || []).length;
+  assert.strictEqual(apariciones, 2, 'las dos tablas deben quedar con el método PC');
+  assert.ok(!salida.includes('Indicador de Rentabilidad'), 'un préstamo no tiene indicador de rentabilidad');
+  assert.ok(!salida.includes('>MO<'), 'no debe quedar el indicador por defecto del motor de márgenes');
+  assert.ok(textoPlanoOoxml(salida).includes('Intereses Sobre Préstamos'));
+});
+
+test('préstamo: el Rango Intercuartil se sustituye por la tabla de 7 columnas, una fila por préstamo', () => {
+  const xml = '<w:p><w:t>Tabla 6. Rango intercuartil</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const salida = actualizarTablasOperacionesOoxml(xml, ESTUDIO_PRESTAMO_DOCX, []);
+  const texto = textoPlanoOoxml(salida);
+  assert.ok(texto.includes('RANGO MINIMO') && texto.includes('RANGO MEDIANA') && texto.includes('RANGO SUPERIOR'));
+  assert.ok(texto.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(texto.includes('27/10/2020'));
+  /* 5,410% y no el 5,411% del informe real: ese documento redondeó cada tasa de entrada a 3
+     decimales ANTES de componerlas, y este motor compone con precisión completa y solo
+     redondea al final —la diferencia de 0,001 es el mismo redondeo intermedio que ya
+     documenta `prestamoTasasCalculo.js` (Fase 4) para este mismo préstamo; el percentil 75
+     no cae en un borde de redondeo y sí coincide exacto. */
+  assert.ok(texto.includes('5,410%'), 'P25 del método PC, coincide con prestamoTasasCalculo.test.js');
+  assert.ok(texto.includes('7,061%'), 'P75 del método PC, verificado contra el informe real');
+  assert.ok(!texto.includes('vieja'));
+});
+
+test('préstamo: la Conclusión se redacta con la posición frente al rango cuando es favorable', () => {
+  const xml = '<w:p><w:t>Tabla 6. Rango intercuartil</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Conclusión</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo uno.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo dos.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo tres.</w:t></w:p>'
+    + '<w:p><w:t>INFORMACIÓN GENERAL</w:t></w:p>';
+  const salida = actualizarTablasOperacionesOoxml(xml, ESTUDIO_PRESTAMO_DOCX, []);
+  const texto = textoPlanoOoxml(salida);
+  assert.ok(texto.includes('por debajo del rango intercuartil'));
+  assert.ok(texto.includes('Autoland SAS') && texto.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(!texto.includes('Texto viejo párrafo'), 'los tres párrafos viejos se sustituyen');
+  assert.ok(texto.includes('INFORMACIÓN GENERAL'), 'lo que sigue después de los tres párrafos no se toca');
+});
+
+test('préstamo: si la tasa pactada exige revisión, la Conclusión se deja como estaba y se avisa', () => {
+  const xml = '<w:p><w:t>Tabla 6. Rango intercuartil</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Conclusión</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo que no se debe tocar.</w:t></w:p>';
+  const estudioFueraDeRango = {
+    ...ESTUDIO_PRESTAMO_DOCX,
+    prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '50% E.A.', valorDesembolsoMoneda: 3000000 }],
+  };
+  const avisos = [];
+  const salida = actualizarTablasOperacionesOoxml(xml, estudioFueraDeRango, avisos);
+  const texto = textoPlanoOoxml(salida);
+  assert.ok(texto.includes('Texto viejo que no se debe tocar.'), 'sin una redacción verificada no se inventa nada');
+  assert.ok(avisos.some((a) => /revis/i.test(a)), 'debe avisar que hace falta redactarla a mano');
+});

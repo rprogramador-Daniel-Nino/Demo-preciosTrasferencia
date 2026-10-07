@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   conceptoDeOperacion, filasOperacionesDeIngreso, filasOperacionAnalizar,
-  filasTransaccionesIntercompania, filasMetodoAplicable, filasCompaniasVinculadas,
+  filasTransaccionesIntercompania, filasMetodoAplicable, filasMetodoAplicablePrestamo, filasCompaniasVinculadas,
   filasCriteriosVinculacion, UVT_UMBRAL_OPERACION_ADICIONAL, umbralOperacionAdicional,
   tieneOperacionAdicional,
 } from './tablasOperaciones.js';
@@ -164,6 +164,26 @@ test('el método cae a TU y MO cuando el estudio no los fija', () => {
 
 test('el método no inventa el código de operación', () => {
   assert.strictEqual(filasMetodoAplicable({ vinc_tipo: 'VENTA SERVICIOS' }).filas[0][0], '—');
+});
+
+/* ── Método de Precios de Transferencia Aplicable, estudios de préstamo (Tabla 5/17) ──
+   Verificado contra Informe Local_Autoland 2025.docx: 3 columnas, sin "Indicador de
+   Rentabilidad" (un préstamo no tiene PLI), método siempre "PC" — no hay selector de
+   método en la UI de préstamo, así que nunca llega un `estudio.metodo` propio. */
+
+test('el método de préstamo publica PC y 3 columnas, sin indicador de rentabilidad', () => {
+  const t = filasMetodoAplicablePrestamo({ vinc_tipo: 'Intereses Sobre Préstamos (42)' });
+  assert.strictEqual(t.titulo, 'Método de Precios de Transferencia Aplicable');
+  assert.deepStrictEqual(t.encabezados, [
+    'Código de Operación', 'Descripción de la operación', 'Método seleccionado',
+  ]);
+  assert.deepStrictEqual(t.filas, [['42', 'Intereses Sobre Préstamos', 'PC']]);
+});
+
+test('el método de préstamo no inventa el código cuando no se puede resolver', () => {
+  const t = filasMetodoAplicablePrestamo({ vinc_tipo: 'INTERESES' });
+  assert.strictEqual(t.filas[0][0], '—');
+  assert.strictEqual(t.filas[0][2], 'PC');
 });
 
 /* ── Tabla 8. Compañías vinculadas ── */

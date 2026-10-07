@@ -316,6 +316,28 @@ export function filasMetodoAplicable(estudio) {
   };
 }
 
+/**
+ * Misma Tabla 5/17 para un estudio de préstamo: sin "Indicador de Rentabilidad" (un
+ * préstamo no tiene PLI, no hay nada que publicar en esa columna) y el método siempre
+ * "PC" — no existe ningún selector de método en la UI de préstamo, así que un
+ * `estudio.metodo` propio nunca llega; a diferencia de `filasMetodoAplicable`, "PC" no es
+ * un valor por defecto que se pueda pisar, es el único método que este tipo de estudio
+ * aplica (comparación de tasas de interés). Verificado contra el informe real de
+ * referencia (Autoland 2025): 3 columnas, método "PC".
+ */
+export function filasMetodoAplicablePrestamo(estudio) {
+  const e = estudio || {};
+  const { desc, cod } = conceptoDeOperacion(e);
+  return {
+    nombre: 'Método de Precios de Transferencia',
+    titulo: 'Método de Precios de Transferencia Aplicable',
+    encabezados: ['Código de Operación', 'Descripción de la operación', 'Método seleccionado'],
+    filas: [[wrap(cod), wrap(desc), 'PC']],
+    fuente: FUENTE,
+    sinDatos: sinNingunDato([cod, desc]),
+  };
+}
+
 /** El año gravable del estudio. 2025 por omisión, igual que el resto del sistema. */
 const anioDe = (estudio) => Number(estudio && estudio.anio) || 2025;
 
