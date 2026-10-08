@@ -67,8 +67,7 @@ import { parseAccionistasFromDocument } from '../services/accionistasParser.js';
    El proyecto sale de `projectIdFirebase` y no escrito a mano: al ser absoluta, esta URL era
    lo único que seguía apuntando a producción desde el entorno de pruebas, así que probar ahí
    gastaba la cuota de IA de producción y escribía el análisis del sector en su Firestore. */
-const URL_ANALISIS_SECTOR =
-  `https://us-central1-${projectIdFirebase}.cloudfunctions.net/generarAnalisisSector`;
+const URL_ANALISIS_SECTOR = `https://us-central1-${projectIdFirebase}.cloudfunctions.net/generarAnalisisSector`;
 
 /* Actividad+año cuya corrida ya se intentó rehacer en esta página. Vive fuera del
    componente a propósito: sobrevive a que el estudio se cierre y se vuelva a abrir, que es
@@ -429,10 +428,10 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
       avisos.push(
         /Ning[uú]n dato del sector trajo confirmaci[oó]n de b[uú]squeda/i.test(motivoFalloSector)
           ? 'no se encontró información pública confiable para el sector de esta actividad: el ' +
-            'análisis del sector (III.C) quedó con el respaldo genérico — redáctalo a mano, no va ' +
-            'a resolverse solo con reintentar'
+          'análisis del sector (III.C) quedó con el respaldo genérico — redáctalo a mano, no va ' +
+          'a resolverse solo con reintentar'
           : 'no se pudo generar el análisis del sector (III.C) por un error técnico (' + motivoFalloSector + '): ' +
-            'quedó con el respaldo genérico, vuelve a intentarlo'
+          'quedó con el respaldo genérico, vuelve a intentarlo'
       );
     } else if (!d.sectorNarrativaCubierta) {
       avisos.push(
@@ -762,8 +761,8 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
       setAvisoNube(await bucketAusente(err)
         ? AVISO_STORAGE_APAGADO
         : 'La plantilla no se pudo guardar en la nube: ' + ((err && err.message) || 'error desconocido') +
-          '. Funciona en este navegador, pero al abrir el estudio en otro equipo no habrá ' +
-          'plantilla y no se podrá generar el informe hasta volver a subirla.');
+        '. Funciona en este navegador, pero al abrir el estudio en otro equipo no habrá ' +
+        'plantilla y no se podrá generar el informe hasta volver a subirla.');
     }
   };
 
@@ -810,38 +809,38 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
        poblar. Por eso el botón de descarga, más abajo, ahora también se deshabilita con `loading`. */
     const promesaAccionistas = (typeof updateStudy === 'function')
       ? parseAccionistasFromDocument(file).then((resultado) => {
-          if (!vigente.current) return;
-          if (resultado && resultado.accionistas && resultado.accionistas.length > 0) {
-            updateStudy({ plantillaAccionistas: resultado });
-            setAvisoAccionistasPlantilla(
-              `✅ ${resultado.accionistas.length} accionista(s) leídos de la plantilla: sirven de respaldo ` +
-              'para los campos del texto (accionista principal, capital pagado) si no hay certificado en ' +
-              '«1. Contribuyente» ni informe del año anterior. La tabla de composición accionaria del ' +
-              'informe se conserva tal como viene en la plantilla.'
-            );
-          } else if (resultado && resultado.error) {
-            setAvisoAccionistasPlantilla(
-              `⚠ No se pudo leer la composición accionaria de la plantilla (${resultado.error}). ` +
-              'Vuelve a intentarlo subiendo la plantilla otra vez, o carga el Certificado de ' +
-              'Composición Accionaria en «1. Contribuyente».'
-            );
-          } else {
-            setAvisoAccionistasPlantilla(
-              'ℹ La plantilla no trae una tabla de composición accionaria reconocible. Sin certificado ' +
-              'ni informe anterior, la tabla de composición accionaria queda tal como viene en la ' +
-              'plantilla y hay que revisarla a mano.'
-            );
-          }
-          return resultado;
-        }).catch((err) => {
-          // Defensivo: parseAccionistasFromDocument ya no debería rechazar.
-          console.warn('[plantilla] No se pudo extraer composición accionaria:', err);
+        if (!vigente.current) return;
+        if (resultado && resultado.accionistas && resultado.accionistas.length > 0) {
+          updateStudy({ plantillaAccionistas: resultado });
           setAvisoAccionistasPlantilla(
-            '⚠ No se pudo leer la composición accionaria de la plantilla (fallo inesperado). ' +
-            'Vuelve a intentarlo subiendo la plantilla otra vez.'
+            `✅ ${resultado.accionistas.length} accionista(s) leídos de la plantilla: sirven de respaldo ` +
+            'para los campos del texto (accionista principal, capital pagado) si no hay certificado en ' +
+            '«1. Contribuyente» ni informe del año anterior. La tabla de composición accionaria del ' +
+            'informe se conserva tal como viene en la plantilla.'
           );
-          return null;
-        })
+        } else if (resultado && resultado.error) {
+          setAvisoAccionistasPlantilla(
+            `⚠ No se pudo leer la composición accionaria de la plantilla (${resultado.error}). ` +
+            'Vuelve a intentarlo subiendo la plantilla otra vez, o carga el Certificado de ' +
+            'Composición Accionaria en «1. Contribuyente».'
+          );
+        } else {
+          setAvisoAccionistasPlantilla(
+            'ℹ La plantilla no trae una tabla de composición accionaria reconocible. Sin certificado ' +
+            'ni informe anterior, la tabla de composición accionaria queda tal como viene en la ' +
+            'plantilla y hay que revisarla a mano.'
+          );
+        }
+        return resultado;
+      }).catch((err) => {
+        // Defensivo: parseAccionistasFromDocument ya no debería rechazar.
+        console.warn('[plantilla] No se pudo extraer composición accionaria:', err);
+        setAvisoAccionistasPlantilla(
+          '⚠ No se pudo leer la composición accionaria de la plantilla (fallo inesperado). ' +
+          'Vuelve a intentarlo subiendo la plantilla otra vez.'
+        );
+        return null;
+      })
       : Promise.resolve(null);
 
     const reader = new FileReader();
@@ -988,26 +987,26 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
          —y un consejo falso sobre un documento que se radica es peor que
          ninguno—. De ahí el `reintentable`. */
       lineas.push(trozosFallidos + ' de ' + trozosEnviados + ' tramos del documento no se ' +
-                  'pudieron marcar (falló la llamada o la respuesta no traía JSON). Ese texto ' +
-                  'queda SIN MARCAR: los datos del contribuyente anterior que hubiera ahí van a ' +
-                  'sobrevivir. ' +
-                  (reintentable
-                    ? 'Puedes cancelar y volver a subir el PDF para marcarlo otra vez.'
-                    : 'El marcado ya quedó guardado: revisa a mano esos tramos del documento ' +
-                      'antes de radicar.'));
+        'pudieron marcar (falló la llamada o la respuesta no traía JSON). Ese texto ' +
+        'queda SIN MARCAR: los datos del contribuyente anterior que hubiera ahí van a ' +
+        'sobrevivir. ' +
+        (reintentable
+          ? 'Puedes cancelar y volver a subir el PDF para marcarlo otra vez.'
+          : 'El marcado ya quedó guardado: revisa a mano esos tramos del documento ' +
+          'antes de radicar.'));
     }
     /* Los tramos que solo salieron partiéndolos. No es un fallo —ese texto quedó marcado—,
        pero es la señal de que las peticiones van al límite del plazo de `/api/gemini`: si el
        número es alto, esta plantilla necesita trozos más pequeños. */
     if (tramosPartidos) {
       lineas.push(tramosPartidos + ' tramo(s) tardaron demasiado y hubo que partirlos en dos ' +
-                  'para que la IA los alcanzara a leer. Quedaron marcados: no hay nada que ' +
-                  'revisar por esto, pero el marcado de esta plantilla va justo de tiempo.');
+        'para que la IA los alcanzara a leer. Quedaron marcados: no hay nada que ' +
+        'revisar por esto, pero el marcado de esta plantilla va justo de tiempo.');
     }
     if (rechazadasPorVocabulario) {
       lineas.push(rechazadasPorVocabulario + ' propuesta(s) se rechazaron porque el campo no está ' +
-                  'en el vocabulario. El modelo estaba señalando un dato del informe de ' +
-                  'referencia que ningún campo puede sustituir: revísalo a mano.');
+        'en el vocabulario. El modelo estaba señalando un dato del informe de ' +
+        'referencia que ningún campo puede sustituir: revísalo a mano.');
     }
     /* Lo que las guardas dejaron fuera. No es un fallo —es lo que evita que el año gravable
        reescriba una serie histórica o que una cifra del contribuyente aterrice en la ficha
@@ -1015,15 +1014,15 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
        encabezados podría estar bloqueando texto que sí había que marcar. */
     if (bloqueadasPorZona) {
       lineas.push(bloqueadasPorZona + ' aparición(es) no se marcaron por estar en una zona ' +
-                  'donde ese dato no va (anexos, tendencias de la economía, citas). Esas ' +
-                  'secciones se regeneran o son fijas; si tu plantilla las titula de otro ' +
-                  'modo, revísalas a mano.');
+        'donde ese dato no va (anexos, tendencias de la economía, citas). Esas ' +
+        'secciones se regeneran o son fijas; si tu plantilla las titula de otro ' +
+        'modo, revísalas a mano.');
     }
     if (bloqueadasPorGuarda) {
       lineas.push(bloqueadasPorGuarda + ' aparición(es) no se marcaron porque el texto no ' +
-                  'identifica el dato por sí solo (una palabra común, un número corto, o un ' +
-                  'año en una fecha que no es el año gravable). Se dejan como están a ' +
-                  'propósito: sustituirlas reescribiría la redacción del informe.');
+        'identifica el dato por sí solo (una palabra común, un número corto, o un ' +
+        'año en una fecha que no es el año gravable). Se dejan como están a ' +
+        'propósito: sustituirlas reescribiría la redacción del informe.');
     }
     return lineas.join('\n');
   };
@@ -1046,23 +1045,23 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
     const sinLibre = porMotivo.get(MOTIVO_SIN_APARICION_LIBRE);
     if (noAparece) {
       lineas.push(noAparece + ' se descartaron porque su texto no aparece literalmente en el ' +
-                  'documento: revisa si el modelo reescribió ese fragmento.');
+        'documento: revisa si el modelo reescribió ese fragmento.');
     }
     if (sinLibre) {
       lineas.push(sinLibre + ' se descartaron porque el documento no tiene tantas apariciones de ' +
-                  'ese texto como decía la marca. ATENCIÓN: esas apariciones se quedan SIN ' +
-                  'SUSTITUIR y el dato del contribuyente anterior sobrevive ahí. Revísalas a mano ' +
-                  'en el documento antes de radicar.');
+        'ese texto como decía la marca. ATENCIÓN: esas apariciones se quedan SIN ' +
+        'SUSTITUIR y el dato del contribuyente anterior sobrevive ahí. Revísalas a mano ' +
+        'en el documento antes de radicar.');
     }
     if (solapada) {
       lineas.push(solapada + ' se descartaron por solaparse con una marca ya aplicada, lo cual es ' +
-                  'normal y no es señal de un problema.');
+        'normal y no es señal de un problema.');
     }
     /* Motivo distinto de los tres conocidos hoy: se reporta genérico en vez de
        omitirlo, por si aplicarMarcas agrega alguno nuevo más adelante. */
     for (const [motivo, n] of porMotivo) {
       if (motivo !== MOTIVO_NO_APARECE && motivo !== MOTIVO_SOLAPE &&
-          motivo !== MOTIVO_SIN_APARICION_LIBRE) {
+        motivo !== MOTIVO_SIN_APARICION_LIBRE) {
         lineas.push(n + ' se descartaron: ' + motivo + '.');
       }
     }
@@ -1255,8 +1254,10 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
     try {
       const { salida, camposVacios, avisosTablas } = construirDocxDelEstudio(
         binarioMarcado, 'uint8array', binarioOriginal);
-      const { value } = await mammoth.convertToHtml({ arrayBuffer: salida.buffer.slice(
-        salida.byteOffset, salida.byteOffset + salida.byteLength) });
+      const { value } = await mammoth.convertToHtml({
+        arrayBuffer: salida.buffer.slice(
+          salida.byteOffset, salida.byteOffset + salida.byteLength)
+      });
       setHtmlContent(value);
       /* Lo que le falta al informe (series macro del año, análisis del sector, tablas
          del motor) se mide aquí y no solo en la ruta de PDF: esta es la ruta con la
@@ -1527,9 +1528,7 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
       if (plantillaActiva && plantillaActiva.tipo === 'docx' && plantillaActiva.marcada) {
         const marcado = await leerDocxMarcado(plantillaActiva.id);
         if (!marcado) throw new Error('No se encontró la plantilla marcada. Vuelve a subirla.');
-        const {
-          salida, camposVacios, camposConservados, avisosTablas, imagenesInsertadas,
-        } = construirDocxDelEstudio(marcado, 'blob', await leerDocx(plantillaActiva.id));
+        const { salida, camposVacios, camposConservados, avisosTablas, imagenesInsertadas } = construirDocxDelEstudio(marcado, 'blob', await leerDocx(plantillaActiva.id));
         const enlace = document.createElement('a');
         enlace.href = URL.createObjectURL(salida);
         enlace.download = 'Informe_Local_PT_' + (study.ent || 'Empresa') + '_' +
@@ -1780,7 +1779,7 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
     const bloquesMso =
       (encabezado
         ? '<div style="mso-element:header" id="h1"><p class=enc>' +
-          conTamanoDeImagen(conImagenes(encabezado)) + '</p></div>'
+        conTamanoDeImagen(conImagenes(encabezado)) + '</p></div>'
         : '') +
       '<div style="mso-element:footer" id="f1"><p class=pie>' +
       '<span style="mso-field-code:PAGE"></span></p></div>';
