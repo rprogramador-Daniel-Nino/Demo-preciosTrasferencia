@@ -424,6 +424,22 @@ service cloud.firestore {
     }
 
     // =============================================================
+    // jurisdiccionesNoCooperantes — lista vigente de jurisdicciones no cooperantes o de
+    // baja o nula imposición (Artículo 260-7 del E.T., Artículo 1.2.2.5.1. del Decreto
+    // 1625 de 2016), una por documento, con su propio `activo` para conservar el rastro
+    // histórico de las que salieron de la lista vigente por una resolución posterior.
+    // Dato compartido (no por usuario ni por cliente), mismo criterio que analisisMercado
+    // y analisisSector: el Decreto que la fija cambia por resolución del Gobierno
+    // Nacional, no por un consultor editando a mano, así que solo la siembra/actualiza un
+    // script administrativo con el SDK de Admin (no pasa por estas reglas).
+    // =============================================================
+
+    match /jurisdiccionesNoCooperantes/{pais} {
+      allow read: if esMiembro();
+      allow write: if false;
+    }
+
+    // =============================================================
     // narrativaMacroPorEstudio — caché por estudio de la redacción en vivo de la
     // narrativa macro (III.A/III.B), disparada desde el navegador cuando
     // `analisisMercado/actual` no trae todavía la narrativa para ese estudio.

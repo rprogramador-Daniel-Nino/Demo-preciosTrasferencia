@@ -63,8 +63,12 @@ import {
   NOMBRES_TABLA_ADICIONAL, NOMBRES_TABLA_TRANSACCIONES,
 } from './tablasOperaciones.js';
 import {
-  tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo, NOMBRES_TABLA_PRESTAMO,
+  tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo, vinculadoDePrestamo,
+  NOMBRES_TABLA_PRESTAMO,
 } from './tablasPrestamos.js';
+import {
+  JURISDICCIONES_NO_COOPERANTES_DEFAULT, esJurisdiccionNoCooperante,
+} from './jurisdiccionesNoCooperantes.js';
 /* Fase 5 de los estudios tipo préstamo: las Tablas 6/20 (rango intercuartil, 7 columnas,
    una fila por préstamo) y su "Conclusión" en esta misma ruta. No se reimplementa nada del
    cálculo —`filasTablaRangoIntercuartil` y `conclusionRangoIntercuartilPrestamo` ya están
@@ -2825,12 +2829,28 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
     reemplazar('Vinculado económica', (b) => emitir(b, filasVinculadoEconomicoPrestamo(estudio)));
   }
 
-  // 8. Criterios de vinculación económica
-  reemplazar(
-    'Criterios de vinculación',
-    (b) => emitir(b, filasCriteriosVinculacion(estudio)),
-    { numeros: [9] }
-  );
+  /* 8. Criterios de vinculación económica — Artículo 260-7 del E.T. (jurisdicciones no
+     cooperantes) cuando `pais_vinc` cruza con la lista vigente (ver
+     `jurisdiccionesNoCooperantes.js`); `estudio.jurisdiccionesNoCooperantes` es el gancho
+     para una lista real leída de Firestore (que todavía no existe: `ReporteGenerador.jsx`
+     no la lee hoy), y a falta de ella se usa la lista por defecto embebida del Decreto
+     1625 de 2016 — el sistema nunca se queda sin ninguna lista.
+
+     Para préstamo, además, el nombre del vinculado lo identifica
+     `vinculadoDePrestamo` (mismo criterio otorga/recibe que la Tabla 1), nunca
+     `estudio.vinc` — mismo motivo que la Tabla 11, arriba. */
+  {
+    const jurisdicciones = estudio.jurisdiccionesNoCooperantes || JURISDICCIONES_NO_COOPERANTES_DEFAULT;
+    const esNoCooperante = esJurisdiccionNoCooperante(estudio.pais_vinc, jurisdicciones);
+    const estudioParaCriterios = (estudio.tipo_estudio === 'prestamo' && tienePrestamos(estudio))
+      ? { ...estudio, vinc: vinculadoDePrestamo(estudio.prestamos[0], estudio.ent) }
+      : estudio;
+    reemplazar(
+      'Criterios de vinculación',
+      (b) => emitir(b, filasCriteriosVinculacion(estudioParaCriterios, { esNoCooperante })),
+      { numeros: [9] }
+    );
+  }
 
   // 9. Tabla 10. Activos a 31 de diciembre del año gravable
   reemplazar(

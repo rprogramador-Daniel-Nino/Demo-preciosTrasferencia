@@ -369,8 +369,25 @@ export function filasCompaniasVinculadas(estudio) {
  *
  * @returns {{nombre:string, titulo:string, encabezados:string[], filas:string[][], fuente:string}}
  */
-export function filasCriteriosVinculacion(estudio) {
+/**
+ * Tabla 9/12 — «Criterios de vinculación económica».
+ *
+ * `esNoCooperante` decide, por sí sola, el criterio y su detalle (Artículo 260-7 del E.T.
+ * cuando el vinculado reside en una jurisdicción no cooperante de baja o nula imposición —
+ * ver `jurisdiccionesNoCooperantes.js`—, o el 260-1 de vinculación directa en cualquier otro
+ * caso, el único que este sistema sustenta hoy fuera de ese escenario). Quien llama resuelve
+ * el booleano (`esJurisdiccionNoCooperante(estudio.pais_vinc, jurisdicciones)`); esta función
+ * nunca consulta la lista de jurisdicciones por sí misma, para no acoplar una tabla del
+ * informe a la fuente de esos datos.
+ */
+export function filasCriteriosVinculacion(estudio, { esNoCooperante = false } = {}) {
   const e = estudio || {};
+  const [articulo, detalle] = esNoCooperante
+    ? [
+      'Artículo 260-7 del Estatuto Tributario.',
+      'Operaciones con jurisdicciones no cooperantes de baja o nula imposición (Paraíso Fiscal).',
+    ]
+    : ['Artículo. 260-1 del Estatuto Tributario, numeral 1, literal a', 'Vinculación Directa'];
   return {
     nombre: 'Criterios de vinculación',
     titulo: 'Criterios de vinculación económica',
@@ -378,10 +395,7 @@ export function filasCriteriosVinculacion(estudio) {
       'Nombre Vinculada', 'País', 'Criterio de vinculación',
       'Detalle del Criterio de Vinculación',
     ],
-    filas: [[
-      wrap(e.vinc), wrap(e.pais_vinc),
-      'Artículo. 260-1 del Estatuto Tributario, numeral 1, literal a', 'Vinculación Directa',
-    ]],
+    filas: [[wrap(e.vinc), wrap(e.pais_vinc), articulo, detalle]],
     fuente: FUENTE,
     /* Las dos últimas columnas son la norma que esta función escribe, no un dato: sin el
        nombre y el país del vinculado la fila sería la cita legal sobre dos guiones. */

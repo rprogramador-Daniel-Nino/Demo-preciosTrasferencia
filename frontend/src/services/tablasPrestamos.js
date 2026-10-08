@@ -8,7 +8,14 @@ export const NOMBRES_TABLA_PRESTAMO = [
 const normalizarNombreCompania = (s) =>
   String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
-function vinculadoDePrestamo(fila, ent) {
+/** Quien NO es el contribuyente (`ent`) en la fila de un préstamo: el vinculado real,
+ *  nunca `estudio.vinc` —un campo del motor de márgenes que puede quedar sin llenar o
+ *  desactualizado en un estudio de préstamo (reportado el 2026-10-09: "BRUNO FRITSCH SA",
+ *  el nombre de otro cliente, en un estudio real de Autoland). Exportada para que
+ *  `docxRelleno.js` identifique al mismo vinculado en cualquier tabla genérica que
+ *  necesite su nombre para préstamo (Tabla 11 «Vinculado económica», Tabla 12 «Criterios
+ *  de vinculación»), con el mismo criterio que ya usa la Tabla 1. */
+export function vinculadoDePrestamo(fila, ent) {
   const entNorm = normalizarNombreCompania(ent);
   if (normalizarNombreCompania(fila.recibe) === entNorm) return fila.otorga;
   if (normalizarNombreCompania(fila.otorga) === entNorm) return fila.recibe;

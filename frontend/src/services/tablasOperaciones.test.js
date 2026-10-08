@@ -208,6 +208,26 @@ test('los criterios de vinculación citan el artículo y el detalle', () => {
   ]]);
 });
 
+/* Artículo 260-7 del E.T. (jurisdicciones no cooperantes): cuando el vinculado reside en una
+   de esas jurisdicciones, el criterio y el detalle citan esa norma en vez de la vinculación
+   directa del Artículo 260-1 — pedido por el usuario el 2026-10-09, con la lista oficial del
+   Artículo 1.2.2.5.1. del Decreto 1625 de 2016. El booleano lo decide quien llama
+   (`esJurisdiccionNoCooperante`, cruzando `pais_vinc` contra la lista vigente), esta función
+   solo elige qué fila publicar. */
+test('los criterios de vinculación citan el Art. 260-7 cuando el vinculado es de una jurisdicción no cooperante', () => {
+  const t = filasCriteriosVinculacion(ESTUDIO, { esNoCooperante: true });
+  assert.deepStrictEqual(t.filas, [[
+    'END GAME INTERACTIVE INC', 'ESTADOS UNIDOS',
+    'Artículo 260-7 del Estatuto Tributario.',
+    'Operaciones con jurisdicciones no cooperantes de baja o nula imposición (Paraíso Fiscal).',
+  ]]);
+});
+
+test('sin el booleano, sigue citando el Art. 260-1 (comportamiento de siempre, sin cambios)', () => {
+  const t = filasCriteriosVinculacion(ESTUDIO, { esNoCooperante: false });
+  assert.strictEqual(t.filas[0][2], 'Artículo. 260-1 del Estatuto Tributario, numeral 1, literal a');
+});
+
 /* ── El umbral de la operación adicional, en UVT del año gravable ───────────── */
 
 const conAdicional = (monto, anio) => ({

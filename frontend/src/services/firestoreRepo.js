@@ -659,6 +659,23 @@ export async function leerAnalisisSector(claveActividad) {
   return instantanea.exists() ? instantanea.data() : null;
 }
 
+const JURISDICCIONES_NO_COOPERANTES = 'jurisdiccionesNoCooperantes';
+
+/** Lista vigente de jurisdicciones no cooperantes o de baja o nula imposición (Artículo
+ *  260-7 del E.T.), para cruzarla contra `pais_vinc` del estudio
+ *  (`esJurisdiccionNoCooperante`, `jurisdiccionesNoCooperantes.js`). Dato compartido entre
+ *  todos los consultores, no por usuario ni por cliente — mismo criterio que
+ *  `analisisMercado`/`analisisSector`. Solo lectura desde el navegador: el Decreto que fija
+ *  la lista cambia por resolución, no por un consultor editando a mano (ver
+ *  `firestore.rules`); sembrarla o actualizarla es tarea de un script administrativo
+ *  (`scripts/sembrar-jurisdicciones-no-cooperantes.js`), no de esta función. `[]` si la
+ *  colección todavía no se sembró: el llamador cae al respaldo embebido
+ *  (`JURISDICCIONES_NO_COOPERANTES_DEFAULT`). */
+export async function leerJurisdiccionesNoCooperantes() {
+  const instantanea = await getDocs(collection(db, JURISDICCIONES_NO_COOPERANTES));
+  return instantanea.docs.map((d) => d.data());
+}
+
 const NARRATIVA_MACRO_ESTUDIO = 'narrativaMacroPorEstudio';
 
 /** Narrativa macro redactada en vivo para ESTE estudio (no el documento global

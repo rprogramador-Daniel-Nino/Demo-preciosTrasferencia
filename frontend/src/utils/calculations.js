@@ -18,13 +18,6 @@ export function getUvtValue(year) {
   return UVT_VALUES[y] || 47065;
 }
 
-export const JURISDICCIONES_D1496_2024 = [
-  'svalbard', 'san pedro y miguelon', 'kuwait', 'qatar',
-  'samoa occidental', 'queshm', 'pitcairn', 'islas salomon', 'labuan', 'macao', 'bahamas',
-  'bahrein', 'jordania', 'guyana', 'angola', 'cabo verde', 'islas marshall', 'liberia',
-  'maldivas', 'nauru', 'trinidad y tobago', 'vanuatu', 'yemen', 'santa elena', 'oman'
-];
-
 export const PAIS_DIAN = {
   'COLOMBIA': '170', 'RUSIA': '643', 'FEDERACION RUSA': '643',
   'EMIRATOS ARABES': '784', 'EMIRATOS ARABES UNIDOS': '784', 'MEXICO': '484', 'PERU': '604',
@@ -327,12 +320,6 @@ export function adjustInfo(T, tPLI, st, base, unitMult, egresoValue = null) {
 }
 
 const _sinAc = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-export function checkJurisdiccionD1496(pais) {
-  const p = _sinAc(pais);
-  if (!p) return false;
-  return JURISDICCIONES_D1496_2024.some(k => p.includes(k) || k.includes(p));
-}
 
 export function paisCodigo(n) {
   const k = _sinAc(n).toUpperCase();

@@ -5025,6 +5025,39 @@ test('estándar: no toca "Vinculado económica" (esa tabla es exclusiva de prés
   assert.ok(textoPlanoOoxml(salida).includes('Cualquier cosa de la plantilla'));
 });
 
+test('Criterios de vinculación cita el Art. 260-7 cuando el país del vinculado cruza con una jurisdicción no cooperante', () => {
+  const xml = '<w:p><w:t>Tabla 9. Criterios de vinculación económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = { ent: 'ACME', anio: 2025, vinc: 'Shell Co', pais_vinc: 'Macao' };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  const texto = textoPlanoOoxml(salida);
+  assert.ok(texto.includes('260-7'), 'debe citar el Art. 260-7');
+  assert.ok(texto.includes('Paraíso Fiscal'));
+  assert.ok(!texto.includes('260-1'), 'no debe quedar también el 260-1 de vinculación directa');
+});
+
+test('Criterios de vinculación sigue citando el Art. 260-1 para un país que no es jurisdicción no cooperante', () => {
+  const xml = '<w:p><w:t>Tabla 9. Criterios de vinculación económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = { ent: 'ACME', anio: 2025, vinc: 'Acme Partner Inc', pais_vinc: 'Estados Unidos' };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  assert.ok(textoPlanoOoxml(salida).includes('260-1'));
+});
+
+test('préstamo: Criterios de vinculación usa el vinculado real (otorga/recibe), no `estudio.vinc`', () => {
+  const xml = '<w:p><w:t>Tabla 9. Criterios de vinculación económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = {
+    ...ESTUDIO_PRESTAMO_DOCX,
+    pais_vinc: 'Chile',
+    prestamos: [{
+      ...ESTUDIO_PRESTAMO_DOCX.prestamos[0], otorga: 'Inversiones San Jeronimo SpA', recibe: ESTUDIO_PRESTAMO_DOCX.ent,
+    }],
+  };
+  const texto = textoPlanoOoxml(actualizarTablasOperacionesOoxml(xml, estudio, []));
+  assert.ok(texto.includes('Inversiones San Jeronimo SpA'));
+});
+
 test('préstamo: tampoco avisa del ANEXO B si el estudio arrastra `comparables` de un uso previo como '
   + 'estudio estándar (reportado el 2026-10-08: el estudio real sí traía datos viejos)', async () => {
   const buf = await plantilla([parrafo('Informe de {ent}')]);

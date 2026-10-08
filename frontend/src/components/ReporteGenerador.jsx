@@ -20,6 +20,7 @@ import {
 } from '../services/plantillaStore';
 import {
   leerAnalisisMercado, leerAnalisisSector, leerNarrativaMacroEstudio, guardarNarrativaMacroEstudio,
+  leerJurisdiccionesNoCooperantes,
 } from '../services/firestoreRepo';
 import { leerCriteriosScreeningDeArchivo } from '../services/comparablesEngine.js';
 import { necesitaRedaccion, redactarNarrativaMacroEnVivo } from '../services/analisisMercadoRedaccion';
@@ -162,6 +163,12 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      mientras carga o si todavía no hay corrida: generarApartadoSectorial cae
      al respaldo genérico con marcador. */
   const [analisisSector, setAnalisisSector] = useState(null);
+  /* Lista vigente de jurisdicciones no cooperantes (Artículo 260-7 del E.T.), para la Tabla
+     de "Criterios de vinculación" (Art. 260-1 vs 260-7). Documento/colección global, no por
+     estudio: una lectura por sesión basta, igual que `analisisMercado`. `null` mientras
+     carga o si la lectura falla — `docxRelleno.js` cae entonces al respaldo embebido
+     (`JURISDICCIONES_NO_COOPERANTES_DEFAULT`), nunca se queda sin ninguna lista. */
+  const [jurisdiccionesNoCooperantes, setJurisdiccionesNoCooperantes] = useState(null);
   /* Motivo por el que no se pudo generar/leer el análisis de sector, o null si no ha
      fallado (todavía no corre, o corrió bien). Se distingue del resto de `analisisSector`
      porque el banner necesita decir POR QUÉ falló, no solo que falló: "no hay información
@@ -320,6 +327,20 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
       .catch((err) => {
         console.error('No se pudo leer el análisis de mercado de Firestore:', err);
         if (vivo) setAnalisisMercado(null);
+      });
+    return () => { vivo = false; };
+  }, []);
+
+  /* Documento/colección global igual que `analisisMercado`: una lectura por sesión. Si la
+     colección todavía no se sembró (`scripts/sembrar-jurisdicciones-no-cooperantes.js`) o
+     la lectura falla, se deja `null` y `docxRelleno.js` cae a su respaldo embebido. */
+  useEffect(() => {
+    let vivo = true;
+    leerJurisdiccionesNoCooperantes()
+      .then((datos) => { if (vivo) setJurisdiccionesNoCooperantes(datos); })
+      .catch((err) => {
+        console.error('No se pudo leer las jurisdicciones no cooperantes de Firestore:', err);
+        if (vivo) setJurisdiccionesNoCooperantes(null);
       });
     return () => { vivo = false; };
   }, []);
@@ -1234,7 +1255,7 @@ export default function ReporteGenerador({ study, updateStudy, estudioId, usuari
      `guardarDocx` lo dejó al subirlo; si no está, el relleno se comporta como antes. */
   const construirDocxDelEstudio = (binarioMarcado, tipoSalida = 'blob', binarioOriginal = null) => rellenarDocx({
     binario: binarioMarcado,
-    estudio: study,
+    estudio: jurisdiccionesNoCooperantes ? { ...study, jurisdiccionesNoCooperantes } : study,
     datosMacro: analisisMercado,
     analisisSector: analisisSector,
     colecciones: coleccionesDelEstudio(study),
