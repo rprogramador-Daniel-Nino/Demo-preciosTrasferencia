@@ -2840,7 +2840,12 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
      `vinculadoDePrestamo` (mismo criterio otorga/recibe que la Tabla 1), nunca
      `estudio.vinc` — mismo motivo que la Tabla 11, arriba. */
   {
-    const jurisdicciones = estudio.jurisdiccionesNoCooperantes || JURISDICCIONES_NO_COOPERANTES_DEFAULT;
+    /* `[] || RESPALDO` se queda con `[]` —un array vacío es verdadero en JS—, y `[]` es
+       justo lo que devuelve `leerJurisdiccionesNoCooperantes` sobre una colección que
+       todavía no se sembró: hay que comprobar la LONGITUD, no solo la presencia. */
+    const jurisdicciones = (estudio.jurisdiccionesNoCooperantes && estudio.jurisdiccionesNoCooperantes.length)
+      ? estudio.jurisdiccionesNoCooperantes
+      : JURISDICCIONES_NO_COOPERANTES_DEFAULT;
     const esNoCooperante = esJurisdiccionNoCooperante(estudio.pais_vinc, jurisdicciones);
     const estudioParaCriterios = (estudio.tipo_estudio === 'prestamo' && tienePrestamos(estudio))
       ? { ...estudio, vinc: vinculadoDePrestamo(estudio.prestamos[0], estudio.ent) }

@@ -5036,6 +5036,21 @@ test('Criterios de vinculación cita el Art. 260-7 cuando el país del vinculado
   assert.ok(!texto.includes('260-1'), 'no debe quedar también el 260-1 de vinculación directa');
 });
 
+test('Criterios de vinculación: una lista de Firestore vacía (colección sin sembrar todavía) cae al respaldo embebido', () => {
+  /* `estudio.jurisdiccionesNoCooperantes: []` es el estado real mientras la colección de
+     Firestore no se haya sembrado (`leerJurisdiccionesNoCooperantes` devuelve `[]`, no
+     `null`, sobre una colección vacía) — un `[] || RESPALDO` se queda con `[]` porque un
+     array vacío es verdadero en JS, así que el respaldo nunca entraría a menos que se
+     compruebe la longitud, no solo la presencia. */
+  const xml = '<w:p><w:t>Tabla 9. Criterios de vinculación económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = {
+    ent: 'ACME', anio: 2025, vinc: 'Shell Co', pais_vinc: 'Macao', jurisdiccionesNoCooperantes: [],
+  };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  assert.ok(textoPlanoOoxml(salida).includes('260-7'), 'debe seguir reconociendo Macao vía el respaldo embebido');
+});
+
 test('Criterios de vinculación sigue citando el Art. 260-1 para un país que no es jurisdicción no cooperante', () => {
   const xml = '<w:p><w:t>Tabla 9. Criterios de vinculación económica</w:t></w:p>'
     + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja</w:t></w:p></w:tc></w:tr></w:tbl>';
