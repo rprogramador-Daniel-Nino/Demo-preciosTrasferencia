@@ -2825,6 +2825,16 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
     { numeros: [10] }
   );
 
+  /* 10/10.5/11/13 (Razones de rechazo, Códigos SIC, Muestra Compañías comparables, Margen
+     Operacional Compañías Comparables): las cuatro tablas del cribado y puntaje de empresas
+     comparables del motor de MÁRGENES. Un estudio de préstamo no cribó ni puntuó ninguna
+     empresa —el método PC compara tasas de interés, no hay universo que filtrar—, así que
+     ninguna de las cuatro existe para él. Antes de esta guarda, un estudio de préstamo real
+     recibía cuatro avisos de "no se encontró en la plantilla" sobre tablas que nunca iban a
+     estar ahí ni tenían por qué estarlo — ruido, no información (reportado el 2026-10-08).
+     El motor de márgenes sigue exactamente igual para cualquier otro tipo de estudio: nada
+     de lo de dentro de este `if` se tocó. */
+  if (estudio.tipo_estudio !== 'prestamo') {
   // 10. Razones de rechazo
   reemplazar('Razones de rechazo', (b) => {
     const { filas: razonesFilas } = filasRazonesRechazo(estudio.embudoSeleccion);
@@ -3047,6 +3057,7 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
       enMayusculas(citaBaseDatos(estudio))
     );
   }, { numeros: [17] });
+  } // fin de la guarda: tablas del motor de márgenes (ver el comentario de la Razón 10)
 
   /* 5/12. Rango Intercuartil —horizontal Y vertical— más «Tabla de rangos».
    *
@@ -3257,7 +3268,9 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
      de Capital IQ. Va por la misma función que la ruta del PDF, con el delimitador de Word. */
   doc.aplicar((x) => actualizarProsaBaseDatos(x, avisos, { rxParrafo: PARRAFO_OOXML }));
 
-  /* 13. Margen Operacional Compañías Comparables.
+  /* 13. Margen Operacional Compañías Comparables — motor de márgenes, no existe en préstamo
+     (ver el comentario de la Razón 10, arriba): se omite entera para `tipo_estudio ===
+     'prestamo'`, sin tocar nada de lo que hace para cualquier otro tipo de estudio.
 
      Se localiza por el nombre COMPLETO, no por «Margen Operacional» a secas. La clave corta
      casa por inclusión con la prosa del propio informe: en la plantilla de End Game, el
@@ -3271,7 +3284,7 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
 
      El nombre de la tabla es lo único estable: el prefijo se renumera al reordenar el informe,
      y hay plantillas que lo rotulan sin número. Por eso se busca solo por el nombre. */
-  {
+  if (estudio.tipo_estudio !== 'prestamo') {
     const generarTabla19 = (b) => {
       const compList = filasComparablesInforme(estudio);
       const filas19 = (compList || []).map((f) => [
@@ -4267,9 +4280,17 @@ export function rellenarDocx({
   /* Después del anexo de descripciones: los anexos se delimitan unos con otros, así que
      reescribir la matriz antes le movería el corte. Su aviso viaja con los de las tablas
      —es el mismo canal que ya publica el generador— para que un anexo sin rehacer no pase
-     inadvertido. */
-  const anexoC = insertarAnexoC(zip, estudio);
-  if (anexoC.aviso) avisosTablas.push(anexoC.aviso);
+     inadvertido.
+
+     Un estudio de préstamo no tiene comparables que describir (ANEXO B, ya lo omite
+     `insertarImagenesAnexoB` sin comparables) ni una matriz de rechazo que rearmar (ANEXO C:
+     qué empresa del universo quedó en cada motivo de descarte) — el método PC no cribó
+     ningún universo. Avisar "no se pudo rearmar" sobre un anexo que no aplica es ruido
+     (reportado el 2026-10-08), así que se omite entera para préstamo. */
+  if (estudio.tipo_estudio !== 'prestamo') {
+    const anexoC = insertarAnexoC(zip, estudio);
+    if (anexoC.aviso) avisosTablas.push(anexoC.aviso);
+  }
 
   return {
     salida: zip.generate({

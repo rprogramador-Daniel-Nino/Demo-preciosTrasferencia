@@ -4944,3 +4944,47 @@ test('préstamo: Tabla 6 Y Tabla 20 se sustituyen las DOS en el documento comple
   assert.ok(texto.includes('Descripción de la Compañía Colombiana'));
   assert.ok(texto.includes('Fin del documento.'), 'lo que sigue después de la segunda Conclusión no se pierde');
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Avisos del motor de márgenes que no aplican a un estudio de préstamo. Reportado el
+   2026-10-08: el panel de avisos de un estudio de préstamo real salía con una decena de
+   líneas sobre «Razones de rechazo», «Códigos SIC utilizados», «Muestra Compañías
+   comparables» y «Margen Operacional Compañías Comparables» — tablas que no existen en
+   el método PC (no hay universo de empresas que cribar, filtrar ni puntuar), así que
+   avisar que «no se encontraron en la plantilla» es ruido, no información. Para
+   cualquier otro tipo de estudio el aviso sigue intacto: no se toca el código que ya
+   funciona para el motor de márgenes, solo se evita correrlo cuando no aplica. */
+test('préstamo: no avisa de tablas del motor de márgenes que no le aplican', () => {
+  const xml = '<w:p><w:t>Prosa cualquiera sin ninguna tabla del motor de márgenes.</w:t></w:p>';
+  const avisos = [];
+  actualizarTablasOperacionesOoxml(xml, { ...ESTUDIO_PRESTAMO_DOCX, embudoSeleccion: { evaluadas: 10 } }, avisos);
+  ['Razones de rechazo', 'Códigos SIC utilizados', 'Muestra Compañías comparables',
+    'Margen Operacional Compañías Comparables'].forEach((nombre) => {
+    assert.ok(!avisos.some((a) => a.includes(nombre)),
+      `no debe avisar de «${nombre}»: no existe en un estudio de préstamo`);
+  });
+});
+
+test('estándar: sigue avisando de las tablas del motor de márgenes cuando faltan (sin cambios)', () => {
+  const xml = '<w:p><w:t>Prosa cualquiera sin ninguna tabla del motor de márgenes.</w:t></w:p>';
+  const avisos = [];
+  actualizarTablasOperacionesOoxml(
+    xml, { tipo_estudio: 'estandar', ent: 'ACME', anio: 2025, embudoSeleccion: { evaluadas: 10 } }, avisos,
+  );
+  ['Razones de rechazo', 'Códigos SIC utilizados', 'Muestra Compañías comparables',
+    'Margen Operacional Compañías Comparables'].forEach((nombre) => {
+    assert.ok(avisos.some((a) => a.includes(nombre)),
+      `debe seguir avisando de «${nombre}» para un estudio que sí usa el motor de márgenes`);
+  });
+});
+
+test('préstamo: rellenarDocx no rearma los ANEXOS B y C (descripciones y matriz de rechazo de comparables)', async () => {
+  const buf = await plantilla([parrafo('Informe de {ent}')]);
+  const { avisosTablas } = rellenarDocx({
+    binario: buf,
+    estudio: { ...ESTUDIO_PRESTAMO_DOCX, comparables: [{ name: 'Alpha SA' }] },
+    tipoSalida: 'nodebuffer',
+  });
+  assert.ok(!avisosTablas.some((a) => /ANEXO B/.test(a)), 'no debe tocar el ANEXO B: un préstamo no tiene comparables');
+  assert.ok(!avisosTablas.some((a) => /Matriz de Rechazo/.test(a)), 'ni el ANEXO C');
+});
