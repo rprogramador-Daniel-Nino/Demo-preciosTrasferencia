@@ -4990,6 +4990,41 @@ test('préstamo: rellenarDocx no rearma los ANEXOS B y C (descripciones y matriz
   assert.ok(!avisosTablas.some((a) => /Matriz de Rechazo/.test(a)), 'ni el ANEXO C');
 });
 
+test('préstamo: la Tabla «Vinculado económica» trae el vinculado real, no el de la plantilla reutilizada', () => {
+  /* Reportado el 2026-10-09: un estudio de préstamo real mostraba "BRUNO FRITSCH SA" en esta
+     tabla (el nombre de otro cliente, residual de la plantilla reutilizada) porque nada la
+     rellenaba para préstamo. */
+  const xml = '<w:p><w:t>Tabla 11. Vinculado económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>BRUNO FRITSCH SA</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const salida = actualizarTablasOperacionesOoxml(
+    xml,
+    {
+      ...ESTUDIO_PRESTAMO_DOCX,
+      pais_vinc: 'Chile',
+      vinc_id: '76.421.180-4',
+      prestamos: [{
+        ...ESTUDIO_PRESTAMO_DOCX.prestamos[0],
+        otorga: 'Inversiones San Jeronimo SpA',
+        recibe: ESTUDIO_PRESTAMO_DOCX.ent,
+      }],
+    },
+    [],
+  );
+  const texto = textoPlanoOoxml(salida);
+  assert.ok(!texto.includes('BRUNO FRITSCH SA'), 'el nombre de otro cliente debe desaparecer');
+  assert.ok(texto.includes('Inversiones San Jeronimo SpA'), 'y aparecer el vinculado real del préstamo');
+  assert.ok(texto.includes('Chile') && texto.includes('76.421.180-4'));
+});
+
+test('estándar: no toca "Vinculado económica" (esa tabla es exclusiva de préstamo)', () => {
+  const xml = '<w:p><w:t>Tabla 11. Vinculado económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>Cualquier cosa de la plantilla</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const salida = actualizarTablasOperacionesOoxml(
+    xml, { tipo_estudio: 'estandar', ent: 'ACME', anio: 2025 }, [],
+  );
+  assert.ok(textoPlanoOoxml(salida).includes('Cualquier cosa de la plantilla'));
+});
+
 test('préstamo: tampoco avisa del ANEXO B si el estudio arrastra `comparables` de un uso previo como '
   + 'estudio estándar (reportado el 2026-10-08: el estudio real sí traía datos viejos)', async () => {
   const buf = await plantilla([parrafo('Informe de {ent}')]);

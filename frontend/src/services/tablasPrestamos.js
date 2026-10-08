@@ -32,6 +32,29 @@ export function tienePrestamos(estudio) {
     && Array.isArray(estudio.prestamos) && estudio.prestamos.length > 0;
 }
 
+/**
+ * Tabla 11 — «Vinculado económica»: identificación genérica del vinculado, presente en
+ * cualquier tipo de estudio. Para préstamo no existía ningún código que la llenara —se
+ * quedaba con lo que trajera la plantilla reutilizada de otro informe, incluido el nombre
+ * de otro cliente (reportado el 2026-10-09: "BRUNO FRITSCH SA" en un estudio de Autoland).
+ *
+ * El nombre usa la MISMA identificación otorga/recibe que ya usa `filasPrestamoConVinculado`
+ * (Tabla 1) — nunca `estudio.vinc`, que es un campo del motor de márgenes y puede quedar
+ * desactualizado o sin llenar en un estudio de préstamo. País e identificación fiscal sí son
+ * genéricos del estudio (`pais_vinc`/`vinc_id`): un préstamo no trae esos datos por fila.
+ */
+export function filasVinculadoEconomicoPrestamo(estudio) {
+  if (!tienePrestamos(estudio)) return null;
+  const e = estudio;
+  const nombre = vinculadoDePrestamo(e.prestamos[0], e.ent);
+  return {
+    nombre: 'Vinculado económica',
+    encabezados: ['Nombre Vinculada', 'País', 'Identificación Fiscal'],
+    filas: [[nombre, e.pais_vinc || '—', e.vinc_id || '—']],
+    fuente: 'Información suministrada por ' + (e.ent || 'la Compañía') + '.',
+  };
+}
+
 export function filasPrestamoConVinculado(estudio) {
   if (!tienePrestamos(estudio)) return null;
   const e = estudio;

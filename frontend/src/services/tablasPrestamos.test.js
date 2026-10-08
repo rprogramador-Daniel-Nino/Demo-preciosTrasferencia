@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { NOMBRES_TABLA_PRESTAMO, tienePrestamos, filasPrestamoConVinculado } from './tablasPrestamos.js';
+import {
+  NOMBRES_TABLA_PRESTAMO, tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo,
+} from './tablasPrestamos.js';
 
 const PRESTAMOS_AUTOLAND = [
   { otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS', fechaPacto: '2020-10-27', valorDesembolsoMoneda: 3000000, moneda: 'USD', valorCOPDesembolso: 10431000000, tasaEA: '4,540% Efectivo Anual' },
@@ -76,4 +78,44 @@ test('filasPrestamoConVinculado muestra "—" para fecha o montos ausentes', () 
   };
   const t = filasPrestamoConVinculado(estudio);
   assert.deepStrictEqual(t.filas[0], ['—', '—', '—', '—', '—']);
+});
+
+/* ══════ Tabla 11. Vinculado económica — mismo criterio otorga/recibe que la Tabla 1,
+   nunca `estudio.vinc` ══════
+
+   Reportado el 2026-10-09: un estudio de préstamo real mostraba "BRUNO FRITSCH SA" como
+   vinculado en la Tabla 11, el nombre de OTRO cliente — porque nada en el sistema rellenaba
+   esa tabla para préstamo y se quedaba con lo que trajera la plantilla reutilizada de otro
+   informe. El vinculado correcto (el prestamista, "Inversiones San Jeronimo SpA" en este
+   caso) ya se identifica bien en la Tabla 1 comparando otorga/recibe contra `estudio.ent`:
+   esta tabla usa la MISMA identificación, no un campo aparte que puede quedar desactualizado. */
+
+test('filasVinculadoEconomicoPrestamo identifica al vinculado igual que la Tabla 1 (quien NO es el contribuyente)', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS', pais_vinc: 'Chile', vinc_id: '76.421.180-4',
+    prestamos: [PRESTAMOS_AUTOLAND[0]],
+  };
+  const t = filasVinculadoEconomicoPrestamo(estudio);
+  assert.strictEqual(t.nombre, 'Vinculado económica');
+  assert.deepStrictEqual(t.encabezados, ['Nombre Vinculada', 'País', 'Identificación Fiscal']);
+  assert.deepStrictEqual(t.filas, [['Inversiones San Jeronimo SpA', 'Chile', '76.421.180-4']]);
+});
+
+test('filasVinculadoEconomicoPrestamo identifica al vinculado cuando el contribuyente OTORGA el préstamo', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Inversiones San Jeronimo SpA',
+    prestamos: [PRESTAMOS_AUTOLAND[0]],
+  };
+  const t = filasVinculadoEconomicoPrestamo(estudio);
+  assert.strictEqual(t.filas[0][0], 'Autoland SAS');
+});
+
+test('filasVinculadoEconomicoPrestamo sin país ni identificación muestra "—"', () => {
+  const estudio = { tipo_estudio: 'prestamo', ent: 'Autoland SAS', prestamos: [PRESTAMOS_AUTOLAND[0]] };
+  const t = filasVinculadoEconomicoPrestamo(estudio);
+  assert.deepStrictEqual(t.filas[0], ['Inversiones San Jeronimo SpA', '—', '—']);
+});
+
+test('filasVinculadoEconomicoPrestamo: null sin estudio.prestamos', () => {
+  assert.strictEqual(filasVinculadoEconomicoPrestamo({ tipo_estudio: 'prestamo' }), null);
 });

@@ -62,7 +62,9 @@ import {
   filasOperacionAdicional, filasOperacionAdicionalFicha, tieneOperacionAdicional,
   NOMBRES_TABLA_ADICIONAL, NOMBRES_TABLA_TRANSACCIONES,
 } from './tablasOperaciones.js';
-import { tienePrestamos, filasPrestamoConVinculado, NOMBRES_TABLA_PRESTAMO } from './tablasPrestamos.js';
+import {
+  tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo, NOMBRES_TABLA_PRESTAMO,
+} from './tablasPrestamos.js';
 /* Fase 5 de los estudios tipo préstamo: las Tablas 6/20 (rango intercuartil, 7 columnas,
    una fila por préstamo) y su "Conclusión" en esta misma ruta. No se reimplementa nada del
    cálculo —`filasTablaRangoIntercuartil` y `conclusionRangoIntercuartilPrestamo` ya están
@@ -2810,6 +2812,18 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
     (b) => emitir(b, filasCompaniasVinculadas(estudio)),
     { numeros: [8] }
   );
+
+  /* 7-bis. «Vinculado económica» (Tabla 11 del informe real de préstamo): sin esta rama
+     nadie rellenaba esta tabla para préstamo y se quedaba con lo que trajera la plantilla
+     reutilizada de otro informe — incluido el nombre de OTRO cliente, reportado el
+     2026-10-09 ("BRUNO FRITSCH SA" en un estudio de Autoland). El nombre lo identifica
+     `filasVinculadoEconomicoPrestamo` con el mismo criterio otorga/recibe que ya usa la
+     Tabla 1 («Préstamo con su vinculado»), nunca `estudio.vinc`. No existe para ningún otro
+     tipo de estudio: ahí la identificación del vinculado la cubre «Compañías vinculadas»,
+     arriba. */
+  if (estudio.tipo_estudio === 'prestamo') {
+    reemplazar('Vinculado económica', (b) => emitir(b, filasVinculadoEconomicoPrestamo(estudio)));
+  }
 
   // 8. Criterios de vinculación económica
   reemplazar(
