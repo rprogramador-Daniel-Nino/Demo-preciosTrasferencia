@@ -4889,3 +4889,58 @@ test('préstamo: si la tasa pactada exige revisión, la Conclusión se deja como
   assert.ok(texto.includes('Texto viejo que no se debe tocar.'), 'sin una redacción verificada no se inventa nada');
   assert.ok(avisos.some((a) => /revis/i.test(a)), 'debe avisar que hace falta redactarla a mano');
 });
+
+test('préstamo: Tabla 6 Y Tabla 20 se sustituyen las DOS en el documento completo (dos operaciones, como el informe real)', () => {
+  /* Réplica fiel del orden real de Informe Local_Autoland 2025.docx: Tabla 5 (método) →
+     narrativa → Tabla 6 (rango) → Conclusión → OTRO BLOQUE DE CONTENIDO (el título de otra
+     sección, igual que "INFORMACIÓN GENERAL" separa las dos operaciones en el documento
+     real) → Tabla 17 (método) → narrativa → Tabla 20 (rango) → Conclusión. Las pruebas
+     anteriores de este archivo solo ejercitan a Tabla 6 o a Tabla 17/20 por separado, nunca
+     las dos juntas en un solo documento con contenido real entre ellas — que es justo lo que
+     reportó el usuario como roto en su plantilla real: Tabla 6 sí sale bien, Tabla 20 no. */
+  const xml =
+    '<w:p><w:t>Tabla 5. Método de Precios de Transferencia Aplicable</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>— | INTERESES | TU | MO</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>La muestra seleccionada fue las tasas PRIME, TMC y LIBOR.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 6. Rango intercuartil</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja6</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Conclusión</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo uno de la primera Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo dos de la primera Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo tres de la primera Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>INFORMACIÓN GENERAL</w:t></w:p>'
+    + '<w:p><w:t>Descripción de la Compañía Colombiana, varios párrafos de contexto.</w:t></w:p>'
+    + '<w:p><w:t>Aceptación del método PC</w:t></w:p>'
+    + '<w:p><w:t>Tabla 17. Método de Precios de Transferencia Aplicable</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>— | INTERESES | TU | MO</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Resultados de la muestra.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 20. Rango intercuartil</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>vieja20</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Conclusión</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo uno de la segunda Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo dos de la segunda Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>Texto viejo párrafo tres de la segunda Conclusión.</w:t></w:p>'
+    + '<w:p><w:t>Fin del documento.</w:t></w:p>';
+
+  const avisos = [];
+  const salida = actualizarTablasOperacionesOoxml(xml, ESTUDIO_PRESTAMO_DOCX, avisos);
+  const texto = textoPlanoOoxml(salida);
+
+  assert.ok(!texto.includes('vieja6'), 'Tabla 6 debe quedar sustituida');
+  assert.ok(!texto.includes('vieja20'), 'Tabla 20 debe quedar sustituida');
+  const aparicionesRango = (texto.match(/RANGO MINIMO/g) || []).length;
+  assert.strictEqual(aparicionesRango, 2, 'las dos tablas de rango deben tener el encabezado nuevo');
+  /* 3 veces por operación: la fila de la tabla + las 2 veces que lo nombra su propia
+     Conclusión (`conclusionRangoIntercuartilPrestamo`, párrafos 1 y 3) — 6 en total entre
+     las dos operaciones, no solo en la primera. */
+  const aparicionesVinculado = (texto.match(/Inversiones San Jeronimo SpA/g) || []).length;
+  assert.strictEqual(aparicionesVinculado, 6, 'las dos tablas y sus dos Conclusiones deben traer el vinculado real');
+
+  assert.ok(!texto.includes('Texto viejo párrafo'), 'las dos Conclusiones deben quedar sustituidas');
+  const aparicionesConclusion = (texto.match(/por debajo del rango intercuartil/g) || []).length;
+  assert.strictEqual(aparicionesConclusion, 2, 'las dos Conclusiones deben redactarse');
+
+  assert.ok(texto.includes('INFORMACIÓN GENERAL'), 'el contenido entre las dos operaciones no se toca');
+  assert.ok(texto.includes('Descripción de la Compañía Colombiana'));
+  assert.ok(texto.includes('Fin del documento.'), 'lo que sigue después de la segunda Conclusión no se pierde');
+});
