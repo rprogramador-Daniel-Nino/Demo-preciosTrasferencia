@@ -47,6 +47,28 @@ function escaparXml(s) {
    es el 100 % de la caja de texto, sea cual sea el margen de la plantilla del cliente. */
 const ANCHO_TABLA_PCT = 5000;
 
+/* Segundo intento de ancla para Transacciones Intercompañías, entre la ficha genérica y
+   «Préstamo con su vinculado». Reportado el 2026-10-08 contra un informe real: sin esta
+   ancla intermedia, una plantilla que SÍ trae «Operaciones a analizar» (y «Otras Operaciones
+   – Información Adicional» justo antes) pero no trae la ficha genérica caía directo a anclar
+   junto a «Préstamo con su vinculado» —el primer ancla disponible—, insertando Transacciones
+   Intercompañía ANTES de esas dos tablas y numerándola «Tabla 2», chocando con la Tabla 2 real
+   del documento. El usuario la necesita DESPUÉS de «Operaciones a analizar» (Tabla 4, con
+   Préstamo=1, Otras Operaciones=2, Operaciones a analizar=3). «Operación analizar» (singular)
+   es el nombre genérico que ya busca `actualizarTablasOperacionesOoxml`
+   (`docxRelleno.js`, ítem 2); «Operaciones a analizar» es como la rotula el informe real —se
+   buscan las dos formas, nunca se le pide a esa función genérica que cambie su propio nombre. */
+const NOMBRES_TABLA_OPERACIONES_ANALIZAR = ['Operación analizar', 'Operaciones a analizar'];
+
+/* «Otras Operaciones – Información Adicional» (Tabla 2 del informe real) rotula su propia
+   columna «Concepto de Operaciones a analizar» (`tablasOperaciones.js`, la ficha de
+   `filasOperacionAdicionalFicha`), que CONTIENE el nombre de arriba como subcadena. Sin
+   excluirla, el ancla caía en esa columna —que viene ANTES de la Tabla 3 real— y
+   Transacciones Intercompañía se insertaba entre la Tabla 2 y la Tabla 3 en vez de después
+   de las dos. Mismo criterio de exclusión que ya usa este archivo para «Transacciones
+   Intercompañías» frente a la ficha genérica (ver la cabecera del archivo). */
+const EXCLUIR_PARA_ANCLA_OPERACIONES_ANALIZAR = ['Concepto de Operaciones a analizar'];
+
 /* NO hace falta excluir nada al buscar la Tabla 4/13 POR SU PROPIO NOMBRE: el título de la
    Tabla 4, "Transacciones Intercompañías" (plural), es más largo que cualquier nombre ya
    registrado y los contiene a ellos —nunca al revés—, así que buscar por el nombre largo no
@@ -243,13 +265,20 @@ export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
     return { cursor: cursor + ooxml.length, numero };
   };
 
-  // 1. Transacciones Intercompañías: misma cadena de anclas que siempre.
+  // 1. Transacciones Intercompañías: ficha genérica → «Operaciones a analizar» → «Préstamo
+  //    con su vinculado» → final del documento.
   let anclaT = localizarBloqueTabla(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
   let descT = 'junto a «Transacciones Inter compañía»';
   if (!anclaT) {
+    anclaT = localizarBloqueTabla(out, NOMBRES_TABLA_OPERACIONES_ANALIZAR,
+      { excluir: EXCLUIR_PARA_ANCLA_OPERACIONES_ANALIZAR });
+    descT = 'después de «Operaciones a analizar», porque la plantilla no trae '
+      + '«Transacciones Inter compañía»';
+  }
+  if (!anclaT) {
     anclaT = localizarBloqueTabla(out, NOMBRES_TABLA_PRESTAMO);
     descT = 'junto a «Préstamo con su vinculado», porque la plantilla no trae '
-      + '«Transacciones Inter compañía»: revise la ubicación';
+      + '«Transacciones Inter compañía» ni «Operaciones a analizar»: revise la ubicación';
   }
   let cursorT;
   let numeroT;
@@ -259,9 +288,9 @@ export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
   } else {
     cursorT = finDelCuerpoOoxml(out);
     numeroT = null;
-    descT = 'al final del documento, porque la plantilla no trae ni '
-      + '«Transacciones Inter compañía» ni «Préstamo con su vinculado»: revise la ubicación '
-      + 'antes de radicar';
+    descT = 'al final del documento, porque la plantilla no trae ninguna de «Transacciones '
+      + 'Inter compañía», «Operaciones a analizar» ni «Préstamo con su vinculado»: revise la '
+      + 'ubicación antes de radicar';
   }
   const { cursor: cursorTrasTransacciones, numero: numeroTrasTransacciones } =
     insertarEn(cursorT, filasTablaTransaccionesPrestamos(estudio), numeroT, descT);

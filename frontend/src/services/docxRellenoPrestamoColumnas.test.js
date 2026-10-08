@@ -183,6 +183,45 @@ test('insertarTablasPrestamoColumnasOoxml: el Histórico de la deuda se ancla en
     + 'entre «Criterios de vinculación económica» y «Activos a 31 de diciembre»')));
 });
 
+test('insertarTablasPrestamoColumnasOoxml: Transacciones Intercompañías se ancla después de '
+  + '«Operaciones a analizar», no justo después de «Préstamo con su vinculado»', () => {
+  /* Reproduce exactamente el documento real que reportó el usuario el 2026-10-08
+     (Informe_Local_PT_AUTOLAND S.A.S._2025 (4).docx): la plantilla no trae «Transacciones
+     Inter compañía» (la ficha genérica), pero SÍ trae, en este orden, «Préstamo con su
+     vinculado» (Tabla 1), «Otras Operaciones – Información Adicional» (Tabla 2) y
+     «Operaciones a analizar» (Tabla 3). El código anterior caía directo al segundo ancla de
+     la cadena («Préstamo con su vinculado») e insertaba Transacciones Intercompañías justo
+     ahí, como «Tabla 2» — chocando con la Tabla 2 real del documento y dejando Transacciones
+     ANTES de donde el usuario la necesita (después de Operaciones a analizar, como Tabla 4). */
+  const xml =
+    '<w:p><w:t>Tabla 1. Préstamo con su vinculado</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>x</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>FUENTE: de la Fase 2.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 2. Otras Operaciones – Información Adicional</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>Concepto de Operaciones a analizar</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Las anteriores operaciones fueron realizadas con Intercompañías.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 3. Operaciones a analizar</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>No. Operaciones de análisis</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>Prosa que sigue a Operaciones a analizar.</w:t></w:p>';
+  const avisos = [];
+  const salida = insertarTablasPrestamoColumnasOoxml(xml, ESTUDIO_PRESTAMO, avisos);
+
+  const iTabla1 = salida.indexOf('Préstamo con su vinculado');
+  const iTabla2 = salida.indexOf('Otras Operaciones');
+  const iTabla3 = salida.indexOf('Tabla 3. Operaciones a analizar');
+  const iProsa = salida.indexOf('Prosa que sigue a Operaciones a analizar.');
+  const iTransacciones = salida.indexOf('Transacciones Intercompañías');
+
+  assert.ok(iTabla1 > -1 && iTabla2 > -1 && iTabla3 > -1 && iTransacciones > -1,
+    'las cuatro tablas deben existir en el resultado');
+  assert.ok(iTabla1 < iTabla2 && iTabla2 < iTabla3 && iTabla3 < iProsa,
+    'Préstamo con su vinculado, Otras Operaciones y Operaciones a analizar no se mueven de su sitio');
+  assert.ok(iTransacciones < iProsa,
+    'Transacciones Intercompañías se inserta junto a Operaciones a analizar, empujando hacia '
+    + 'abajo la prosa que la plantilla traía después');
+  assert.match(salida, /Tabla 4\. Transacciones Intercompañías/, 'numerada como Tabla 4, no Tabla 2');
+});
+
 test('insertarTablasPrestamoColumnasOoxml: avisa si el estudio mezcla más de un vinculado', () => {
   const xml =
     '<w:p><w:t>Tabla 3. Transacciones Inter compañía</w:t></w:p>'
