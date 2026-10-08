@@ -201,61 +201,88 @@ function finDelCuerpoOoxml(xml) {
 }
 
 /**
- * Inserta la Tabla 4 y la Tabla 13 con los datos frescos del estudio. Sin `estudio.prestamos`
- * no hace nada: ya se quitaron las que hubiera, y no hay nada que insertar.
+ * Inserta la Tabla 4 (Transacciones Intercompañías) y la Tabla 13 (Histórico de la deuda) con
+ * los datos frescos del estudio. Sin `estudio.prestamos` no hace nada: ya se quitaron las que
+ * hubiera, y no hay nada que insertar.
  *
- * Regla confirmada con el usuario: estas dos tablas se crean SIEMPRE que el estudio es de
- * tipo préstamo, nunca se degrada a un simple aviso de "no encontrada" como sí le pasa a la
- * tabla de la Fase 2 cuando falta su ancla. Por eso la búsqueda de dónde anclarlas es una
- * cadena de tres intentos, de más a menos ideal:
- *   1. junto a la ficha "Transacciones Inter compañía" (el lugar natural, el mismo que usa
- *      la Fase 2) — el caso normal.
- *   2. junto a "Préstamo con su vinculado" (Fase 2): no todas las plantillas traen la ficha
- *      genérica, pero un estudio de tipo préstamo que ya pasó por el informe suele traer esa.
- *   3. al final del cuerpo del documento, si ninguna de las dos anclas existe — un informe
- *      armado a mano puede no traer ninguna. Se avisa para que se revise la ubicación antes
- *      de radicar, pero la tabla SALE con los datos del estudio; nunca se queda sin crear.
+ * Regla confirmada con el usuario: estas dos tablas se crean SIEMPRE que el estudio es de tipo
+ * préstamo, nunca se degradan a un simple aviso de "no encontrada" como sí le pasa a la tabla
+ * de la Fase 2 cuando falta su ancla. Lo que SÍ cambió (reportado el 2026-10-08, contra el
+ * informe real de referencia): las dos tablas NO van juntas. Cada una tiene su propio lugar:
+ *
+ *   - Transacciones Intercompañías va junto al resumen de la operación, con la misma cadena de
+ *     anclas de siempre: 1) la ficha "Transacciones Inter compañía", 2) "Préstamo con su
+ *     vinculado" (Fase 2) si la plantilla no trae la ficha, 3) al final del documento si no
+ *     existe ninguna de las dos.
+ *   - Histórico de la deuda va MÁS ADELANTE, entre "Criterios de vinculación económica" y
+ *     "Activos a 31 de diciembre" — el lugar exacto del informe real (Tabla 12 → Tabla 13 →
+ *     Tabla 14) —, y solo si la plantilla no trae "Criterios de vinculación económica" cae de
+ *     vuelta a anclarse junto a donde haya quedado Transacciones Intercompañía, para seguir
+ *     garantizando que nunca se queda sin crear.
+ *
+ * Cada ancla se busca sobre el XML ya actualizado por el paso anterior (nunca sobre offsets
+ * calculados antes de insertar), así que una tabla que se inserta más arriba en el documento no
+ * desactualiza la posición de la que viene después.
  */
 export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
   let out = String(xml || '');
   if (!tienePrestamos(estudio)) return out;
 
-  let ancla = localizarBloqueTabla(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
-  let descripcionAncla = 'junto a «Transacciones Inter compañía»';
-  if (!ancla) {
-    ancla = localizarBloqueTabla(out, NOMBRES_TABLA_PRESTAMO);
-    descripcionAncla = 'junto a «Préstamo con su vinculado», porque la plantilla no trae '
+  /* Inserta `tabla` en `cursor`, numerada a partir de `numeroAncla` (la tabla que la precede),
+     y devuelve dónde quedó el cursor y qué número usó — lo que la siguiente tabla necesita
+     para numerarse en cadena si le toca caer en el mismo sitio (respaldo de Histórico cuando
+     no hay «Criterios de vinculación»). */
+  const insertarEn = (cursor, tabla, numeroAncla, descripcion) => {
+    if (!tabla) return { cursor, numero: numeroAncla };
+    if (tabla.avisoVinculados && Array.isArray(avisos)) avisos.push(tabla.avisoVinculados);
+    const numero = numeroAncla != null ? numeroAncla + 1 : null;
+    const titulo = numero != null ? 'Tabla ' + numero + '. ' + tabla.nombre : tabla.nombre;
+    const ooxml = generarTablaOoxmlPorColumnas(titulo, tabla);
+    out = out.slice(0, cursor) + ooxml + out.slice(cursor);
+    if (Array.isArray(avisos)) avisos.push('se insertó la tabla «' + tabla.nombre + '» ' + descripcion + '.');
+    return { cursor: cursor + ooxml.length, numero };
+  };
+
+  // 1. Transacciones Intercompañías: misma cadena de anclas que siempre.
+  let anclaT = localizarBloqueTabla(out, NOMBRES_TABLA_TRANSACCIONES, { excluir: EXCLUIR_PARA_ANCLA });
+  let descT = 'junto a «Transacciones Inter compañía»';
+  if (!anclaT) {
+    anclaT = localizarBloqueTabla(out, NOMBRES_TABLA_PRESTAMO);
+    descT = 'junto a «Préstamo con su vinculado», porque la plantilla no trae '
       + '«Transacciones Inter compañía»: revise la ubicación';
   }
-
-  let cursor;
-  let numero;
-  if (ancla) {
-    cursor = finDeFuenteTrasPosicion(out, ancla.fin);
-    numero = ancla.numero != null ? ancla.numero : null;
+  let cursorT;
+  let numeroT;
+  if (anclaT) {
+    cursorT = finDeFuenteTrasPosicion(out, anclaT.fin);
+    numeroT = anclaT.numero != null ? anclaT.numero : null;
   } else {
-    cursor = finDelCuerpoOoxml(out);
-    numero = null;
-    descripcionAncla = 'al final del documento, porque la plantilla no trae ni '
+    cursorT = finDelCuerpoOoxml(out);
+    numeroT = null;
+    descT = 'al final del documento, porque la plantilla no trae ni '
       + '«Transacciones Inter compañía» ni «Préstamo con su vinculado»: revise la ubicación '
       + 'antes de radicar';
   }
+  const { cursor: cursorTrasTransacciones, numero: numeroTrasTransacciones } =
+    insertarEn(cursorT, filasTablaTransaccionesPrestamos(estudio), numeroT, descT);
 
-  [
-    { nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS, tabla: filasTablaTransaccionesPrestamos(estudio) },
-    { nombre: NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS, tabla: filasTablaHistoricoDeudaPrestamos(estudio) },
-  ].forEach(({ nombre, tabla }) => {
-    if (!tabla) return;
-    if (tabla.avisoVinculados && Array.isArray(avisos)) avisos.push(tabla.avisoVinculados);
-    if (numero != null) numero += 1;
-    const titulo = numero != null ? 'Tabla ' + numero + '. ' + nombre : nombre;
-    const ooxml = generarTablaOoxmlPorColumnas(titulo, tabla);
-    out = out.slice(0, cursor) + ooxml + out.slice(cursor);
-    cursor += ooxml.length;
-    if (Array.isArray(avisos)) {
-      avisos.push('se insertó la tabla «' + nombre + '» ' + descripcionAncla + '.');
-    }
-  });
+  // 2. Histórico de la deuda: entre «Criterios de vinculación económica» y «Activos a 31 de
+  //    diciembre». Se busca sobre `out` YA actualizado por el paso 1.
+  const anclaH = localizarBloqueTabla(out, ['Criterios de vinculación']);
+  let cursorH;
+  let numeroH;
+  let descH;
+  if (anclaH) {
+    cursorH = finDeFuenteTrasPosicion(out, anclaH.fin);
+    numeroH = anclaH.numero != null ? anclaH.numero : null;
+    descH = 'entre «Criterios de vinculación económica» y «Activos a 31 de diciembre»';
+  } else {
+    cursorH = cursorTrasTransacciones;
+    numeroH = numeroTrasTransacciones;
+    descH = 'junto a «Transacciones Intercompañías», porque la plantilla no trae '
+      + '«Criterios de vinculación económica»: revise la ubicación';
+  }
+  insertarEn(cursorH, filasTablaHistoricoDeudaPrestamos(estudio), numeroH, descH);
 
   return out;
 }

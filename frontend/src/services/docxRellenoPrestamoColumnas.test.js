@@ -144,6 +144,45 @@ test('insertarTablasPrestamoColumnasOoxml: sin ninguna ancla, igual crea las tab
   assert.ok(avisos.some((a) => a.includes('revise la ubicación antes de radicar')));
 });
 
+test('insertarTablasPrestamoColumnasOoxml: el Histórico de la deuda se ancla entre «Criterios de '
+  + 'vinculación económica» y «Activos a 31 de diciembre», no junto a Transacciones Intercompañía', () => {
+  /* El orden real del informe de referencia (Autoland 2025): Tabla 4 (Transacciones
+     Intercompañía) va cerca del resumen ejecutivo, muy lejos de la Tabla 13 (Histórico de la
+     deuda), que va entre la Tabla 12 (Criterios de vinculación económica) y la Tabla 14
+     (Activos a 31 de diciembre) — reportado el 2026-10-08: el código anterior insertaba las
+     dos tablas juntas, pegadas a Transacciones, y la de Histórico nunca aparecía donde el
+     usuario la necesitaba. */
+  const xml =
+    '<w:p><w:t>Tabla 3. Transacciones Inter compañía</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>Razón social</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>FUENTE: de la ficha.</w:t></w:p>'
+    + '<w:p><w:t>Mucho contenido intermedio: info general, EEFF, notas, vinculación económica.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 12. Criterios de vinculación económica</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>Nombre Vinculada</w:t></w:p></w:tc></w:tr></w:tbl>'
+    + '<w:p><w:t>FUENTE: de criterios.</w:t></w:p>'
+    + '<w:p><w:t>Contratos de Créditos: narrativa propia del cliente sobre el préstamo.</w:t></w:p>'
+    + '<w:p><w:t>Tabla 14. Activos a 31 de diciembre de 2025</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>Efectivo</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const avisos = [];
+  const salida = insertarTablasPrestamoColumnasOoxml(xml, ESTUDIO_PRESTAMO, avisos);
+
+  const iTabla4 = salida.indexOf('Transacciones Intercompañías');
+  const iCriterios = salida.indexOf('Criterios de vinculación económica');
+  const iFuenteCriterios = salida.indexOf('FUENTE: de criterios.');
+  const iHistorico = salida.indexOf('Histórico de la deuda intereses sobre Préstamos (42)');
+  const iContratos = salida.indexOf('Contratos de Créditos');
+  const iActivos = salida.indexOf('Tabla 14. Activos a 31 de diciembre de 2025');
+
+  assert.ok(iTabla4 > -1 && iCriterios > -1 && iHistorico > -1 && iActivos > -1,
+    'las cuatro tablas/anclas deben existir en el resultado');
+  assert.ok(iTabla4 < iCriterios, 'Transacciones sigue cerca de su propia ancla, no se movió');
+  assert.ok(iFuenteCriterios < iHistorico, 'Histórico va DESPUÉS de la fuente de Criterios de vinculación');
+  assert.ok(iHistorico < iContratos, 'Histórico va ANTES de la narrativa de Contratos de Créditos');
+  assert.ok(iHistorico < iActivos, 'Histórico va ANTES de Activos a 31 de diciembre');
+  assert.ok(avisos.some((a) => a.includes('«Histórico de la deuda intereses sobre Préstamos (42)» '
+    + 'entre «Criterios de vinculación económica» y «Activos a 31 de diciembre»')));
+});
+
 test('insertarTablasPrestamoColumnasOoxml: avisa si el estudio mezcla más de un vinculado', () => {
   const xml =
     '<w:p><w:t>Tabla 3. Transacciones Inter compañía</w:t></w:p>'
