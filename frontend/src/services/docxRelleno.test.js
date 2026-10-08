@@ -4985,6 +4985,25 @@ test('préstamo: rellenarDocx no rearma los ANEXOS B y C (descripciones y matriz
     estudio: { ...ESTUDIO_PRESTAMO_DOCX, comparables: [{ name: 'Alpha SA' }] },
     tipoSalida: 'nodebuffer',
   });
-  assert.ok(!avisosTablas.some((a) => /ANEXO B/.test(a)), 'no debe tocar el ANEXO B: un préstamo no tiene comparables');
+  assert.ok(!avisosTablas.some((a) => /ANEXO B|Descripciones de comparables/.test(a)),
+    'no debe tocar el ANEXO B: un préstamo no tiene comparables');
   assert.ok(!avisosTablas.some((a) => /Matriz de Rechazo/.test(a)), 'ni el ANEXO C');
+});
+
+test('préstamo: tampoco avisa del ANEXO B si el estudio arrastra `comparables` de un uso previo como '
+  + 'estudio estándar (reportado el 2026-10-08: el estudio real sí traía datos viejos)', async () => {
+  const buf = await plantilla([parrafo('Informe de {ent}')]);
+  const { avisosTablas } = rellenarDocx({
+    binario: buf,
+    /* Dato residual real: el usuario convirtió un estudio ya probado como estándar a
+       `tipo_estudio: 'prestamo'`, y `comparables` se quedó con las de esa corrida anterior.
+       El ANEXO B no debe intentar describirlas sin importar qué haya quedado en el campo. */
+    estudio: {
+      ...ESTUDIO_PRESTAMO_DOCX,
+      comparables: [{ name: 'Alpha SA', eeffArchivo: 'alpha.pdf' }, { name: 'Beta Ltd' }],
+    },
+    tipoSalida: 'nodebuffer',
+  });
+  assert.ok(!avisosTablas.some((a) => /ANEXO B|Descripciones de comparables/.test(a)),
+    'el tipo de estudio manda sobre lo que haya quedado en `comparables`');
 });

@@ -4275,18 +4275,23 @@ export function rellenarDocx({
     imagenes: insertadas > 0 ? [] : imagenesAnexo,
     avisos: avisosTablas,
   });
-  const { insertadas: insertadasB } = insertarImagenesAnexoB(zip, estudio, avisosTablas);
+  /* Un estudio de préstamo no tiene comparables que describir (ANEXO B) ni una matriz de
+     rechazo que rearmar (ANEXO C: qué empresa del universo quedó en cada motivo de
+     descarte) — el método PC no cribó ningún universo. `insertarImagenesAnexoB` ya se
+     omite sola cuando `estudio.comparables` viene vacío, pero un estudio real puede
+     arrastrar un `comparables` NO vacío de un uso anterior como estudio estándar (se
+     prueba, se cambia `tipo_estudio` a préstamo, y el campo se queda con lo viejo) —
+     reportado el 2026-10-08: avisar "no se pudo rearmar" sobre un anexo que no aplica es
+     ruido, así que el tipo de estudio manda sobre lo que haya quedado en `comparables`,
+     sin tocar nada de lo que hace esta función para cualquier otro tipo de estudio. */
+  const insertadasB = estudio.tipo_estudio === 'prestamo'
+    ? 0
+    : insertarImagenesAnexoB(zip, estudio, avisosTablas).insertadas;
 
   /* Después del anexo de descripciones: los anexos se delimitan unos con otros, así que
      reescribir la matriz antes le movería el corte. Su aviso viaja con los de las tablas
      —es el mismo canal que ya publica el generador— para que un anexo sin rehacer no pase
-     inadvertido.
-
-     Un estudio de préstamo no tiene comparables que describir (ANEXO B, ya lo omite
-     `insertarImagenesAnexoB` sin comparables) ni una matriz de rechazo que rearmar (ANEXO C:
-     qué empresa del universo quedó en cada motivo de descarte) — el método PC no cribó
-     ningún universo. Avisar "no se pudo rearmar" sobre un anexo que no aplica es ruido
-     (reportado el 2026-10-08), así que se omite entera para préstamo. */
+     inadvertido. */
   if (estudio.tipo_estudio !== 'prestamo') {
     const anexoC = insertarAnexoC(zip, estudio);
     if (anexoC.aviso) avisosTablas.push(anexoC.aviso);
