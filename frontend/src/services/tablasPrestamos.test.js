@@ -71,13 +71,15 @@ test('filasPrestamoConVinculado con varios vinculados usa el de la primera fila 
   assert.strictEqual(t.filas.length, 2);
 });
 
-test('filasPrestamoConVinculado muestra "—" para fecha o montos ausentes', () => {
+test('filasPrestamoConVinculado muestra "—" para fecha o montos ausentes, salvo el Valor en COP real', () => {
+  /* El Valor en COP sí tiene que ser real (ver el bloque de arriba): con él presente, los
+     demás campos ausentes siguen mostrando "—" como siempre. */
   const estudio = {
     tipo_estudio: 'prestamo', ent: 'Autoland SAS',
-    prestamos: [{ otorga: 'Vinc SAS', recibe: 'Autoland SAS', fechaPacto: null, valorDesembolsoMoneda: null, moneda: '', valorCOPDesembolso: undefined, tasaEA: '' }],
+    prestamos: [{ otorga: 'Vinc SAS', recibe: 'Autoland SAS', fechaPacto: null, valorDesembolsoMoneda: null, moneda: '', valorCOPDesembolso: 500000, tasaEA: '' }],
   };
   const t = filasPrestamoConVinculado(estudio);
-  assert.deepStrictEqual(t.filas[0], ['—', '—', '—', '—', '—']);
+  assert.deepStrictEqual(t.filas[0], ['—', '—', '—', '500.000', '—']);
 });
 
 /* ══════ Tabla 11. Vinculado económica — mismo criterio otorga/recibe que la Tabla 1,
@@ -118,4 +120,34 @@ test('filasVinculadoEconomicoPrestamo sin país ni identificación muestra "—"
 
 test('filasVinculadoEconomicoPrestamo: null sin estudio.prestamos', () => {
   assert.strictEqual(filasVinculadoEconomicoPrestamo({ tipo_estudio: 'prestamo' }), null);
+});
+
+/* ── Tabla 1. Préstamo con su vinculado: sin Valor en COP, no se indexa ──
+   Pedido el 2026-10-10: un abono a capital o un movimiento sin desembolso real llega del
+   Excel con `valorCOPDesembolso` en 0 o ausente (visto en un informe real: dos filas con
+   monto negativo y "0" de COP). Esa fila no es un préstamo nuevo que declarar en la Tabla
+   1, así que no debe aparecer ahí —ni como fila con guiones—, aunque sí siga existiendo en
+   `estudio.prestamos` para lo que otras tablas necesiten de ella. */
+
+test('filasPrestamoConVinculado excluye los préstamos sin Valor en COP en la fecha de desembolso', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS',
+    prestamos: [
+      PRESTAMOS_AUTOLAND[0],
+      { ...PRESTAMOS_AUTOLAND[1], valorCOPDesembolso: 0 },
+      { ...PRESTAMOS_AUTOLAND[2], valorCOPDesembolso: null },
+      { ...PRESTAMOS_AUTOLAND[3], valorCOPDesembolso: undefined },
+    ],
+  };
+  const t = filasPrestamoConVinculado(estudio);
+  assert.strictEqual(t.filas.length, 1, 'solo el préstamo con un Valor en COP real queda en la tabla');
+  assert.strictEqual(t.filas[0][3], '10.431.000.000');
+});
+
+test('filasPrestamoConVinculado: null si NINGÚN préstamo trae Valor en COP (nada que indexar)', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS',
+    prestamos: [{ ...PRESTAMOS_AUTOLAND[0], valorCOPDesembolso: 0 }],
+  };
+  assert.strictEqual(filasPrestamoConVinculado(estudio), null);
 });

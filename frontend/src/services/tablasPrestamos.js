@@ -65,8 +65,15 @@ export function filasVinculadoEconomicoPrestamo(estudio) {
 export function filasPrestamoConVinculado(estudio) {
   if (!tienePrestamos(estudio)) return null;
   const e = estudio;
-  const vinculado = vinculadoDePrestamo(e.prestamos[0], e.ent);
-  const moneda = e.prestamos[0].moneda || 'moneda pactada';
+  /* Sin un Valor en COP real en la fecha de desembolso, la fila no es un préstamo nuevo que
+     declarar aquí: un abono a capital o un movimiento sin desembolso real llega del Excel
+     con `valorCOPDesembolso` en 0 o ausente (visto en un informe real: dos filas con monto
+     negativo y "0" de COP) — pedido el 2026-10-10. Se excluye de ESTA tabla nada más; el
+     préstamo sigue existiendo en `estudio.prestamos` para lo que otras tablas necesiten. */
+  const prestamosConDesembolso = e.prestamos.filter((p) => num(p.valorCOPDesembolso) > 0);
+  if (!prestamosConDesembolso.length) return null;
+  const vinculado = vinculadoDePrestamo(prestamosConDesembolso[0], e.ent);
+  const moneda = prestamosConDesembolso[0].moneda || 'moneda pactada';
   return {
     nombre: 'Préstamo con su vinculado',
     vinculado,
@@ -77,7 +84,7 @@ export function filasPrestamoConVinculado(estudio) {
       'Valor en COP en la fecha de desembolso',
       'E. A',
     ],
-    filas: e.prestamos.map((p) => [
+    filas: prestamosConDesembolso.map((p) => [
       fechaTexto(p.fechaPacto),
       montoTexto(p.valorDesembolsoMoneda),
       p.moneda || '—',
