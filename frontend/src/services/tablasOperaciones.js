@@ -18,8 +18,9 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { fmt, num, getUvtValue } from '../utils/calculations.js';
-import { codigoDeTipoOperacion } from './tiposOperacionDian.js';
+import { codigoDeTipoOperacion, conceptoPrestamoPorClase } from './tiposOperacionDian.js';
 import { sinNingunDato } from './datosDeTabla.js';
+import { tienePrestamos } from './tablasPrestamos.js';
 
 const FUENTE = 'Información suministrada por la Administración de la Compañía.';
 const SIN_DATO = '—';
@@ -45,6 +46,18 @@ const montoTexto = (v) => {
  * @returns {{desc: string|null, cod: string|null}}
  */
 export function conceptoDeOperacion(estudio) {
+  if (estudio && estudio.tipo_estudio === 'prestamo') {
+    /* Monotemático por diseño: un estudio de préstamo analiza "Intereses sobre préstamos"
+       (42 egreso / 13 ingreso) y nada más — mismo criterio que ya usa `tipoOperacionPrestamo`
+       y el método "PC" fijo de `filasMetodoAplicablePrestamo`. Se ignora `vinc_tipo` a
+       propósito: el bug confirmado (capturas de un informe real) era justamente que ese
+       texto libre venía abreviado ("INTERESES") o con la redacción cruda del Excel
+       ("INTERESES (42)") en vez del nombre DIAN exacto. */
+    const clase = estudio.egreso === false ? 'ingreso' : 'egreso';
+    const delCatalogo = conceptoPrestamoPorClase(clase);
+    if (delCatalogo) return { desc: delCatalogo.nombre, cod: String(delCatalogo.cod).padStart(2, '0') };
+  }
+
   const texto = String((estudio && estudio.vinc_tipo) || '').trim();
   if (!texto) return { desc: null, cod: null };
 
@@ -65,6 +78,19 @@ function montoDeLaOperacion(estudio) {
   return n === null ? SIN_DATO : fmt(n);
 }
 
+/** La suma de intereses de todos los préstamos del estudio, en COP, o `null` si NINGUNO
+ *  trae `interesesCOP` (préstamo recién cargado, antes de completar esa fase) — un `|| 0`
+ *  silencioso aquí publicaría "0" y, peor, marcaría la tabla como "con datos" para
+ *  `sinNingunDato`, pisando la de la plantilla sin necesidad. Misma cifra, de la misma
+ *  fuente, que ya usa fila a fila «Transacciones Intercompañías»
+ *  (`tablasPrestamoColumnas.js`) — no `monto_operacion`/`monto`, un campo de la ingesta
+ *  genérica de OPERACIONES que puede quedar desconectado del total real de intereses. */
+function montoInteresesPrestamos(estudio) {
+  const valores = estudio.prestamos.map((p) => num(p.interesesCOP));
+  if (valores.every((v) => v === null)) return null;
+  return valores.reduce((acc, v) => acc + (v || 0), 0);
+}
+
 /**
  * Tabla 1 — «Operaciones de Ingreso» (o de Egreso), tal como la declara el estudio.
  *
@@ -76,17 +102,35 @@ function montoDeLaOperacion(estudio) {
  */
 export function filasOperacionesDeIngreso(estudio) {
   const e = estudio || {};
+  const prestamo = tienePrestamos(e);
+
+  /* En préstamo, el concepto es el canónico ("desc (cod)") de `conceptoDeOperacion` —no el
+     texto crudo de `vinc_tipo`— y el monto es la suma de intereses de los préstamos, no
+     `monto_operacion`/`monto`. Confirmado con un informe real: estas dos cifras venían
+     desconectadas entre sí y de lo que ya muestra «Transacciones Intercompañías». */
+  const concepto = (() => {
+    if (!prestamo) return wrap(e.vinc_tipo);
+    const { desc, cod } = conceptoDeOperacion(e);
+    return desc && cod ? desc + ' (' + cod + ')' : wrap(e.vinc_tipo);
+  })();
+  const montoPrestamo = prestamo ? montoInteresesPrestamos(e) : null;
+  const monto = prestamo ? montoTexto(montoPrestamo) : montoDeLaOperacion(e);
+
   return {
     nombre: 'Operaciones de ' + (e.egreso ? 'Egreso' : 'Ingreso'),
     encabezados: [
       'Concepto de Operaciones a analizar', 'Nombre vinculado', 'País vinculado',
       'Monto de la Operación analizar',
     ],
-    filas: [[wrap(e.vinc_tipo), wrap(e.vinc), wrap(e.pais_vinc), montoDeLaOperacion(e)]],
+    filas: [[concepto, wrap(e.vinc), wrap(e.pais_vinc), monto]],
     fuente: FUENTE,
     /* Los cuatro campos que publica, en crudo: sin ninguno de ellos la única fila sale
-       «— — — —» y quien la emite conserva la de la plantilla. */
-    sinDatos: sinNingunDato([e.vinc_tipo, e.vinc, e.pais_vinc, e.monto_operacion ?? e.monto]),
+       «— — — —» y quien la emite conserva la de la plantilla. En préstamo, el concepto
+       siempre resuelve (igual que el método "PC" fijo de `filasMetodoAplicablePrestamo`),
+       así que no cuenta como dato — lo que decide es el vinculado y el monto. */
+    sinDatos: prestamo
+      ? sinNingunDato([e.vinc, e.pais_vinc, montoPrestamo])
+      : sinNingunDato([e.vinc_tipo, e.vinc, e.pais_vinc, e.monto_operacion ?? e.monto]),
   };
 }
 
@@ -121,6 +165,14 @@ export function filasOperacionAnalizar(estudio) {
  */
 export function filasTransaccionesIntercompania(estudio) {
   const e = estudio || {};
+  const prestamo = tienePrestamos(e);
+  /* Mismo criterio que la Tabla 1: en préstamo, el tipo de operación es el concepto
+     canónico del catálogo (solo la descripción, sin código: esta ficha no muestra código)
+     y el monto es la suma de intereses de los préstamos, no `monto_operacion`/`monto`. */
+  const tipoOperacionValor = prestamo ? conceptoDeOperacion(e).desc : wrap(e.vinc_tipo);
+  const montoPrestamo = prestamo ? montoInteresesPrestamos(e) : null;
+  const montoValor = prestamo ? montoTexto(montoPrestamo) : montoDeLaOperacion(e);
+
   return {
     nombre: 'Transacciones Inter compañía',
     encabezados: ['Compañía vinculada', ''],
@@ -131,16 +183,16 @@ export function filasTransaccionesIntercompania(estudio) {
       /* El inciso es el del caso más común y el estudio puede corregirlo. No es un dato
          que se pueda dejar en blanco: la vinculación hay que sustentarla. */
       ['Tipo de vinculación', wrap(e.tipo_vinculacion || 'Art 260-1 E-T Inciso 1')],
-      ['Tipo de operaciones (' + (e.egreso ? 'Egreso' : 'Ingreso') + ')', wrap(e.vinc_tipo)],
-      ['Monto en pesos', montoDeLaOperacion(e)],
+      ['Tipo de operaciones (' + (e.egreso ? 'Egreso' : 'Ingreso') + ')', wrap(tipoOperacionValor)],
+      ['Monto en pesos', montoValor],
     ],
     fuente: 'Información de ' + (e.ent || 'la Compañía') + '.',
     /* Ficha vertical: la primera columna son los rótulos que pone esta función y el
        inciso de vinculación tiene valor por defecto, así que ninguno de los dos cuenta
        como dato. Lo que decide son los campos del vinculado. */
-    sinDatos: sinNingunDato([
-      e.vinc, e.vinc_id, e.pais_vinc, e.vinc_tipo, e.monto_operacion ?? e.monto,
-    ]),
+    sinDatos: prestamo
+      ? sinNingunDato([e.vinc, e.vinc_id, e.pais_vinc, montoPrestamo])
+      : sinNingunDato([e.vinc, e.vinc_id, e.pais_vinc, e.vinc_tipo, e.monto_operacion ?? e.monto]),
   };
 }
 

@@ -127,3 +127,21 @@ export function codigoDeTipoOperacion(texto, esEgreso) {
   const cod = POR_CLASE[esEgreso ? 'egreso' : 'ingreso'].get(k);
   return cod === undefined ? null : String(cod).padStart(2, '0');
 }
+
+/** ¿El nombre describe un concepto de "intereses sobre préstamos"? Robusto a variantes de
+ *  acento/mayúscula: cubre tanto el nombre canónico del catálogo como texto libre del Excel
+ *  («Intereses», «INTERESES (42)»). */
+const esConceptoDePrestamo = (nombre) => /pr[eé]stam/i.test(nombre || '') && /inter[eé]s/i.test(nombre || '');
+
+/**
+ * La entrada canónica del catálogo para «Intereses sobre préstamos» en la clase dada.
+ *
+ * Único punto de esta búsqueda: antes vivía duplicada, con el mismo regex, entre
+ * `tablasOperaciones.js` y `tablasPrestamoColumnas.js`.
+ *
+ * @param {'ingreso'|'egreso'} clase
+ * @returns {{cod:number, nombre:string, clase:string}|null}
+ */
+export function conceptoPrestamoPorClase(clase) {
+  return TIPOS_OPERACION_DIAN.find((t) => t.clase === clase && esConceptoDePrestamo(t.nombre)) || null;
+}

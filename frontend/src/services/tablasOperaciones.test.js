@@ -46,6 +46,28 @@ test('sin tipo de operación no hay descripción ni código', () => {
   assert.deepStrictEqual(conceptoDeOperacion({}), { desc: null, cod: null });
 });
 
+test('en un estudio de préstamo, el concepto resuelve siempre al catálogo DIAN, sin importar qué traiga vinc_tipo', () => {
+  assert.deepStrictEqual(
+    conceptoDeOperacion({ tipo_estudio: 'prestamo', vinc_tipo: 'INTERESES (42)' }),
+    { desc: 'Intereses sobre préstamos', cod: '42' }
+  );
+  assert.deepStrictEqual(
+    conceptoDeOperacion({ tipo_estudio: 'prestamo', vinc_tipo: 'INTERESES' }),
+    { desc: 'Intereses sobre préstamos', cod: '42' }
+  );
+  assert.deepStrictEqual(
+    conceptoDeOperacion({ tipo_estudio: 'prestamo' }),
+    { desc: 'Intereses sobre préstamos', cod: '42' }
+  );
+});
+
+test('en préstamo, egreso: false resuelve al código de ingreso (13), no al de egreso (42)', () => {
+  assert.deepStrictEqual(
+    conceptoDeOperacion({ tipo_estudio: 'prestamo', egreso: false }),
+    { desc: 'Intereses sobre préstamos', cod: '13' }
+  );
+});
+
 /* ── Tabla 1. Operaciones de Ingreso ── */
 
 const ESTUDIO = {
@@ -85,6 +107,52 @@ test('el monto se lee también de `monto` cuando `monto_operacion` no está', ()
   assert.strictEqual(t.filas[0][3], '1.140.574');
 });
 
+/* ── Tabla 1, estudios de préstamo ── */
+
+test('en préstamo, el concepto es el canónico del catálogo con su código, no el texto crudo de vinc_tipo', () => {
+  const t = filasOperacionesDeIngreso({
+    tipo_estudio: 'prestamo', vinc_tipo: 'INTERESES (42)',
+    vinc: 'Inversiones San Jeronimo SpA', pais_vinc: 'Chile',
+    prestamos: [{ interesesCOP: 100 }],
+  });
+  assert.strictEqual(t.filas[0][0], 'Intereses sobre préstamos (42)');
+});
+
+test('en préstamo, el monto es la suma de interesesCOP de todos los préstamos, no monto_operacion/monto', () => {
+  const t = filasOperacionesDeIngreso({
+    tipo_estudio: 'prestamo', vinc: 'Inversiones San Jeronimo SpA', pais_vinc: 'Chile',
+    monto_operacion: 4345505548, // el monto viejo y desconectado que reportó el bug real
+    prestamos: [
+      { interesesCOP: 545267665 }, { interesesCOP: 480413482 },
+      { interesesCOP: 312268763 }, { interesesCOP: 1032888986 },
+    ],
+  });
+  assert.strictEqual(t.filas[0][3], '2.370.838.896');
+});
+
+test('en préstamo marcado pero sin prestamos[], cae al comportamiento genérico sin romperse', () => {
+  const t = filasOperacionesDeIngreso({ tipo_estudio: 'prestamo', prestamos: [], monto_operacion: 123 });
+  assert.strictEqual(t.filas[0][3], '123');
+});
+
+test('en préstamo, si ningún préstamo trae interesesCOP el monto sale como hueco y la tabla cuenta como sin datos', () => {
+  /* Caso real: un estudio de préstamo recién creado, con el préstamo ya cargado pero antes
+     de que la Fase de tasas/intereses se complete. Un `|| 0` silencioso aquí publicaría
+     "0" y marcaría la tabla como "con datos", pisando la de la plantilla sin necesidad. */
+  const t = filasOperacionesDeIngreso({
+    tipo_estudio: 'prestamo',
+    prestamos: [{ otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS', valorCOPDesembolso: 10431000000 }],
+  });
+  assert.strictEqual(t.filas[0][3], '—');
+  assert.strictEqual(t.sinDatos, true);
+});
+
+test('un estudio estándar no cambia: sigue usando vinc_tipo crudo y monto_operacion/monto', () => {
+  const t = filasOperacionesDeIngreso(ESTUDIO);
+  assert.strictEqual(t.filas[0][0], 'VENTA SERVICIOS');
+  assert.strictEqual(t.filas[0][3], '3.433.542.684');
+});
+
 /* ── Tabla 2. Operación analizar ── */
 
 test('la operación a analizar declara el tipo con su código', () => {
@@ -92,6 +160,11 @@ test('la operación a analizar declara el tipo con su código', () => {
   assert.strictEqual(t.nombre, 'Operación analizar');
   assert.deepStrictEqual(t.encabezados, ['No. Operaciones de análisis', 'Descripción']);
   assert.deepStrictEqual(t.filas, [['Ingreso (07)', 'Otros servicios']]);
+});
+
+test('en préstamo, declara el concepto canónico aunque vinc_tipo venga abreviado', () => {
+  const t = filasOperacionAnalizar({ tipo_estudio: 'prestamo', egreso: true, vinc_tipo: 'INTERESES (42)' });
+  assert.deepStrictEqual(t.filas, [['Egreso (42)', 'Intereses sobre préstamos']]);
 });
 
 test('sin código resoluble la operación a analizar deja el hueco a la vista', () => {
@@ -146,6 +219,22 @@ test('sin razón social del contribuyente la fuente no nombra a nadie concreto',
   assert.strictEqual(filasTransaccionesIntercompania({}).fuente, 'Información de la Compañía.');
 });
 
+test('en préstamo, el tipo de operación es el concepto canónico del catálogo, no vinc_tipo crudo', () => {
+  const t = filasTransaccionesIntercompania({
+    tipo_estudio: 'prestamo', egreso: true, vinc_tipo: 'INTERESES (42)',
+    vinc: 'Inversiones San Jeronimo SpA', prestamos: [{ interesesCOP: 100 }],
+  });
+  assert.deepStrictEqual(t.filas[4], ['Tipo de operaciones (Egreso)', 'Intereses sobre préstamos']);
+});
+
+test('en préstamo, el monto en pesos es la suma de interesesCOP, no monto_operacion/monto', () => {
+  const t = filasTransaccionesIntercompania({
+    tipo_estudio: 'prestamo', monto_operacion: 4345505548,
+    prestamos: [{ interesesCOP: 545267665 }, { interesesCOP: 480413482 }],
+  });
+  assert.deepStrictEqual(t.filas[5], ['Monto en pesos', '1.025.681.147']);
+});
+
 /* ── Tabla 4. Método de Precios de Transferencia Aplicable ── */
 
 test('el método publica el código y la descripción de la operación', () => {
@@ -183,6 +272,18 @@ test('el método de préstamo publica PC y 3 columnas, sin indicador de rentabil
 test('el método de préstamo no inventa el código cuando no se puede resolver', () => {
   const t = filasMetodoAplicablePrestamo({ vinc_tipo: 'INTERESES' });
   assert.strictEqual(t.filas[0][0], '—');
+  assert.strictEqual(t.filas[0][2], 'PC');
+});
+
+test('con tipo_estudio: prestamo, el método normaliza el concepto al catálogo DIAN aunque vinc_tipo no sea el nombre canónico', () => {
+  const t = filasMetodoAplicablePrestamo({ tipo_estudio: 'prestamo', vinc_tipo: 'Intereses Sobre Préstamos (42)' });
+  assert.deepStrictEqual(t.filas, [['42', 'Intereses sobre préstamos', 'PC']]);
+});
+
+test('con tipo_estudio: prestamo, SÍ resuelve el código aunque vinc_tipo venga abreviado ("no se puede resolver" antes)', () => {
+  const t = filasMetodoAplicablePrestamo({ tipo_estudio: 'prestamo', vinc_tipo: 'INTERESES' });
+  assert.strictEqual(t.filas[0][0], '42');
+  assert.strictEqual(t.filas[0][1], 'Intereses sobre préstamos');
   assert.strictEqual(t.filas[0][2], 'PC');
 });
 

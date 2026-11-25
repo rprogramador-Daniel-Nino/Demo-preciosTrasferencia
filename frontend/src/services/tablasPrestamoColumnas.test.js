@@ -69,6 +69,18 @@ test('filasTablaTransaccionesPrestamos: las filas fusionadas vienen de los campo
   assert.strictEqual(filaDe(t, 'tipoVinculacion').valor, 'Articulo 260-1 E.T – Literal 1');
 });
 
+test('filasTablaTransaccionesPrestamos: la razón social es la del préstamo (otorga/recibe), nunca estudio.vinc', () => {
+  /* Reportado el 2026-11-25: un estudio real de préstamo traía "BRUNO FRITSCH SA" en
+     `estudio.vinc` —el nombre de otro cliente, sobrante de la ingesta genérica de
+     "Operaciones con Vinculados" cuando el archivo trae varias contrapartes distintas—
+     mientras los 6 préstamos reales eran con "Inversiones San Jeronimo SpA". Mismo criterio
+     que ya usa la Fase 2 (`tablasPrestamos.js`, `vinculadoDePrestamo`) y la Tabla 12 de
+     `docxRelleno.js`: para un estudio de préstamo, el vinculado lo dice el préstamo, nunca
+     el campo genérico del motor de márgenes. */
+  const t = filasTablaTransaccionesPrestamos({ ...ESTUDIO_PRESTAMO, vinc: 'BRUNO FRITSCH SA' });
+  assert.strictEqual(filaDe(t, 'razonSocial').valor, 'Inversiones San Jeronimo SpA');
+});
+
 test('filasTablaTransaccionesPrestamos: "Monto en Principal" es valorCOPDesembolso, no saldoCOP', () => {
   /* Confirmado cifra a cifra contra el documento real de Autoland y contra la prueba ya
      existente de la Fase 2 (tablasPrestamos.test.js): son los mismos cuatro montos. */

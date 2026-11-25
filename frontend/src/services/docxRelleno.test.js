@@ -4837,7 +4837,7 @@ test('préstamo: el Método de Precios de Transferencia se sustituye en sus DOS 
   assert.strictEqual(apariciones, 2, 'las dos tablas deben quedar con el método PC');
   assert.ok(!salida.includes('Indicador de Rentabilidad'), 'un préstamo no tiene indicador de rentabilidad');
   assert.ok(!salida.includes('>MO<'), 'no debe quedar el indicador por defecto del motor de márgenes');
-  assert.ok(textoPlanoOoxml(salida).includes('Intereses Sobre Préstamos'));
+  assert.ok(textoPlanoOoxml(salida).includes('Intereses sobre préstamos'));
 });
 
 test('préstamo: el Rango Intercuartil se sustituye por la tabla de 7 columnas, una fila por préstamo', () => {

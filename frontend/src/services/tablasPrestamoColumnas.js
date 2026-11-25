@@ -11,14 +11,16 @@
    documento real y con la prueba ya existente de la Fase 2) y NO `saldoCOP` (que es el
    saldo a 31 de diciembre, un dato distinto).
 
-   Los datos del vinculado —razón social, identificación fiscal, país, tipo de
-   vinculación— NO viven en `estudio.prestamos`: salen de los mismos campos de nivel
-   superior del estudio (`estudio.vinc`, `vinc_id`, `pais_vinc`, `tipo_vinculacion`) que ya
-   usa la ficha genérica "Transacciones Inter compañía" para lo mismo
-   (`tablasOperaciones.js:122-145`). Mismo criterio de simplificación que ya acepta la Fase
-   2 (`tablasPrestamos.js:11-16`): un solo vinculado por tabla. Si el estudio trae
-   préstamos de más de una contraparte distinta, se declara en `avisoVinculados` en vez de
-   mezclarlos en silencio.
+   La razón social del vinculado la dice el préstamo (`vinculadoDePrestamo`, el otorga/recibe
+   que no es `estudio.ent` — Fase 2, `tablasPrestamos.js:11-16`), nunca `estudio.vinc`: ese
+   campo es del motor de márgenes y puede traer la contraparte equivocada cuando la ingesta
+   genérica de "Operaciones con Vinculados" encontró varias distintas (reportado el
+   2026-11-25: un estudio real traía "BRUNO FRITSCH SA" —otro cliente— mientras los
+   préstamos eran con "Inversiones San Jeronimo SpA"). Identificación fiscal y país SÍ
+   salen de `estudio.vinc_id`/`pais_vinc`: una fila de préstamo no los trae. Mismo criterio
+   de simplificación que ya acepta la Fase 2: un solo vinculado por tabla. Si el estudio
+   trae préstamos de más de una contraparte distinta, se declara en `avisoVinculados` en vez
+   de mezclarlos en silencio.
 
    Produce las filas como una lista de DESCRIPTORES (`{tipo, ...}`), no como una matriz
    plana: quien las consuma decide cómo pintar cada tipo —con celda fusionada de verdad
@@ -29,9 +31,8 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { fmt, num } from '../utils/calculations.js';
-import { tienePrestamos } from './tablasPrestamos.js';
+import { tienePrestamos, vinculadoDePrestamo } from './tablasPrestamos.js';
 import { conceptoDeOperacion } from './tablasOperaciones.js';
-import { TIPOS_OPERACION_DIAN } from './tiposOperacionDian.js';
 
 export const NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS = 'Transacciones Intercompañías';
 export const NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS =
@@ -55,23 +56,15 @@ function fechaLargaEs(iso) {
     .toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-const esConceptoDePrestamo = (desc) => /pr[eé]stam/i.test(desc || '') && /inter[eé]s/i.test(desc || '');
-
 /**
- * «Tipo de operación» de la tabla: prioriza lo que el estudio ya declaró para la operación
- * analizada —mismo campo que usa la ficha genérica (`conceptoDeOperacion`,
- * `tablasOperaciones.js:47-58`)— si resulta ser un concepto de intereses sobre préstamos.
- * Si no, cae en el catálogo DIAN (`tiposOperacionDian.js`, la misma fuente que usa
- * `conceptoDeOperacion`) buscando "Intereses sobre préstamos" en la clase que corresponda:
- * egreso por defecto, ingreso si el estudio lo declara explícitamente.
+ * «Tipo de operación» de la tabla: delega en `conceptoDeOperacion` (`tablasOperaciones.js`),
+ * que para un estudio de préstamo ya resuelve siempre al catálogo DIAN ("Intereses sobre
+ * préstamos", 42 egreso / 13 ingreso) — un solo lugar para esa resolución en vez de dos
+ * copias del mismo regex contra el catálogo.
  */
 export function tipoOperacionPrestamo(estudio) {
   const { desc, cod } = conceptoDeOperacion(estudio);
-  if (cod && desc && esConceptoDePrestamo(desc)) return desc + ' (' + cod + ')';
-
-  const clase = estudio && estudio.egreso === false ? 'ingreso' : 'egreso';
-  const delCatalogo = TIPOS_OPERACION_DIAN.find((t) => t.clase === clase && esConceptoDePrestamo(t.nombre));
-  return delCatalogo ? delCatalogo.nombre + ' (' + delCatalogo.cod + ')' : 'Intereses sobre préstamos';
+  return desc && cod ? desc + ' (' + cod + ')' : 'Intereses sobre préstamos';
 }
 
 const normalizarNombreCompania = (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -110,6 +103,7 @@ export function filasTablaTransaccionesPrestamos(estudio) {
   const e = estudio;
   const prestamos = e.prestamos;
   const etiquetasPrestamo = prestamos.map((_, i) => 'Préstamo ' + (i + 1));
+  const razonSocial = vinculadoDePrestamo(prestamos[0], e.ent);
 
   return {
     nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS,
@@ -118,7 +112,7 @@ export function filasTablaTransaccionesPrestamos(estudio) {
     filas: [
       { tipo: 'banner', texto: 'Compañía Vinculada' },
       { tipo: 'encabezado', etiqueta: 'Nº de prestamos', valores: etiquetasPrestamo },
-      { tipo: 'fusionada', clave: 'razonSocial', etiqueta: 'Razón social', valor: wrap(e.vinc) },
+      { tipo: 'fusionada', clave: 'razonSocial', etiqueta: 'Razón social', valor: wrap(razonSocial) },
       { tipo: 'fusionada', clave: 'idFiscal', etiqueta: 'Identificación fiscal', valor: wrap(e.vinc_id) },
       { tipo: 'fusionada', clave: 'pais', etiqueta: 'País-Residencia fiscal', valor: wrap(e.pais_vinc) },
       {
