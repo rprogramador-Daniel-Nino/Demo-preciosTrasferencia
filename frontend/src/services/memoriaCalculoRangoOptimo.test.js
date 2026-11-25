@@ -94,7 +94,8 @@ test('todos los motivos del motor quedan contados, aunque se presenten en menos 
     .join(' ');
   ['controlada', 'holding', 'saldoNegativo', 'perdidaOperativa',
     'sinDescripcion', 'actividadDistinta', 'rigorFuncional',
-  ].forEach((m) => assert.match(formulas, new RegExp(`COUNTIF\\(N\\d+:N\\d+,"${m}"\\)`), `falta contar ${m}`));
+  ].forEach((m) => assert.match(formulas,
+    new RegExp(`COUNTIFS\\(N\\d+:N\\d+,"${m}",Q\\d+:Q\\d+,"<>Sí"\\)`), `falta contar ${m}`));
 });
 
 test('«Diferencias funcionales» recoge los motivos cualitativos y las que no entraron a la muestra', () => {
@@ -104,7 +105,7 @@ test('«Diferencias funcionales» recoge los motivos cualitativos y las que no e
   const f = fila(sel.celdas, '(−) Diferencias funcionales');
   assert.ok(f, 'existe la fila unificada');
   ['sinDescripcion', 'actividadDistinta', 'rigorFuncional'].forEach((m) =>
-    assert.match(f[1].f, new RegExp(`COUNTIF\\(N\\d+:N\\d+,"${m}"\\)`), `falta ${m}`));
+    assert.match(f[1].f, new RegExp(`COUNTIFS\\(N\\d+:N\\d+,"${m}",Q\\d+:Q\\d+,"<>Sí"\\)`), `falta ${m}`));
   /* El término que recoge a las que pasaron todo y no se seleccionaron. */
   assert.match(f[1].f, /COUNTIFS\(N\d+:N\d+,"",Q\d+:Q\d+,"<>Sí"\)/);
   assert.match(String(f[2].v), /No comparable con la parte examinada \(Art\. 260-4\)/);

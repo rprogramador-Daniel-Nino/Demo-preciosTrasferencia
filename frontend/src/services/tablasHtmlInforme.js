@@ -690,13 +690,16 @@ export function actualizarTablasMotorHtml(html, estudio, avisos) {
 
   /* ── Razones de rechazo ── El total del universo cierra la tabla, como en la ruta
      .docx: es lo que permite comprobar de un vistazo que la columna suma. */
-  const { filas: razones } = filasRazonesRechazo(study.embudoSeleccion);
+  const { filas: razones, total: universoRazones, sinDatos: sinDatosRazones } = filasRazonesRechazo(
+    study.embudoSeleccion, study.matrizRechazo,
+  );
   const filasRazones = (razones || []).map((f) => [f.etiqueta, f.letra, String(f.cuantas)]);
   if (filasRazones.length) {
-    filasRazones.push([
-      'TOTAL, UNIVERSO', '',
-      study.embudoSeleccion ? String(study.embudoSeleccion.evaluadas) : '—',
-    ]);
+    /* El total sale de lo que `filasRazonesRechazo` de verdad sumó —`matrizRechazo.universo`
+       cuando manda la matriz, `embudoSeleccion.evaluadas` cuando no hay matriz y se cae al
+       embudo—, no de leer `evaluadas` directo: con la matriz al mando esos dos números pueden
+       no coincidir, y esta fila tiene que cerrar la columna que el lector tiene delante. */
+    filasRazones.push(['TOTAL, UNIVERSO', '', sinDatosRazones ? '—' : String(universoRazones)]);
   }
   const fuenteRazones = citaBaseDatos(study);
   sustituir(TABLA_RAZONES, filasRazones, { fuente: fuenteRazones });

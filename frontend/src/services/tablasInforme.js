@@ -21,6 +21,7 @@ import {
 } from './analisisMercado.js';
 import { num, pliOf } from '../utils/calculations.js';
 import { traducirCriterio } from './criteriosScreeningEs.js';
+import { nameKey, claveDeCruce } from './comparablesEngine.js';
 
 /* ══════════════ Nombres de tabla compartidos por las dos rutas ══════════════
 
@@ -118,13 +119,217 @@ export const ETIQUETAS_MOTIVO = Object.freeze({
 });
 
 /**
+ * Saca de «aceptadas» a las compañías que el embudo dice retiradas a mano, y las suma a
+ * `rigorFuncional` (diferencias funcionales) — el mismo destino que les da la fila fundida.
+ *
+ * `matrizRechazo` se recalcula al vuelo con el universo completo en memoria
+ * (`MotorComparables.jsx`), y ese universo NO se persiste con el estudio: si se retira una
+ * comparable con la papelera del paso 4 sin tener el universo cargado —el caso normal al
+ * reabrir un estudio guardado—, la matriz persistida se queda con la foto de la última corrida
+ * real y sigue listando esa compañía como aceptada, aunque `embudoSeleccion.retiradasManual`
+ * (que sí viaja siempre) ya la tenga anotada. Reconciliar aquí, al leer, no depende de que la
+ * matriz se haya podido recalcular.
+ *
+ * Es un no-op si la matriz ya está al día: si la compañía ya no está en `aceptadas` —porque
+ * `matrizDeRechazo` sí corrió después del retiro—, no hay nada que mover.
+ *
+ * Vive aquí y no en `anexoCHtml.js` —donde nació el 2026-09-08— porque ahora la usan también
+ * las filas de la Tabla 16 (`filasDesdeMatriz`, más abajo): las dos tienen que reconciliar
+ * exactamente igual para no volver a publicar un ANEXO C y un cuerpo que se contradicen.
+ *
+ * @param {object} porMotivo        el de `matrizRechazo`, sin tocar.
+ * @param {Array}  retiradasManual  `nameKey` de las compañías retiradas (`embudoSeleccion`).
+ * @returns {object} una copia de `porMotivo` con el ajuste, o el mismo objeto si no hacía falta.
+ */
+export function reconciliarRetiradasManual(porMotivo, retiradasManual) {
+  const claves = new Set((retiradasManual || []).filter(Boolean));
+  const aceptadas = Array.isArray(porMotivo.aceptadas) ? porMotivo.aceptadas : [];
+  if (!claves.size || !aceptadas.length) return porMotivo;
+
+  const retiradas = aceptadas.filter((nombre) => claves.has(nameKey(nombre)));
+  if (!retiradas.length) return porMotivo;
+
+  return {
+    ...porMotivo,
+    aceptadas: aceptadas.filter((nombre) => !claves.has(nameKey(nombre))),
+    rigorFuncional: [...(porMotivo.rigorFuncional || []), ...retiradas].sort((a, b) => a.localeCompare(b, 'es')),
+  };
+}
+
+/**
+ * Reconcilia `matrizRechazo` contra la muestra final ACTUAL (`study.comparables`), sin
+ * necesitar el universo. Generaliza `reconciliarRetiradasManual`: en vez de depender de una
+ * lista explícita de retiradas, compara la matriz contra la fuente de verdad de la muestra que
+ * de verdad se va a radicar —la misma que usa `filasComparablesInforme`/`diagnosticarCobertura`—
+ * y mueve en LOS DOS sentidos:
+ *
+ *   - una compañía que sigue en «aceptadas» pero ya no está en la muestra actual (por cualquier
+ *     motivo, no solo un retiro explícito) → a `rigorFuncional`;
+ *   - una compañía que la matriz tiene registrada bajo otro motivo pero SÍ está en la muestra
+ *     actual (el analista la rescató subiendo su EEFF, en otra pantalla, después de que el
+ *     motor la rechazara) → a `aceptadas`.
+ *
+ * POR QUÉ EXISTE. Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21): la única forma de
+ * refrescar `matrizRechazo` era reabrir el paso 3 (Motor de Comparables) con el cribado cargado
+ * y volver a ejecutar la selección —algo que nadie puede garantizar que el analista recuerde
+ * hacer cada vez—. Esta función deja que el botón «Actualizar información» del generador del
+ * informe (`ReporteGenerador.jsx`) corrija la foto SIN pasar por el motor, con lo único que esa
+ * pantalla sí tiene a mano: la muestra final tal como está guardada en el estudio.
+ *
+ * Empareja por `claveDeCruce` y NO por `nameKey`: esta función compara nombres de DOS fuentes
+ * distintas —los que trae la matriz congelada del cribado, contra los de `study.comparables`,
+ * que el analista escribe o edita a mano—, que es exactamente el escenario para el que se creó
+ * `claveDeCruce`. `nameKey` tiene un defecto documentado y todavía abierto con formas societarias
+ * que terminan en punto (`S.A.S.`, `CO.`): con ella, una compañía que sigue en la muestra podría
+ * salir expulsada de «aceptadas» por error, o una rescatada podría no volver a entrar.
+ *
+ * DELIBERADAMENTE CONSERVADORA. Una compañía de la muestra actual que no aparece en NINGÚN
+ * motivo de la matriz —una creada desde su EEFF que nunca estuvo en el universo de Capital IQ,
+ * por ejemplo— se deja fuera: sin el universo real no hay forma de inventarle un lugar. `universo`
+ * nunca se toca, porque solo se mueven nombres entre baldes que la matriz ya tenía, nunca se
+ * agregan desde fuera. Un estudio así puede seguir necesitando el recálculo completo del paso 3.
+ *
+ * Es un no-op si la matriz ya está al día: devuelve el MISMO objeto por referencia, y solo
+ * reescribe los baldes que de verdad cambiaron —el resto conserva su arreglo y orden originales—,
+ * para que el llamador pueda comparar `=== ` y decidir si hace falta guardar algo.
+ *
+ * @param {{porMotivo:object, universo:number}} matrizRechazo
+ * @param {Array} comparables  `study.comparables`, la muestra final tal como está en el estudio.
+ * @returns {object} el mismo `matrizRechazo`, o una copia con `porMotivo` ajustado.
+ */
+export function sincronizarMatrizConMuestra(matrizRechazo, comparables) {
+  if (!matrizRechazo || !matrizRechazo.porMotivo) return matrizRechazo;
+  /* Sin muestra que comparar —estudio todavía sin cargar— no se toca nada. Una muestra
+     explícitamente vacía (`[]`, el analista retiró todas las comparables) sí es una decisión
+     real y se procesa: debe vaciar «aceptadas». */
+  if (!Array.isArray(comparables)) return matrizRechazo;
+
+  const porMotivoOriginal = matrizRechazo.porMotivo;
+  const clavesEnMuestra = new Set(
+    comparables
+      .filter((c) => c && String(c.name || '').trim())
+      .map((c) => claveDeCruce(c.name))
+      .filter(Boolean)
+  );
+
+  const porMotivo = { ...porMotivoOriginal };
+  const aceptadasOriginal = Array.isArray(porMotivoOriginal.aceptadas) ? porMotivoOriginal.aceptadas : [];
+  let cambio = false;
+
+  /* Dirección 1: fuera de «aceptadas» lo que ya no está en la muestra. */
+  const siguenAceptadas = [];
+  const salenDeAceptadas = [];
+  aceptadasOriginal.forEach((nombre) => {
+    if (clavesEnMuestra.has(claveDeCruce(nombre))) siguenAceptadas.push(nombre);
+    else salenDeAceptadas.push(nombre);
+  });
+  if (salenDeAceptadas.length) {
+    cambio = true;
+    porMotivo.aceptadas = siguenAceptadas;
+    porMotivo.rigorFuncional = [...(porMotivoOriginal.rigorFuncional || []), ...salenDeAceptadas]
+      .sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  /* Dirección 2: a «aceptadas» lo que la muestra sí tiene y la matriz tenía en otro motivo. Un
+     set de claves ya asignadas evita duplicar una compañía si por algún motivo aparece repetida
+     en dos baldes de la matriz a la vez. */
+  const entranAAceptadas = [];
+  const clavesYaAceptadas = new Set(siguenAceptadas.map((n) => claveDeCruce(n)));
+  Object.keys(porMotivoOriginal).forEach((clave) => {
+    if (clave === 'aceptadas') return;
+    const original = porMotivoOriginal[clave] || [];
+    const quedan = [];
+    let tocado = false;
+    original.forEach((nombre) => {
+      const k = claveDeCruce(nombre);
+      if (k && clavesEnMuestra.has(k) && !clavesYaAceptadas.has(k)) {
+        clavesYaAceptadas.add(k);
+        entranAAceptadas.push(nombre);
+        tocado = true;
+      } else {
+        quedan.push(nombre);
+      }
+    });
+    if (tocado) {
+      cambio = true;
+      porMotivo[clave] = quedan;
+    }
+  });
+  if (entranAAceptadas.length) {
+    cambio = true;
+    porMotivo.aceptadas = [...siguenAceptadas, ...entranAAceptadas].sort((a, b) => a.localeCompare(b, 'es'));
+  }
+
+  if (!cambio) return matrizRechazo;
+  return { ...matrizRechazo, porMotivo };
+}
+
+/**
+ * Las filas de la Tabla 16, contadas sobre la matriz del universo (`matrizRechazo`) en vez de
+ * sobre el embudo. Es la MISMA agrupación que arma el ANEXO C (`gruposDelAnexoC`,
+ * `anexoCHtml.js`): motivo por motivo, `companias.length` en vez de un contador aparte.
+ *
+ * POR QUÉ EXISTE. Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21): la Tabla 16 y el
+ * ANEXO C son DOS conteos independientes del mismo hecho —uno el embudo que deja
+ * `scoreCandidates`, contador por contador y parchado a mano en cada retiro o alta manual; el
+ * otro `matrizRechazo`, nombre por nombre, recalculado solo mediante `enriquecerUniverso`—, y
+ * nada obligaba a que coincidieran. El embudo se queda desactualizado en cuanto el analista
+ * agrega o retira una comparable sin volver a «Ejecutar Selección Automática» —ese botón es el
+ * único que lo toca—, mientras que `matrizRechazo` se recalcula solo con abrir el paso 3 con el
+ * cribado cargado. El informe salió dos veces con la Tabla 16 y el ANEXO C dando cifras
+ * distintas para el mismo universo.
+ *
+ * La cuenta por nombre es además más robusta que la del embudo: una candidata que ya no está en
+ * `comparables` y no tiene un motivo propio de una corrida anterior cae SOLA en «diferencias
+ * funcionales» —el `|| 'rigorFuncional'` de `matrizDeRechazo`, `anexoCHtml.js`—, así que no hace
+ * falta sumarle aparte la reserva, las que se quedaron sin EEFF o las retiradas a mano: ya están
+ * ahí, cada una por su cuenta, sin un contador que se pueda desincronizar.
+ *
+ * @param {{porMotivo:object, universo:number}} matrizRechazo
+ * @param {Array<string>} [retiradasManual]  del embudo, para reconciliar (ver arriba).
+ */
+function filasDesdeMatriz(matrizRechazo, retiradasManual) {
+  const porMotivo = reconciliarRetiradasManual(matrizRechazo.porMotivo || {}, retiradasManual);
+
+  const filas = [];
+  RAZONES_RECHAZO.forEach(([clave, etiqueta]) => {
+    if (FUNDIDOS_EN_RIGOR.includes(clave)) return;
+    const esRigor = clave === 'rigorFuncional';
+    const cuantas = (Array.isArray(porMotivo[clave]) ? porMotivo[clave].length : 0)
+      + (esRigor
+        ? FUNDIDOS_EN_RIGOR.reduce((acc, k) => acc + (Array.isArray(porMotivo[k]) ? porMotivo[k].length : 0), 0)
+        : 0);
+    if (cuantas > 0) filas.push({ clave, etiqueta: esRigor ? ETIQUETA_RIGOR : etiqueta, cuantas });
+  });
+
+  const aceptadas = Array.isArray(porMotivo.aceptadas) ? porMotivo.aceptadas.length : 0;
+  filas.push({ clave: 'aceptadas', etiqueta: 'Compañías comparables aceptadas', cuantas: aceptadas });
+
+  const filasConLetra = filas.map((f, i) => ({ ...f, letra: LETRAS[i] || '' }));
+  const suma = filas.reduce((acc, f) => acc + f.cuantas, 0);
+  const total = Number(matrizRechazo.universo) || 0;
+
+  return { filas: filasConLetra, total, cuadra: suma === total, suma, sinDatos: false };
+}
+
+/**
  * Filas de la tabla de razones de rechazo, ya con su letra y su conteo.
  *
  * Devuelve también si los números cuadran: rechazos —con la reserva ya sumada a las
  * diferencias funcionales— más aceptadas debe dar el universo evaluado. Si no cuadra,
  * quien genera el informe tiene que saberlo antes de radicarlo, no después.
+ *
+ * `matrizRechazo` (segundo argumento, opcional) manda cuando trae datos: es la misma matriz
+ * nombre a nombre que sustenta el ANEXO C y la hoja «Selección comparables» del Excel de
+ * soporte, así que preferirla aquí es lo que hace que la Tabla 16 no pueda decir un número
+ * distinto al de esas dos. El embudo se usa solo cuando no hay matriz —estudios con las
+ * comparables cargadas a mano, sin universo importado nunca— para no perder esa cobertura.
  */
-export function filasRazonesRechazo(embudo) {
+export function filasRazonesRechazo(embudo, matrizRechazo) {
+  if (matrizRechazo && matrizRechazo.porMotivo && Object.keys(matrizRechazo.porMotivo).length) {
+    return filasDesdeMatriz(matrizRechazo, embudo && embudo.retiradasManual);
+  }
+
   const e = embudo || null;
   if (!e || !e.evaluadas) return { filas: [], total: 0, cuadra: false, sinDatos: true };
 
@@ -501,15 +706,32 @@ export function diagnosticarCobertura(rawHtml, study, datosMacro, analisisSector
     if (!serie || serie[year] === undefined) seriesFaltantes.push(concepto);
   });
 
-  /* La tabla de razones de rechazo solo se puede armar si el motor dejó su embudo. Sin
-     él, esa tabla sale con los números que traiga la plantilla, que es exactamente lo
-     que no debe pasar en un documento que se radica: hay que avisarlo antes. */
-  const razones = filasRazonesRechazo(study && study.embudoSeleccion);
+  /* La tabla de razones de rechazo solo se puede armar si el motor dejó su embudo, o si el
+     estudio trae la matriz del universo (`matrizRechazo`, que manda cuando está presente —
+     ver `filasRazonesRechazo`). Sin ninguna de las dos, esa tabla sale con los números que
+     traiga la plantilla, que es exactamente lo que no debe pasar en un documento que se
+     radica: hay que avisarlo antes. */
+  const razones = filasRazonesRechazo(study && study.embudoSeleccion, study && study.matrizRechazo);
 
   /* Lo mismo para las tablas de la muestra y de los márgenes: sin comparables en el
      estudio se quedan con las compañías que trajera la plantilla, con nombre y margen.
      Es la fuga más visible que puede tener el documento, así que se avisa aparte. */
   const comparables = filasComparablesInforme(study);
+
+  /* ── LA MATRIZ PUEDE ESTAR AL DÍA CONSIGO MISMA Y AUN ASÍ ATRASADA RESPECTO A LA MUESTRA ──
+     `matrizRechazo` es una FOTO: se guarda cuando el paso 3 tiene el universo cargado, y desde
+     ahí puede quedar atrás si el estudio se sigue editando sin volver a abrir ese paso —una
+     comparable que se agrega o retira en otra pantalla no la toca—. `razones.cuadra` no lo
+     detecta: la foto puede sumar perfectamente el universo que ella misma declara y aun así no
+     ser la foto DE la muestra que el informe está a punto de radicar. Se compara con la cuenta
+     real —`filasComparablesInforme`, la misma que arma la Tabla 17— porque esa sí es siempre la
+     muestra vigente, foto o no.
+     Detectado auditando ACO SOLUCIONES DE DRENAJE (2026-09-21). */
+  const filaAceptadas = razones.filas.find((f) => f.clave === 'aceptadas');
+  const matrizConDatos = !!(study && study.matrizRechazo && study.matrizRechazo.porMotivo
+    && Object.keys(study.matrizRechazo.porMotivo).length);
+  const matrizRechazoDesactualizada = matrizConDatos
+    && (filaAceptadas ? filaAceptadas.cuantas : 0) !== comparables.length;
 
   return {
     year,
@@ -524,6 +746,10 @@ export function diagnosticarCobertura(rawHtml, study, datosMacro, analisisSector
     /* Los conteos no suman el universo evaluado: algo cambió en el estudio después de
        ejecutar la selección y la tabla quedaría inconsistente. */
     razonesRechazoDescuadradas: !razones.sinDatos && !razones.cuadra,
+    /* La matriz cuadra consigo misma pero no con la muestra que el informe va a radicar (ver
+       arriba): hay que reabrir el paso 3 con el cribado cargado para refrescarla, aunque esta
+       tabla en concreto no avise de ningún descuadre interno. */
+    matrizRechazoDesactualizada,
     comparablesCubiertas: comparables.length > 0,
     /* Comparables de la muestra sin estados financieros cargados: salen con hueco en la
        tabla de márgenes y no entran al rango. */

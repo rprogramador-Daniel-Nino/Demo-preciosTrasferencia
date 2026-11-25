@@ -29,6 +29,24 @@ mientras dura tu trabajo no se ve hasta el siguiente arranque, y para entonces l
 integración ya llega sucia. El objetivo es que el equipo avance hacia el mismo
 punto, no que cada quien descubra al final lo que hicieron los demás.
 
+## Ramas que se excluyen a propósito
+
+`scripts/revisar-ramas.js` mantiene una lista fija de ramas que **no** se tratan
+como compañeros: hoy solo `origin/Rama-Upgradate`, la versión nueva del sistema
+que se trabaja y se prueba aparte (entorno "pruebas") hasta que su autor decida
+integrarla. Esas ramas no aparecen en `companeros` ni en `orden_integracion`, así
+que nunca se traen a `main` ni se cruzan con las demás por este medio, aunque
+tengan commits nuevos en origin.
+
+El script sí las reporta en `ramas_ignoradas` para que quede constancia de que
+existen. Si ese arreglo no está vacío, decirlo en el paso 4 ("Rama-Upgradate
+existe en origin pero se excluye del escaneo a propósito"), sin tratarlo como
+error ni intentar integrarla.
+
+Si el usuario pide explícitamente traer o revisar una rama que está en esta
+lista, es una acción aparte y manual (`git fetch` + `git log`/`git diff` contra
+esa rama puntual) — no reactivar el escaneo automático para ella.
+
 ## Lo que esta skill NO detecta
 
 El script mira **commits ya publicados**. No puede ver un choque que todavía no
@@ -221,3 +239,7 @@ manual en el navegador, porque el repo no tiene tests de la aplicación.
 - No editar `public/index.html` a mano: se regenera con `npm run build` desde
   `index.html` de la raíz.
 - No seguir si `fetch` falló.
+- No integrar ni cruzar `origin/Rama-Upgradate` (ni ninguna otra rama que
+  aparezca en `ramas_ignoradas`) automáticamente: son líneas de desarrollo
+  aparte, no compañeros. Mencionarlas si `ramas_ignoradas` no está vacío, pero
+  no tocarlas sin instrucción explícita del usuario.

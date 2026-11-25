@@ -25,6 +25,14 @@ const {
 
 const PRINCIPAL = 'origin/main';
 
+/* Ramas que existen en origin pero no son "un compañero más": líneas de
+   desarrollo aparte que no se traen a main ni se cruzan con las demás por
+   este medio. Rama-Upgradate es la versión nueva del sistema, que se trabaja
+   y se prueba por separado (entorno "pruebas") hasta que su autor decida
+   integrarla explícitamente. Agregar aquí, no borrar de origin, cualquier
+   otra rama que deba quedar fuera del escaneo por la misma razón. */
+const RAMAS_IGNORADAS = new Set(['origin/Rama-Upgradate']);
+
 /* Corre git y devuelve stdout. Lanza si git falla. */
 function git(args) {
   return execFileSync('git', args, {
@@ -95,6 +103,9 @@ function main() {
     companeros: [],
     /* main primero, después los compañeros de menor a mayor solapamiento. */
     orden_integracion: [],
+    /* Ramas presentes en origin que RAMAS_IGNORADAS excluyó del escaneo. Vacío
+       cuando ninguna de esas ramas existe remotamente todavía. */
+    ramas_ignoradas: [],
   };
 
   /* rev-parse --abbrev-ref HEAD lanza en un repo sin ningún commit (HEAD no
@@ -257,7 +268,10 @@ function main() {
       (r) => r.startsWith('origin/') && r !== PRINCIPAL && r !== 'origin/HEAD' && r !== 'origin/' + yo
     );
 
-  for (const remota of remotas) {
+  resultado.ramas_ignoradas = remotas.filter((r) => RAMAS_IGNORADAS.has(r));
+  const remotasAEscanear = remotas.filter((r) => !RAMAS_IGNORADAS.has(r));
+
+  for (const remota of remotasAEscanear) {
     resultado.companeros.push(analizarRama(remota));
   }
 

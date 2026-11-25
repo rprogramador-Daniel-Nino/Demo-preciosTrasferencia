@@ -1292,9 +1292,18 @@ export function hojasMemoriaRangoOptimo(estudio, seleccion) {
     /* Una fila del embudo puede recoger varios motivos del motor, así que el conteo es
        la suma de sus COUNTIF y no uno solo. Las que llevan `sinMotivo` suman además
        las que pasaron todo y no entraron a la muestra: no traen motivo escrito, pero
-       quedan fuera por la misma razón. */
+       quedan fuera por la misma razón.
+
+       Cada término lleva la condición `¿Seleccionada?<>"Sí"`: una fila con Q="Sí" no
+       puede contar como rechazada aunque la columna N todavía diga un motivo, que es
+       exactamente lo que queda en una comparable que el analista rescató a mano después
+       de que el motor la rechazara. `enriquecerUniverso` ya limpia N en cuanto está
+       seleccionada, pero esta fórmula no depende de eso: audita el libro aunque llegue con
+       datos de una corrida anterior a ese arreglo. Sin la condición, la compañía se contaba
+       dos veces —rechazada por su motivo Y aceptada por «(+) Muestra seleccionada»— y el
+       universo evaluado salía inflado. */
     const contarMotivos = (rango, motivos, sinMotivo, rangoSel) => {
-      const partes = motivos.map((m) => `COUNTIF(${rango},"${m}")`);
+      const partes = motivos.map((m) => `COUNTIFS(${rango},"${m}",${rangoSel},"<>Sí")`);
       if (sinMotivo) partes.push(`COUNTIFS(${rango},"",${rangoSel},"<>Sí")`);
       return partes.join('+');
     };

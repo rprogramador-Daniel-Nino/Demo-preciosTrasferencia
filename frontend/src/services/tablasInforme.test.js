@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   filasRazonesRechazo, filasComparablesInforme, diagnosticarCobertura,
-  filasRangoIntercuartil, filasCriteriosScreening,
+  filasRangoIntercuartil, filasCriteriosScreening, sincronizarMatrizConMuestra,
 } from './tablasInforme.js';
 import { analizarRango } from './rangoIntercuartil.js';
+import { nameKey } from './comparablesEngine.js';
 
 /* Estudio de un cliente que NO es End Game. */
 const otroCliente = {
@@ -241,6 +242,164 @@ test('un estudio guardado antes del cambio sigue cuadrando sin la clave controla
   assert.strictEqual(cuadra, true);
 });
 
+/* ══════ filasRazonesRechazo: la matriz manda sobre el embudo ══════
+   Caso real: ACO SOLUCIONES DE DRENAJE (2026-09-21). La Tabla 16 (embudo, contador aparte) y el
+   ANEXO C (matriz, nombre por nombre) se radicaron dos veces con cifras distintas para el mismo
+   universo, porque nada los obligaba a coincidir. Desde este cambio los dos leen la matriz. */
+
+const matrizDePrueba = {
+  universo: 6,
+  porMotivo: {
+    holding: ['Alpha Group', 'Beta Holdco'],
+    rigorFuncional: ['Gamma Sin Motivo'],
+    aceptadas: ['Delta Aceptada', 'Épsilon Aceptada', 'Zeta Aceptada'],
+  },
+};
+
+test('con matriz, filasRazonesRechazo cuenta nombres y no toca el embudo', () => {
+  /* El embudo dice OTRA cosa a propósito —0 aceptadas, sin holding—: si la función leyera de
+     ahí, la prueba fallaría. Es justo el escenario real: un embudo atrasado con una matriz al
+     día porque el paso 3 se reabrió con el cribado cargado pero sin darle a «Ejecutar Selección
+     Automática». */
+  const embudoAtrasado = { evaluadas: 1089, seleccionadas: 0, porMotivo: {} };
+  const { filas, total, suma, cuadra, sinDatos } = filasRazonesRechazo(embudoAtrasado, matrizDePrueba);
+  assert.strictEqual(sinDatos, false);
+  assert.strictEqual(total, 6);
+  assert.strictEqual(suma, 6);
+  assert.strictEqual(cuadra, true);
+  const porClave = Object.fromEntries(filas.map((f) => [f.clave, f.cuantas]));
+  assert.strictEqual(porClave.holding, 2);
+  assert.strictEqual(porClave.rigorFuncional, 1);
+  assert.strictEqual(porClave.aceptadas, 3);
+});
+
+test('con matriz, una compañía sin motivo propio cae sola en diferencias funcionales', () => {
+  /* Ni reserva, ni sinEeff, ni retiradasManual aparte: el `|| 'rigorFuncional'` de
+     `matrizDeRechazo` (anexoCHtml.js) ya la puso ahí al construir la matriz. */
+  const matriz = { universo: 3, porMotivo: { aceptadas: ['A'], rigorFuncional: ['B', 'C'] } };
+  const { filas, cuadra } = filasRazonesRechazo(null, matriz);
+  const fila = filas.find((f) => f.clave === 'rigorFuncional');
+  assert.strictEqual(fila.cuantas, 2);
+  assert.strictEqual(cuadra, true);
+});
+
+test('con matriz, el retiro manual mueve la aceptada a diferencias funcionales igual que con el embudo', () => {
+  const embudo = { evaluadas: 6, seleccionadas: 2, porMotivo: {}, retiradasManual: [nameKey('Delta Aceptada')] };
+  const { filas } = filasRazonesRechazo(embudo, matrizDePrueba);
+  const porClave = Object.fromEntries(filas.map((f) => [f.clave, f.cuantas]));
+  assert.strictEqual(porClave.aceptadas, 2, 'la retirada ya no cuenta como aceptada');
+  assert.strictEqual(porClave.rigorFuncional, 2, '1 propia + la retirada');
+});
+
+test('sin matriz utilizable, filasRazonesRechazo se cae al embudo como siempre', () => {
+  const { filas, cuadra } = filasRazonesRechazo(embudoReal, { universo: 0, porMotivo: {} });
+  assert.ok(filas.length, 'sigue armando la tabla del embudo');
+  assert.strictEqual(cuadra, true);
+});
+
+/* ══════ sincronizarMatrizConMuestra: el botón «Actualizar información» corrige la foto ══════
+   Caso real: ACO SOLUCIONES DE DRENAJE (2026-09-21). Generaliza `reconciliarRetiradasManual`:
+   compara la matriz contra `study.comparables` directamente, sin depender de una lista de
+   retiros explícitos, y mueve en los dos sentidos. */
+
+test('sincronizarMatrizConMuestra: no-op cuando la matriz ya está al día', () => {
+  const matriz = { universo: 3, porMotivo: { holding: ['Alpha'], aceptadas: ['Beta', 'Gamma'] } };
+  const comparables = [{ name: 'Beta' }, { name: 'Gamma' }];
+  const resultado = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.strictEqual(resultado, matriz, 'sin nada que mover, devuelve la MISMA referencia');
+});
+
+test('sincronizarMatrizConMuestra: saca de aceptadas lo que ya no está en la muestra', () => {
+  const matriz = { universo: 3, porMotivo: { holding: ['Alpha'], aceptadas: ['Beta', 'Gamma'] } };
+  const comparables = [{ name: 'Beta' }]; // Gamma se retiró en otra pantalla
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.deepStrictEqual(porMotivo.aceptadas, ['Beta']);
+  assert.deepStrictEqual(porMotivo.rigorFuncional, ['Gamma']);
+});
+
+test('sincronizarMatrizConMuestra: mete en aceptadas la rescatada de otro motivo', () => {
+  const matriz = { universo: 3, porMotivo: { holding: ['Alpha'], aceptadas: ['Beta'] } };
+  const comparables = [{ name: 'Beta' }, { name: 'Alpha' }]; // Alpha se rescató con su EEFF
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.deepStrictEqual(porMotivo.aceptadas, ['Alpha', 'Beta']);
+  assert.deepStrictEqual(porMotivo.holding, []);
+});
+
+test('sincronizarMatrizConMuestra: mezcla salida y entrada en la misma llamada, sin tocar los baldes ajenos', () => {
+  const matriz = {
+    universo: 4,
+    porMotivo: {
+      holding: ['Alpha'],
+      saldoNegativo: ['Delta'],
+      aceptadas: ['Beta', 'Gamma'],
+    },
+  };
+  const comparables = [{ name: 'Beta' }, { name: 'Alpha' }]; // sale Gamma, entra Alpha
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.deepStrictEqual(porMotivo.aceptadas, ['Alpha', 'Beta']);
+  assert.deepStrictEqual(porMotivo.holding, []);
+  assert.deepStrictEqual(porMotivo.rigorFuncional, ['Gamma']);
+  assert.strictEqual(porMotivo.saldoNegativo, matriz.porMotivo.saldoNegativo, 'balde no tocado: misma referencia');
+});
+
+test('sincronizarMatrizConMuestra: empareja formas societarias distintas (claveDeCruce, no nameKey)', () => {
+  const matriz = { universo: 2, porMotivo: { holding: ['Alpha Group S.A.S.'], aceptadas: [] } };
+  const comparables = [{ name: 'ALPHA GROUP SAS' }];
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.deepStrictEqual(porMotivo.aceptadas, ['Alpha Group S.A.S.']);
+  assert.deepStrictEqual(porMotivo.holding, []);
+});
+
+test('sincronizarMatrizConMuestra: un nombre repetido en la muestra no duplica la entrada', () => {
+  const matriz = { universo: 2, porMotivo: { holding: ['Alpha Group'], aceptadas: [] } };
+  const comparables = [{ name: 'Alpha Group' }, { name: 'alpha group' }];
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.deepStrictEqual(porMotivo.aceptadas, ['Alpha Group']);
+});
+
+test('sincronizarMatrizConMuestra: sin matriz o sin porMotivo, no hace nada', () => {
+  assert.strictEqual(sincronizarMatrizConMuestra(null, [{ name: 'X' }]), null);
+  const sinMotivo = { universo: 0 };
+  assert.strictEqual(sincronizarMatrizConMuestra(sinMotivo, [{ name: 'X' }]), sinMotivo);
+});
+
+test('sincronizarMatrizConMuestra: comparables ausente (estudio sin cargar) es no-op', () => {
+  const matriz = { universo: 1, porMotivo: { aceptadas: ['Beta'] } };
+  assert.strictEqual(sincronizarMatrizConMuestra(matriz, null), matriz);
+  assert.strictEqual(sincronizarMatrizConMuestra(matriz, undefined), matriz);
+});
+
+test('sincronizarMatrizConMuestra: comparables vacío a propósito vacía aceptadas', () => {
+  const matriz = { universo: 1, porMotivo: { aceptadas: ['Beta'] } };
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, []);
+  assert.deepStrictEqual(porMotivo.aceptadas, []);
+  assert.deepStrictEqual(porMotivo.rigorFuncional, ['Beta']);
+});
+
+test('sincronizarMatrizConMuestra: una fila en blanco no rescata nada', () => {
+  const matriz = { universo: 1, porMotivo: { holding: ['Alpha'], aceptadas: [] } };
+  const comparables = [{ name: '   ' }, { name: '' }];
+  const { porMotivo } = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.strictEqual(porMotivo, matriz.porMotivo, 'nada que mover: ni siquiera se reescribe');
+});
+
+test('sincronizarMatrizConMuestra: una compañía sin motivo en la matriz se deja fuera', () => {
+  /* Creada desde su EEFF y nunca estuvo en el universo de Capital IQ: no se inventa su lugar. */
+  const matriz = { universo: 2, porMotivo: { holding: ['Alpha'], aceptadas: ['Beta'] } };
+  const comparables = [{ name: 'Beta' }, { name: 'Externa Nueva SAS', creadaDesdeEeff: true }];
+  const resultado = sincronizarMatrizConMuestra(matriz, comparables);
+  assert.strictEqual(resultado, matriz, 'nada que reconciliar: Externa no está en la matriz');
+  assert.strictEqual(resultado.universo, 2, 'el universo no se infla con una compañía externa');
+});
+
+test('sincronizarMatrizConMuestra: aplicarla dos veces seguidas es no-op la segunda vez', () => {
+  const matriz = { universo: 3, porMotivo: { holding: ['Alpha'], aceptadas: ['Beta', 'Gamma'] } };
+  const comparables = [{ name: 'Beta' }, { name: 'Alpha' }];
+  const primera = sincronizarMatrizConMuestra(matriz, comparables);
+  const segunda = sincronizarMatrizConMuestra(primera, comparables);
+  assert.strictEqual(segunda, primera, 'ya reconciliada, la segunda pasada no mueve nada');
+});
+
 /* ══════ Muestra de comparables ══════ */
 
 const conComparables = {
@@ -282,6 +441,22 @@ test('el diagnóstico avisa cuando la tabla de razones de rechazo quedó descuad
   });
   assert.strictEqual(d.razonesRechazoCubiertas, true);
   assert.strictEqual(d.razonesRechazoDescuadradas, true);
+});
+
+test('el diagnóstico avisa cuando la matriz no refleja la muestra final actual', () => {
+  /* La matriz puede sumar perfectamente su propio universo y aun así ser una foto vieja de una
+     muestra que ya cambió: `conComparables` tiene 3 comparables reales, pero la matriz solo
+     declara 2 aceptadas —se guardó antes de que se agregara la tercera—. */
+  const matrizAtrasada = { universo: 5, porMotivo: { aceptadas: ['A', 'B'], rigorFuncional: ['C', 'D', 'E'] } };
+  const atrasado = diagnosticarCobertura('<p>x</p>', { ...conComparables, matrizRechazo: matrizAtrasada });
+  assert.strictEqual(atrasado.matrizRechazoDesactualizada, true);
+
+  const matrizAlDia = { universo: 5, porMotivo: { aceptadas: ['A', 'B', 'C'], rigorFuncional: ['D', 'E'] } };
+  const alDia = diagnosticarCobertura('<p>x</p>', { ...conComparables, matrizRechazo: matrizAlDia });
+  assert.strictEqual(alDia.matrizRechazoDesactualizada, false);
+
+  /* Sin matriz, no hay nada que comparar: no se inventa un descuadre que no se puede probar. */
+  assert.strictEqual(diagnosticarCobertura('<p>x</p>', conComparables).matrizRechazoDesactualizada, false);
 });
 
 test('el diagnóstico avisa de la muestra sin cargar y de las comparables sin cifras', () => {
