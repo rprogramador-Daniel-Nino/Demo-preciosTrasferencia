@@ -1,5 +1,5 @@
 import XLSX from 'xlsx-js-style';
-import { PAIS_DIAN } from '../utils/calculations.js';
+import { PAIS_DIAN, num } from '../utils/calculations.js';
 import { parseHojaPrestamos } from './excelPrestamosParser.js';
 
 /* El concepto que el informe declara es «nombre (código)» —«Otros servicios (07)»—. El
@@ -201,7 +201,7 @@ export async function parseExcelOperations(file) {
           const ad = idxAdicional;
           const nomAd = String(ad.iNom > -1 ? f[ad.iNom] : '').trim();
           if (!nomAd || nomAd.startsWith('*')) continue;
-          const montoAd = parseFloat(String(ad.iMonto > -1 ? f[ad.iMonto] : '').replace(/[^0-9.-]/g, '')) || 0;
+          const montoAd = num(ad.iMonto > -1 ? f[ad.iMonto] : '') || 0;
           if (montoAd <= 0) continue;
           const codAd = String(ad.iCod > -1 ? f[ad.iCod] : '').trim();
           candidatasAdicional.push({
@@ -224,7 +224,7 @@ export async function parseExcelOperations(file) {
         if (tRaw) currentTipo = tRaw;
 
         const nit = String(iNit > -1 ? f[iNit] : '').replace(/[^0-9]/g, '');
-        const monto = parseFloat(String(iMonto > -1 ? f[iMonto] : '').replace(/[^0-9.\-]/g, '')) || 0;
+        const monto = num(iMonto > -1 ? f[iMonto] : '') || 0;
         const pais = String(iPais > -1 ? f[iPais] : '').trim();
         const cod = String(iCod > -1 ? f[iCod] : '').trim();
 

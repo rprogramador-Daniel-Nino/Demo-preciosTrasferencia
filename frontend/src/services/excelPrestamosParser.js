@@ -1,4 +1,5 @@
 import XLSX from 'xlsx-js-style';
+import { num } from '../utils/calculations.js';
 
 /* Mismo criterio de normalización que usa excelOperationsParser.js para nombres de hoja:
    cada contribuyente titula sus columnas a su manera y no hay que exigir el texto exacto de
@@ -81,9 +82,10 @@ export function fechaISODeSerialExcel(valor) {
   return `${y}-${m}-${d}`;
 }
 
+/* `num` y no `parseFloat`: con texto colombiano, parseFloat se detiene en el segundo
+   punto («2.761.202.249» daba 2,761) y pierde el negativo entre paréntesis. */
 function numero(valor) {
-  const n = parseFloat(String(valor ?? '').replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(n) ? n : 0;
+  return num(valor) ?? 0;
 }
 
 function texto(valor) {

@@ -16,6 +16,7 @@ const {
 const { peticionDeOrigenPermitido } = require('./origenesPermitidos');
 const { crearLimitadorPorIp, ipDeLaPeticion } = require('./limitadorTasa');
 const { peticionAutenticada } = require('./verificarSesion');
+const { politicaClaude, politicaGemini } = require('./politicaModelos');
 
 /* Filtro común de las cinco funciones HTTP públicas (`claude`, `gemini`, `extraerRut`,
    `extraerCamara`, `generarAnalisisSector`): todas hablan con una API de pago
@@ -109,14 +110,14 @@ exports.claude = onRequest(
         return;
       }
 
-      const body = req.body || {};
-      if (!body.model) {
-        /* Antes aquí estaba claude-3-5-haiku-20241022, retirado por Anthropic el
-           19-02-2026 y respondiendo 404: fallaba cualquier llamada que no mandara
-           `model`. Mismo identificador que usan analisisMercadoActualizar.js y
-           analisisSectorActualizar.js. */
-        body.model = 'claude-haiku-4-5-20251001';
+      /* Modelo por defecto (Haiku), lista blanca y techo de max_tokens: ver
+         politicaModelos.js. Antes el cuerpo se reenviaba tal cual. */
+      const politica = politicaClaude(req.body);
+      if (politica.error) {
+        res.status(400).json({ error: { message: politica.error } });
+        return;
       }
+      const body = politica.body;
 
       const upstream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -182,8 +183,13 @@ exports.gemini = onRequest(
       }
 
       const { model, ...body } = req.body || {};
+      const politica = politicaGemini(model, GEMINI_MODEL_DEFAULT);
+      if (politica.error) {
+        res.status(400).json({ error: politica.error });
+        return;
+      }
       const upstream = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model || GEMINI_MODEL_DEFAULT}:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${politica.modelo}:generateContent`,
         {
           method: 'POST',
           headers: {

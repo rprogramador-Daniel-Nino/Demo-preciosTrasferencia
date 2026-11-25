@@ -14,6 +14,7 @@ const {
 const { peticionDeOrigenPermitido } = require('./functions/origenesPermitidos');
 const { crearLimitadorPorIp, ipDeLaPeticion } = require('./functions/limitadorTasa');
 const { peticionAutenticada } = require('./functions/verificarSesion');
+const { politicaClaude, politicaGemini } = require('./functions/politicaModelos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -122,6 +123,11 @@ app.post('/api/claude', async (req, res) => {
   if (!API_KEY) {
     return res.status(500).json({ error: 'Servidor sin ANTHROPIC_API_KEY configurada.' });
   }
+  /* Misma política que functions/index.js: modelo por defecto, lista blanca y techo
+     de max_tokens (functions/politicaModelos.js). */
+  const politica = politicaClaude(req.body);
+  if (politica.error) return res.status(400).json({ error: { message: politica.error } });
+  const cuerpo = politica.body;
   try {
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -130,13 +136,13 @@ app.post('/api/claude', async (req, res) => {
         'x-api-key': API_KEY,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(cuerpo),
     });
 
     const data = await upstream.json();
 
     if (debeCaerAGemini(upstream.status, data)) {
-      const respuesta = await atenderConGemini(req.body, data, upstream.status);
+      const respuesta = await atenderConGemini(cuerpo, data, upstream.status);
       return res.status(respuesta.status)
         .set(CABECERA_PROVEEDOR, respuesta.proveedor)
         .json(respuesta.cuerpo);
@@ -206,8 +212,10 @@ app.post('/api/gemini', async (req, res) => {
   }
   try {
     const { model, ...body } = req.body || {};
+    const politica = politicaGemini(model, GEMINI_MODEL_DEFAULT);
+    if (politica.error) return res.status(400).json({ error: politica.error });
     const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model || GEMINI_MODEL_DEFAULT}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${politica.modelo}:generateContent`,
       {
         method: 'POST',
         headers: {

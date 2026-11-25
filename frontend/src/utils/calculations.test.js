@@ -310,3 +310,13 @@ test('el diagnóstico prueba los cinco indicadores como palanca, no tres', () =>
       `la palanca propone «${otro}», que no es uno de los indicadores del sistema`);
   });
 });
+
+/* ══════ pliOf MB sin costo ══════
+   Sin costo de ventas el MB salía 100 % (`s - null` es `s`) y el estudio concluía CUMPLE
+   sin dato. Debe comportarse como Berry, NCP y Cost Plus: null. */
+test('pliOf MB devuelve null cuando falta el costo de ventas', () => {
+  assert.strictEqual(pliOf({ s: 1000, c: null, op: 50 }, 'MB'), null);
+  assert.strictEqual(pliOf({ s: 1000, c: '', op: 50 }, 'MB'), null);
+  assert.strictEqual(pliOf({ s: 1000, op: 50 }, 'MB'), null);
+  assert.strictEqual(pliOf({ s: 1000, c: 600 }, 'MB'), 0.4);
+});

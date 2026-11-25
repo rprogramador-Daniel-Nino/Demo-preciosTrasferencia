@@ -169,3 +169,14 @@ test('parseHojaPrestamos devuelve [] con datos vacíos o ausentes', () => {
   assert.deepStrictEqual(parseHojaPrestamos(null), []);
   assert.deepStrictEqual(parseHojaPrestamos(undefined), []);
 });
+
+test('parseHojaPrestamos lee montos colombianos escritos como texto', () => {
+  const fila = [...FILAS_PRESTAMOS_AUTOLAND[0]];
+  fila[9] = '2.761.202.249';   // valor en COP del desembolso
+  fila[10] = '1.234.567,89';   // saldo al 31 de diciembre
+  fila[12] = '(1.500)';        // intereses en COP, negativo entre paréntesis
+  const [p] = parseHojaPrestamos(hojaPrestamosCompleta([fila]));
+  assert.strictEqual(p.valorCOPDesembolso, 2761202249);
+  assert.strictEqual(p.saldoCOP, 1234567.89);
+  assert.strictEqual(p.interesesCOP, -1500);
+});

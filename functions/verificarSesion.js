@@ -37,6 +37,29 @@ const { getAuth } = require('firebase-admin/auth');
    tokens del suyo, así que probar el otro no cuesta nada extra en ese caso. */
 const PROYECTOS_VALIDOS = ['precios-trasnferencia', 'precios-trasnferencia-pruebas'];
 
+/* Una función DESPLEGADA solo acepta tokens de su propio proyecto: antes, producción
+   aceptaba también los de pruebas, y una cuenta creada en pruebas gastaba la key de
+   producción. Cloud Functions publica su proyecto en GCLOUD_PROJECT; local
+   (`server.js`) no lo trae y sigue aceptando los dos, como antes. */
+function proyectosAceptados(entorno = process.env) {
+  const propio = entorno.GCLOUD_PROJECT || entorno.GOOGLE_CLOUD_PROJECT || '';
+  return PROYECTOS_VALIDOS.includes(propio) ? [propio] : PROYECTOS_VALIDOS;
+}
+
+/* Los mismos dominios que `firestore.rules` (función `esMiembro`) y que
+   DOMINIOS_PERMITIDOS en frontend/src/services/firebase.js. La firma del token solo
+   prueba que la cuenta existe en Auth, no que sea del despacho: sin esto, cualquier
+   cuenta de Google que lograra entrar a Auth usaba el proxy de IA. */
+const DOMINIOS_PERMITIDOS = ['crconsultorescolombia.com', 'scientia-legal.com'];
+
+/** true si el token decodificado es de una cuenta verificada de un dominio permitido. */
+function cuentaPermitida(claims) {
+  if (!claims || typeof claims !== 'object') return false;
+  if (claims.email_verified !== true) return false;
+  const correo = String(claims.email || '').trim().toLowerCase();
+  return DOMINIOS_PERMITIDOS.some((d) => correo.endsWith('@' + d));
+}
+
 function appParaProyecto(projectId) {
   const nombre = 'auth-' + projectId;
   const existente = getApps().find((a) => a.name === nombre);
@@ -44,18 +67,17 @@ function appParaProyecto(projectId) {
   return initializeApp({ projectId }, nombre);
 }
 
-/** Verificación real contra Firebase: intenta cada proyecto conocido hasta que
- *  uno acepte el token. */
+/** Verificación real contra Firebase: intenta cada proyecto aceptado hasta que
+ *  uno acepte el token. Devuelve los claims decodificados, o null. */
 async function verificarConFirebase(token) {
-  for (const projectId of PROYECTOS_VALIDOS) {
+  for (const projectId of proyectosAceptados()) {
     try {
-      await getAuth(appParaProyecto(projectId)).verifyIdToken(token);
-      return true;
+      return await getAuth(appParaProyecto(projectId)).verifyIdToken(token);
     } catch {
       /* no es de este proyecto, o el token ya venció: probar el siguiente */
     }
   }
-  return false;
+  return null;
 }
 
 /** El token de `Authorization: Bearer <token>`, o cadena vacía si no viene o trae
@@ -65,7 +87,8 @@ function tokenDeLaPeticion(req) {
   return cabecera.startsWith('Bearer ') ? cabecera.slice('Bearer '.length).trim() : '';
 }
 
-/** true si la petición trae un ID token de Firebase Auth válido.
+/** true si la petición trae un ID token de Firebase Auth válido, de una cuenta
+ *  verificada de un dominio del despacho.
  *
  *  `verificar` es inyectable para poder probar la extracción de la cabecera y la
  *  lógica de aceptación/rechazo sin llamar a Firebase de verdad (ver
@@ -74,10 +97,13 @@ async function peticionAutenticada(req, verificar = verificarConFirebase) {
   const token = tokenDeLaPeticion(req);
   if (!token) return false;
   try {
-    return await verificar(token);
+    return cuentaPermitida(await verificar(token));
   } catch {
     return false;
   }
 }
 
-module.exports = { peticionAutenticada, tokenDeLaPeticion, PROYECTOS_VALIDOS };
+module.exports = {
+  peticionAutenticada, tokenDeLaPeticion, cuentaPermitida, proyectosAceptados,
+  PROYECTOS_VALIDOS, DOMINIOS_PERMITIDOS,
+};

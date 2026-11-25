@@ -185,7 +185,12 @@ export function pliOf(o, kind) {
   }
   /* `egreso` y no `num`: el costo llega con el signo que traía el documento (ver
      `egreso`), y con signo negativo la utilidad bruta salía por el doble. */
-  if (kind === 'MB') return (s - egreso(o.c)) / s;
+  /* Sin costo no hay margen bruto: `s - null` es `s` y el MB salía en 100 %, con lo que
+     el estudio concluía CUMPLE sin dato. Igual que Berry, NCP y Cost Plus: null. */
+  if (kind === 'MB') {
+    const c = egreso(o.c);
+    return c === null ? null : (s - c) / s;
+  }
   /* Berry = utilidad bruta ÷ gastos operativos, la definición del Anexo del Cap. III
      de las Guías OCDE y la que replica el modelo Excel validado por el consultor.
 
