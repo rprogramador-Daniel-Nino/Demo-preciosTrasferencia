@@ -118,16 +118,59 @@ test('en préstamo, el concepto es el canónico del catálogo con su código, no
   assert.strictEqual(t.filas[0][0], 'Intereses sobre préstamos (42)');
 });
 
-test('en préstamo, el monto es la suma de interesesCOP de todos los préstamos, no monto_operacion/monto', () => {
+test('en préstamo, si el Excel trae monto_operacion, ese es el monto — no se recalcula desde interesesCOP', () => {
+  /* `parseExcelOperations` acota `monto_operacion` a la contraparte real del préstamo
+     (`excelOperationsParser.js`, corrección del 2026-11-26 contra `study_1795625967358`,
+     Autoland SAS): esa cifra es la que recibe la DIAN y la que trae el Formato 1125
+     radicado (2.370.840.142, verificado contra el PDF de la Dmuisca). Antes esta tabla
+     ignoraba `monto_operacion` a propósito porque venía "desconectada" de la suma de
+     intereses, pero esa desconexión era el síntoma del MISMO bug que mezclaba, en el
+     Excel genérico, operaciones de un vinculado ajeno al préstamo ("BRUNO FRITSCH SA" en
+     ese mismo caso) — no una razón para desconfiar de `monto_operacion` en general. */
   const t = filasOperacionesDeIngreso({
-    tipo_estudio: 'prestamo', vinc: 'Inversiones San Jeronimo SpA', pais_vinc: 'Chile',
-    monto_operacion: 4345505548, // el monto viejo y desconectado que reportó el bug real
+    tipo_estudio: 'prestamo', vinc: 'Inversiones San Jeronimo LTDA', pais_vinc: 'Chile',
+    monto_operacion: 2370840142,
     prestamos: [
-      { interesesCOP: 545267665 }, { interesesCOP: 480413482 },
-      { interesesCOP: 312268763 }, { interesesCOP: 1032888986 },
+      { interesesCOP: 579346941, valorCOPDesembolso: 10431000000 },
+      { interesesCOP: 510441906, valorCOPDesembolso: 8822000000 },
+      { interesesCOP: 331784592, valorCOPDesembolso: 6194500000 },
+      { interesesCOP: 1097445415, valorCOPDesembolso: 20657200000 },
+    ],
+  });
+  assert.strictEqual(t.filas[0][3], '2.370.840.142');
+});
+
+test('en préstamo sin monto_operacion en el Excel (solo la hoja de desembolsos), cae a la suma de interesesCOP', () => {
+  const t = filasOperacionesDeIngreso({
+    tipo_estudio: 'prestamo', vinc: 'Inversiones San Jeronimo LTDA', pais_vinc: 'Chile',
+    prestamos: [
+      { interesesCOP: 545267665, valorCOPDesembolso: 10431000000 },
+      { interesesCOP: 480413482, valorCOPDesembolso: 8822000000 },
+      { interesesCOP: 312268763, valorCOPDesembolso: 6194500000 },
+      { interesesCOP: 1032888986, valorCOPDesembolso: 20657200000 },
     ],
   });
   assert.strictEqual(t.filas[0][3], '2.370.838.896');
+});
+
+test('en préstamo, el monto excluye los abonos a capital (valorCOPDesembolso 0) del total de intereses', () => {
+  /* Caso real (study_1795625967358, Autoland SAS): 4 desembolsos reales más 2 filas de
+     abono a capital que el Excel trae con `valorCOPDesembolso: 0` y `interesesCOP`
+     NEGATIVO — mismo criterio de exclusión que ya aplica `filasPrestamoConVinculado`
+     (`tablasPrestamos.js`) para esas mismas dos filas. Sin el filtro, la resta de los
+     abonos hundía el total muy por debajo de los intereses reales del año. */
+  const t = filasOperacionesDeIngreso({
+    tipo_estudio: 'prestamo', vinc: 'Inversiones San Jeronimo SpA', pais_vinc: 'Chile',
+    prestamos: [
+      { interesesCOP: 579346941, valorCOPDesembolso: 10431000000 },
+      { interesesCOP: 510441906, valorCOPDesembolso: 8822000000 },
+      { interesesCOP: 331784592, valorCOPDesembolso: 6194500000 },
+      { interesesCOP: 1097445415, valorCOPDesembolso: 20657200000 },
+      { interesesCOP: -1217329233, valorCOPDesembolso: 0 },
+      { interesesCOP: -1153510906, valorCOPDesembolso: 0 },
+    ],
+  });
+  assert.strictEqual(t.filas[0][3], '2.519.018.854');
 });
 
 test('en préstamo marcado pero sin prestamos[], cae al comportamiento genérico sin romperse', () => {
@@ -227,10 +270,25 @@ test('en préstamo, el tipo de operación es el concepto canónico del catálogo
   assert.deepStrictEqual(t.filas[4], ['Tipo de operaciones (Egreso)', 'Intereses sobre préstamos']);
 });
 
-test('en préstamo, el monto en pesos es la suma de interesesCOP, no monto_operacion/monto', () => {
+test('en préstamo, el monto en pesos usa monto_operacion cuando el Excel lo trae', () => {
+  /* Mismo caso y razonamiento que en `filasOperacionesDeIngreso` (ver su comentario). */
   const t = filasTransaccionesIntercompania({
-    tipo_estudio: 'prestamo', monto_operacion: 4345505548,
-    prestamos: [{ interesesCOP: 545267665 }, { interesesCOP: 480413482 }],
+    tipo_estudio: 'prestamo', monto_operacion: 2370840142,
+    prestamos: [
+      { interesesCOP: 545267665, valorCOPDesembolso: 10431000000 },
+      { interesesCOP: 480413482, valorCOPDesembolso: 8822000000 },
+    ],
+  });
+  assert.deepStrictEqual(t.filas[5], ['Monto en pesos', '2.370.840.142']);
+});
+
+test('en préstamo sin monto_operacion, el monto en pesos cae a la suma de interesesCOP', () => {
+  const t = filasTransaccionesIntercompania({
+    tipo_estudio: 'prestamo',
+    prestamos: [
+      { interesesCOP: 545267665, valorCOPDesembolso: 10431000000 },
+      { interesesCOP: 480413482, valorCOPDesembolso: 8822000000 },
+    ],
   });
   assert.deepStrictEqual(t.filas[5], ['Monto en pesos', '1.025.681.147']);
 });

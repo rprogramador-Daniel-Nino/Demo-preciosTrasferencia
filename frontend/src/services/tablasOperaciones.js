@@ -70,23 +70,22 @@ export function conceptoDeOperacion(estudio) {
   return { desc: texto, cod: codigoDeTipoOperacion(texto, !!(estudio && estudio.egreso)) };
 }
 
-/** El monto de la operación ya formateado, o «—». Los dos campos porque la ingesta
- *  escribe ambos y un estudio guardado antes puede traer solo uno. */
-function montoDeLaOperacion(estudio) {
-  const bruto = (estudio && (estudio.monto_operacion ?? estudio.monto)) ?? null;
-  const n = num(bruto);
-  return n === null ? SIN_DATO : fmt(n);
-}
-
-/** La suma de intereses de todos los préstamos del estudio, en COP, o `null` si NINGUNO
- *  trae `interesesCOP` (préstamo recién cargado, antes de completar esa fase) — un `|| 0`
- *  silencioso aquí publicaría "0" y, peor, marcaría la tabla como "con datos" para
- *  `sinNingunDato`, pisando la de la plantilla sin necesidad. Misma cifra, de la misma
- *  fuente, que ya usa fila a fila «Transacciones Intercompañías»
- *  (`tablasPrestamoColumnas.js`) — no `monto_operacion`/`monto`, un campo de la ingesta
- *  genérica de OPERACIONES que puede quedar desconectado del total real de intereses. */
+/** La suma de intereses de todos los préstamos del estudio, en COP, o `null` si no hay
+ *  ninguno con `interesesCOP` — un `|| 0` silencioso aquí publicaría "0" y, peor, marcaría
+ *  la tabla como "con datos" para `sinNingunDato`, pisando la de la plantilla sin
+ *  necesidad. No `monto_operacion`/`monto`, un campo de la ingesta genérica de OPERACIONES
+ *  que puede quedar desconectado del total real de intereses.
+ *
+ *  Excluye primero los abonos a capital (`valorCOPDesembolso` en 0 o ausente): mismo
+ *  criterio que ya aplica `filasPrestamoConVinculado` (`tablasPrestamos.js`), porque el
+ *  Excel real puede traer esas filas con un `interesesCOP` NEGATIVO que, sin excluirlas,
+ *  resta del total y lo hunde muy por debajo de los intereses reales del año (reportado
+ *  el 2026-11-25 contra `study_1795625967358`: 4 desembolsos reales por ≈2.520 millones
+ *  más 2 abonos que, sin este filtro, lo bajaban a ≈148 millones). */
 function montoInteresesPrestamos(estudio) {
-  const valores = estudio.prestamos.map((p) => num(p.interesesCOP));
+  const prestamosConDesembolso = estudio.prestamos.filter((p) => num(p.valorCOPDesembolso) > 0);
+  if (!prestamosConDesembolso.length) return null;
+  const valores = prestamosConDesembolso.map((p) => num(p.interesesCOP));
   if (valores.every((v) => v === null)) return null;
   return valores.reduce((acc, v) => acc + (v || 0), 0);
 }
@@ -105,16 +104,29 @@ export function filasOperacionesDeIngreso(estudio) {
   const prestamo = tienePrestamos(e);
 
   /* En préstamo, el concepto es el canónico ("desc (cod)") de `conceptoDeOperacion` —no el
-     texto crudo de `vinc_tipo`— y el monto es la suma de intereses de los préstamos, no
-     `monto_operacion`/`monto`. Confirmado con un informe real: estas dos cifras venían
-     desconectadas entre sí y de lo que ya muestra «Transacciones Intercompañías». */
+     texto crudo de `vinc_tipo`. */
   const concepto = (() => {
     if (!prestamo) return wrap(e.vinc_tipo);
     const { desc, cod } = conceptoDeOperacion(e);
     return desc && cod ? desc + ' (' + cod + ')' : wrap(e.vinc_tipo);
   })();
+  /* El monto es `monto_operacion` cuando el Excel lo trae: desde que
+     `parseExcelOperations` lo acota a la contraparte real del préstamo
+     (`excelOperationsParser.js`), es la misma cifra que recibe la DIAN —verificado
+     contra el Formato 1125 radicado de un caso real (Autoland SAS, `study_1795625967358`):
+     2.370.840.142—. Antes esta tabla lo ignoraba a propósito porque venía "desconectado"
+     de la suma de `interesesCOP` de `estudio.prestamos`, pero esa desconexión era el
+     síntoma de OTRO bug —el Excel genérico mezclaba, bajo el mismo vinculado, operaciones
+     de una contraparte ajena al préstamo ("BRUNO FRITSCH SA" en ese mismo caso)—, ya
+     corregido en el parser; no una razón para desconfiar de `monto_operacion` en general.
+     Solo se cae a la suma de intereses cuando el Excel no trae esa fila genérica (un
+     estudio armado solo con la hoja de desembolsos, sin la hoja de vinculados). */
+  const montoGenerico = num(e.monto_operacion ?? e.monto);
   const montoPrestamo = prestamo ? montoInteresesPrestamos(e) : null;
-  const monto = prestamo ? montoTexto(montoPrestamo) : montoDeLaOperacion(e);
+  const montoNum = prestamo
+    ? (montoGenerico !== null ? montoGenerico : montoPrestamo)
+    : montoGenerico;
+  const monto = montoNum === null ? SIN_DATO : fmt(montoNum);
 
   return {
     nombre: 'Operaciones de ' + (e.egreso ? 'Egreso' : 'Ingreso'),
@@ -129,7 +141,7 @@ export function filasOperacionesDeIngreso(estudio) {
        siempre resuelve (igual que el método "PC" fijo de `filasMetodoAplicablePrestamo`),
        así que no cuenta como dato — lo que decide es el vinculado y el monto. */
     sinDatos: prestamo
-      ? sinNingunDato([e.vinc, e.pais_vinc, montoPrestamo])
+      ? sinNingunDato([e.vinc, e.pais_vinc, montoNum])
       : sinNingunDato([e.vinc_tipo, e.vinc, e.pais_vinc, e.monto_operacion ?? e.monto]),
   };
 }
@@ -168,10 +180,15 @@ export function filasTransaccionesIntercompania(estudio) {
   const prestamo = tienePrestamos(e);
   /* Mismo criterio que la Tabla 1: en préstamo, el tipo de operación es el concepto
      canónico del catálogo (solo la descripción, sin código: esta ficha no muestra código)
-     y el monto es la suma de intereses de los préstamos, no `monto_operacion`/`monto`. */
+     y el monto prefiere `monto_operacion` sobre la suma de intereses de los préstamos
+     —mismo razonamiento que `filasOperacionesDeIngreso`, ver su comentario—. */
   const tipoOperacionValor = prestamo ? conceptoDeOperacion(e).desc : wrap(e.vinc_tipo);
+  const montoGenerico = num(e.monto_operacion ?? e.monto);
   const montoPrestamo = prestamo ? montoInteresesPrestamos(e) : null;
-  const montoValor = prestamo ? montoTexto(montoPrestamo) : montoDeLaOperacion(e);
+  const montoNum = prestamo
+    ? (montoGenerico !== null ? montoGenerico : montoPrestamo)
+    : montoGenerico;
+  const montoValor = montoNum === null ? SIN_DATO : fmt(montoNum);
 
   return {
     nombre: 'Transacciones Inter compañía',
@@ -191,7 +208,7 @@ export function filasTransaccionesIntercompania(estudio) {
        inciso de vinculación tiene valor por defecto, así que ninguno de los dos cuenta
        como dato. Lo que decide son los campos del vinculado. */
     sinDatos: prestamo
-      ? sinNingunDato([e.vinc, e.vinc_id, e.pais_vinc, montoPrestamo])
+      ? sinNingunDato([e.vinc, e.vinc_id, e.pais_vinc, montoNum])
       : sinNingunDato([e.vinc, e.vinc_id, e.pais_vinc, e.vinc_tipo, e.monto_operacion ?? e.monto]),
   };
 }

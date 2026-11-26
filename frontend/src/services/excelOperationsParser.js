@@ -62,6 +62,26 @@ const esFilaDeEncabezado = (f) => {
   return s.includes('identificaci') && s.includes('tipo de operaci');
 };
 
+/* Formas jurídicas que varían entre la hoja de préstamos y la genérica de vinculados
+   para la MISMA empresa: el archivo real de Autoland trae «Inversiones San Jeronimo
+   SpA» en la hoja de préstamos y «INVERSIONES SAN JERONIMO LTDA» en la de operaciones.
+   Sin ignorar la forma jurídica, `vinculadoEsContraparteDePrestamo` (más abajo) no las
+   reconoce como la misma razón social. */
+const SUFIJOS_FORMA_JURIDICA = /\b(SAS|SA|LTDA|SPA|LLC|LTD|INC|CORP|CIA)\b/g;
+
+/** Núcleo comparable de una razón social: sin forma jurídica, tildes, mayúsculas ni
+ *  puntuación. Vive aquí (y no se reutiliza `nameKey` de `comparablesEngine.js`,
+ *  pensado para cruzar comparables de mercado) porque compara dos hojas del MISMO
+ *  Excel, no empresas de universos distintos. */
+function nucleoRazonSocial(nombre) {
+  return String(nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[.,]/g, '')
+    .replace(SUFIJOS_FORMA_JURIDICA, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
 /**
  * Módulo de lectura e ingesta del Excel de Operaciones con Vinculados
  * (Basado en la lógica del método pt36AnalizarOperaciones de index.html)
@@ -315,6 +335,38 @@ export async function parseExcelOperations(file) {
       // Ya que los egresos se ingieren como operaciones del estudio, no se consideran descartados
       egresosFilas = 0;
       egresosMonto = 0;
+    }
+
+    /* Con hoja de préstamos, la hoja genérica de vinculados puede listar operaciones de
+       VARIAS contrapartes —el archivo real de Autoland trae dos contratos de servicios
+       con Bruno Fritsch SA además de los intereses del préstamo con Inversiones San
+       Jeronimo—, y el estudio de préstamo analiza una sola: la del préstamo. Sin este
+       filtro, `mainVinculado`/`totalMonto` se quedaban con la primera fila del archivo y
+       la suma de todas, respectivamente, aunque fueran de un vinculado ajeno al préstamo
+       (reportado el 2026-11-26 contra `study_1795625967358`: "BRUNO  FRITSCH  SA" en vez
+       de "INVERSIONES SAN JERONIMO LTDA", y el monto con el de los dos contratos de
+       servicios sumado al de los intereses).
+       Solo se activa si HAY coincidencia y si además ESTRECHA la lista: si todas las
+       filas ya son de la contraparte del préstamo (el caso típico), no cambia nada, y si
+       ninguna coincide (nombre irreconocible entre hojas) se conserva el comportamiento
+       de siempre en vez de vaciar la operación analizada. */
+    if (filasPrestamos.length && rowsParsed.length) {
+      const contrapartesPrestamo = new Set();
+      filasPrestamos.forEach((p) => {
+        [p.otorga, p.recibe].forEach((n) => {
+          const clave = nucleoRazonSocial(n);
+          if (clave) contrapartesPrestamo.add(clave);
+        });
+      });
+      const rowsDeContraparte = rowsParsed.filter(
+        (r) => contrapartesPrestamo.has(nucleoRazonSocial(r.vinculado))
+      );
+      if (rowsDeContraparte.length && rowsDeContraparte.length < rowsParsed.length) {
+        rowsParsed = rowsDeContraparte;
+        mainVinculado = rowsDeContraparte[0].vinculado;
+        mainVinculadoId = rowsDeContraparte[0].nit || mainVinculadoId;
+        mainPais = rowsDeContraparte[0].pais || mainPais;
+      }
     }
 
     // Calcular el monto total y el tipo de operación principal

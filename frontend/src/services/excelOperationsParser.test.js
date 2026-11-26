@@ -569,3 +569,57 @@ test('sin ninguna hoja de préstamos, res.prestamos es null', async () => {
   const res = await parseExcelOperations(workbookToFakeFile(wb));
   assert.strictEqual(res.prestamos, null);
 });
+
+const ENCABEZADO_PRESTAMO = [
+  'Crédito', 'Razón Social de quien otorga el préstamo', 'Razón Social de quien recibe el préstamo',
+  'Fuente de los recursos', 'Fecha original en la que se pactó', 'Valor del desembolso en la moneda pactada',
+  'Moneda pactada', 'No. de desembolsos', 'Fecha de desembolso', 'Valor en COP en la fecha de desembolso',
+  'Valor en COP del saldo al 31 de diciembre de 2025',
+  'Monto de intereses causados o recibidos durante el FY 2025 (Moneda pactada)',
+  'Monto de intereses causados o recibidos durante el FY 2025 (COP)', 'Plazo',
+  'El préstamo fue renovado', 'El préstamo fue cancelado', 'Tasa de interés EFECTIVA ANUAL',
+  'Tasa de interés pactada', 'Periodicidad',
+];
+
+test('con hoja de préstamos, el vinculado y el monto genéricos se restringen a la contraparte del préstamo', async () => {
+  /* Caso real (Autoland, reportado el 2026-11-26): la hoja "Op. Vinculados Economicos"
+     trae TRES filas de dos vinculados distintos —BRUNO FRITSCH SA (dos contratos de
+     servicios) e INVERSIONES SAN JERONIMO LTDA (los intereses del préstamo que este
+     estudio analiza)—. El estudio es de tipo préstamo y la hoja de préstamos identifica
+     a "Inversiones San Jeronimo SpA" (mismo vinculado, con la forma jurídica escrita
+     distinto) como la contraparte real. Sin este filtro, `mainVinculado` se quedaba con
+     la primera fila del archivo (Bruno Fritsch, un cliente ajeno al préstamo) y el monto
+     con la suma de las tres, muy por encima de los intereses reales. */
+  const wb = conEncabezado([
+    ['BRUNO  FRITSCH  SA', '84807200', 'CHILE', 'SANTIAGO', 'CONTRATO DE PRESTACION DE SERIVICIOS TECNOLOGIA', '', '', '1001', '5004', '', 1875365406],
+    ['BRUNO  FRITSCH  SA', '84807200', 'CHILE', 'SANTIAGO', 'CONTRATO DE ASESORIA TECNICA', '', '', '1001', '5002', '', 99300000],
+    ['INVERSIONES SAN JERONIMO LTDA', '76421180', 'CHILE', 'SANTIAGO', 'INTERESES', '', '', '1001', '5006', '', 2370840142],
+  ]);
+
+  const filasPrestamo = [];
+  for (let i = 0; i < 6; i++) filasPrestamo.push(['']);
+  filasPrestamo.push(ENCABEZADO_PRESTAMO);
+  filasPrestamo.push([1, 'Inversiones San Jeronimo SpA', 'Autoland SAS', '', 44131, 3000000, 'USD', 1, 44131, 10431000000, 13227449999.999998, 138470, 579346941, 'No definido', '', '', '4,540% Efectivo Anual', '', '']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasPrestamo), 'Op. Prestamos Vinculados Econom');
+
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+
+  assert.strictEqual(res.vinc, 'INVERSIONES SAN JERONIMO LTDA');
+  assert.strictEqual(res.vinc_id, '76421180');
+  assert.strictEqual(res.pais_vinc, 'CHILE');
+  assert.strictEqual(res.monto, 2370840142);
+  assert.strictEqual(res.rows.length, 1);
+  assert.strictEqual(res.contrapartes, 1);
+});
+
+test('sin hoja de préstamos, el vinculado y el monto genéricos NO se restringen (no hay con qué comparar)', async () => {
+  const wb = conEncabezado([
+    ['BRUNO  FRITSCH  SA', '84807200', 'CHILE', 'SANTIAGO', 'SERVICIOS', '', '', '1001', '5004', '', 1875365406],
+    ['INVERSIONES SAN JERONIMO LTDA', '76421180', 'CHILE', 'SANTIAGO', 'INTERESES', '', '', '1001', '5006', '', 2370840142],
+  ]);
+
+  const res = await parseExcelOperations(workbookToFakeFile(wb));
+
+  assert.strictEqual(res.vinc, 'BRUNO  FRITSCH  SA', 'sin hoja de préstamos, sigue la primera fila como hasta ahora');
+  assert.strictEqual(res.monto, 1875365406 + 2370840142, 'sin hoja de préstamos, sigue sumando todo como hasta ahora');
+});
