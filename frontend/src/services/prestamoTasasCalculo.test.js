@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   FECHA_INICIO_SOFR, serieDisponible, tasaAjustada, totalesPorFecha, rangoIntercuartil,
+  TRIOS_POR_DIRECCION, trioDeDireccion, aplicaRiesgoPais,
 } from './prestamoTasasCalculo.js';
 
 /* Las cifras de estas pruebas vienen del informe real de Autoland 2025 (Tabla 19/20 del
@@ -99,4 +100,37 @@ test('serieDisponible: SOFR no existe antes del 2 de abril de 2018', () => {
 test('serieDisponible: PRIME y TMC no tienen esa restricción', () => {
   assert.strictEqual(serieDisponible('prime', '2000-01-01'), true);
   assert.strictEqual(serieDisponible('tmc', '2000-01-01'), true);
+});
+
+test('TRIOS_POR_DIRECCION: pasivo es PRIME+SOFR+TMC, activo es PRIME+CIRR+LIBOR', () => {
+  assert.deepStrictEqual(TRIOS_POR_DIRECCION.pasivo, ['prime', 'sofr', 'tmc']);
+  assert.deepStrictEqual(TRIOS_POR_DIRECCION.activo, ['prime', 'cirr', 'libor']);
+});
+
+test('trioDeDireccion devuelve el trio de la dirección dada', () => {
+  assert.deepStrictEqual(trioDeDireccion('pasivo'), ['prime', 'sofr', 'tmc']);
+  assert.deepStrictEqual(trioDeDireccion('activo'), ['prime', 'cirr', 'libor']);
+});
+
+test('trioDeDireccion cae a pasivo con dirección desconocida o ausente', () => {
+  assert.deepStrictEqual(trioDeDireccion(null), TRIOS_POR_DIRECCION.pasivo);
+  assert.deepStrictEqual(trioDeDireccion('otra'), TRIOS_POR_DIRECCION.pasivo);
+});
+
+test('aplicaRiesgoPais es true en pasivo o dirección desconocida, false en activo', () => {
+  assert.strictEqual(aplicaRiesgoPais('pasivo'), true);
+  assert.strictEqual(aplicaRiesgoPais('activo'), false);
+  assert.strictEqual(aplicaRiesgoPais(null), true);
+});
+
+test('totalesPorFecha con series custom (activo) calcula cirr/libor en vez de sofr/tmc', () => {
+  const tasasFecha = {
+    prime: { valor: 8 }, cirr: { valor: 5 }, libor: { valor: 5.535 }, moodys: { valor: 0 },
+  };
+  const totales = totalesPorFecha(tasasFecha, 0, ['prime', 'cirr', 'libor']);
+  assert.ok(cerca(totales.prime, 8));
+  assert.ok(cerca(totales.cirr, 5));
+  assert.ok(cerca(totales.libor, 5.535));
+  assert.strictEqual(totales.sofr, undefined);
+  assert.strictEqual(totales.tmc, undefined);
 });
