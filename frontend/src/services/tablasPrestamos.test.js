@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   NOMBRES_TABLA_PRESTAMO, tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo,
+  direccionPrestamo, direccionPrestamoEstudio,
 } from './tablasPrestamos.js';
 
 const PRESTAMOS_AUTOLAND = [
@@ -150,4 +151,31 @@ test('filasPrestamoConVinculado: null si NINGÚN préstamo trae Valor en COP (na
     prestamos: [{ ...PRESTAMOS_AUTOLAND[0], valorCOPDesembolso: 0 }],
   };
   assert.strictEqual(filasPrestamoConVinculado(estudio), null);
+});
+
+test('direccionPrestamo es pasivo cuando el contribuyente recibe el préstamo (Suma Móvil)', () => {
+  const fila = { otorga: 'Grupo Ingenium Tecnologia S.L.', recibe: 'Suma Movil SAS' };
+  assert.strictEqual(direccionPrestamo(fila, 'Suma Movil SAS'), 'pasivo');
+});
+
+test('direccionPrestamo es activo cuando el contribuyente otorga el préstamo (Alciautos)', () => {
+  const fila = { otorga: 'Alciautos S.A.S.', recibe: 'Favina Holdings Inc' };
+  assert.strictEqual(direccionPrestamo(fila, 'Alciautos S.A.S.'), 'activo');
+});
+
+test('direccionPrestamo es null si ni otorga ni recibe coinciden con el contribuyente', () => {
+  const fila = { otorga: 'A', recibe: 'B' };
+  assert.strictEqual(direccionPrestamo(fila, 'C'), null);
+});
+
+test('direccionPrestamoEstudio usa el primer préstamo del estudio', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Suma Movil SAS',
+    prestamos: [{ otorga: 'Grupo Ingenium Tecnologia S.L.', recibe: 'Suma Movil SAS' }],
+  };
+  assert.strictEqual(direccionPrestamoEstudio(estudio), 'pasivo');
+});
+
+test('direccionPrestamoEstudio es null sin préstamos', () => {
+  assert.strictEqual(direccionPrestamoEstudio({ tipo_estudio: 'estandar' }), null);
 });

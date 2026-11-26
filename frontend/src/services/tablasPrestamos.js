@@ -22,6 +22,25 @@ export function vinculadoDePrestamo(fila, ent) {
   return fila.otorga || fila.recibe || 'el vinculado';
 }
 
+/**
+ * 'pasivo' si `ent` recibe el préstamo (es deudor), 'activo' si `ent` lo otorga (es
+ * acreedor), `null` si ninguno de los dos lados coincide con `ent` (dato inconsistente — no
+ * se asume una dirección sin evidencia).
+ */
+export function direccionPrestamo(fila, ent) {
+  const entNorm = normalizarNombreCompania(ent);
+  if (normalizarNombreCompania(fila.recibe) === entNorm) return 'pasivo';
+  if (normalizarNombreCompania(fila.otorga) === entNorm) return 'activo';
+  return null;
+}
+
+/** Dirección del estudio completo: la de `prestamos[0]` (mismo criterio de "un solo
+ *  vinculado" que ya usan Tabla 1/4/13 — la Fase 7 lo generaliza por grupo). */
+export function direccionPrestamoEstudio(estudio) {
+  if (!tienePrestamos(estudio)) return null;
+  return direccionPrestamo(estudio.prestamos[0], estudio.ent);
+}
+
 function fechaTexto(iso) {
   if (!iso) return '—';
   const [y, m, d] = String(iso).split('-');
