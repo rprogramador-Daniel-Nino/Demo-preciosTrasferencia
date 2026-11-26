@@ -1,7 +1,8 @@
 # Estudios de tipo préstamo — Fase 6: trío de tasas condicionado por dirección y tasa índice+spread
 
 **Fecha:** 2026-11-26
-**Estado:** Diseñada, lista para implementar.
+**Estado:** Implementada y probada (`npm test` en verde, 3120 pruebas; lint y build sin
+advertencias nuevas). Verificación manual pendiente (navegador).
 **Precedente:** `docs/superpowers/specs/2026-09-24-estudios-prestamo-design.md` (Fases 1-2),
 commits `8366937`/`409184b`/`b9d1c90` (Fases 4-5, sin spec formal propia — este documento las
 retoma). Único caso real usado hasta ahora para diseñar el motor de tasas: Autoland (un
