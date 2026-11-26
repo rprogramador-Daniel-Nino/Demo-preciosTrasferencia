@@ -18,8 +18,15 @@ import { cuartilInterpolado } from './ajusteRangoCapitalTrabajo.js';
    dato faltante por error de captura. */
 export const FECHA_INICIO_SOFR = '2018-04-02';
 
+/* El panel oficial de USD LIBOR dejó de publicarse el 30 de junio de 2023 (sustituido por
+   SOFR) — a diferencia de SOFR, que es un piso (no existe antes de su fecha de inicio),
+   LIBOR es un techo: no existe un valor real después de esa fecha, y no debe inventarse ni
+   sustituirse en silencio por otra serie. */
+export const FECHA_FIN_LIBOR_USD = '2023-06-30';
+
 export function serieDisponible(serie, fechaIso) {
   if (serie === 'sofr') return !fechaIso || fechaIso >= FECHA_INICIO_SOFR;
+  if (serie === 'libor') return !fechaIso || fechaIso <= FECHA_FIN_LIBOR_USD;
   return true;
 }
 
@@ -91,4 +98,51 @@ export function rangoIntercuartil(totales) {
     superior: cuartilInterpolado(valores, 0.75),
     n: valores.length,
   };
+}
+
+/* El primer número que trae el texto, sin importar lo que lo rodee: `tasaEA` llega del
+   Excel como "4,540% E.A." (coma decimal, símbolo de porcentaje y el sufijo "E.A."), nunca
+   como un número limpio. Vive aquí (y no en `tablasPrestamoTasas.js`, su dueño original)
+   porque ahora también la usa `tasaEfectivaDeFila`, de este mismo archivo. */
+export function numeroDesdeTexto(texto) {
+  const m = /-?\d+(?:[.,]\d+)?/.exec(String(texto || '').replace(',', '.'));
+  return m ? Number(m[0].replace(',', '.')) : null;
+}
+
+const INDICES_RECONOCIDOS = ['libor', 'sofr'];
+
+/** Extrae `{indice, spreadPct}` de un texto libre tipo "LIBOR + 1 punto" / "Libor USD tres
+ *  meses + 1,5%" / "SOFR+2". `indice` es 'libor'|'sofr'|null; `spreadPct` es 0 si no se
+ *  menciona spread. Nunca reconoce 'prime'/'tmc'/'cirr' como índice variable del préstamo
+ *  mismo: en los casos reales vistos son solo tasas de referencia de mercado para el rango,
+ *  nunca la base de la tasa pactada en el contrato. */
+export function parsearIndiceSpread(texto) {
+  const norm = String(texto || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  const indice = INDICES_RECONOCIDOS.find((i) => norm.includes(i)) || null;
+  if (!indice) return { indice: null, spreadPct: 0 };
+  const m = /\+\s*([\d.,]+)\s*(?:%|puntos?|pts?)?/.exec(norm);
+  const spreadPct = m ? Number(m[1].replace(',', '.')) : 0;
+  return { indice, spreadPct };
+}
+
+/**
+ * La tasa efectiva anual de un préstamo: si `tasaEA` trae un número legible, se usa tal
+ * cual. Si no, y `periodicidad`/`tasaPactada` describen un índice reconocido ("LIBOR"/"SOFR",
+ * con o sin "+ N punto(s)"/"+ N%"), se resuelve buscando el valor del índice en
+ * `tasasPrestamo.porFecha[fechaPacto]` (la misma forma que ya busca/guarda
+ * `prestamoTasasPrompts.js`) y sumando el spread. `null` si no hay ninguna de las dos
+ * fuentes, o el índice mencionado no es uno de los ya soportados — nunca se inventa una
+ * serie nueva.
+ */
+export function tasaEfectivaDeFila(fila, tasasPrestamo) {
+  const f = fila || {};
+  const directa = numeroDesdeTexto(f.tasaEA);
+  if (directa !== null) return directa;
+
+  const { indice, spreadPct } = parsearIndiceSpread(f.periodicidad || f.tasaPactada);
+  if (!indice) return null;
+  const valorIndice = tasasPrestamo?.porFecha?.[f.fechaPacto]?.[indice]?.valor;
+  return esNumero(valorIndice) ? valorIndice + spreadPct : null;
 }

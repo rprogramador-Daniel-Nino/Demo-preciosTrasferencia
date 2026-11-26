@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import {
   FECHA_INICIO_SOFR, serieDisponible, tasaAjustada, totalesPorFecha, rangoIntercuartil,
   TRIOS_POR_DIRECCION, trioDeDireccion, aplicaRiesgoPais,
+  numeroDesdeTexto, parsearIndiceSpread, tasaEfectivaDeFila,
 } from './prestamoTasasCalculo.js';
 
 /* Las cifras de estas pruebas vienen del informe real de Autoland 2025 (Tabla 19/20 del
@@ -133,4 +134,51 @@ test('totalesPorFecha con series custom (activo) calcula cirr/libor en vez de so
   assert.ok(cerca(totales.libor, 5.535));
   assert.strictEqual(totales.sofr, undefined);
   assert.strictEqual(totales.tmc, undefined);
+});
+
+test('numeroDesdeTexto extrae el primer número de un texto con coma decimal y sufijo', () => {
+  assert.strictEqual(numeroDesdeTexto('4,540% Efectivo Anual'), 4.54);
+  assert.strictEqual(numeroDesdeTexto(''), null);
+  assert.strictEqual(numeroDesdeTexto(null), null);
+});
+
+test('parsearIndiceSpread reconoce "LIBOR + 1 punto"', () => {
+  assert.deepStrictEqual(parsearIndiceSpread('LIBOR + 1 punto'), { indice: 'libor', spreadPct: 1 });
+});
+
+test('parsearIndiceSpread es tolerante a mayúsculas/espacios/acentos', () => {
+  assert.deepStrictEqual(parsearIndiceSpread('Libor  usd  3 meses+1%'), { indice: 'libor', spreadPct: 1 });
+});
+
+test('parsearIndiceSpread reconoce SOFR sin espacio antes del signo', () => {
+  assert.deepStrictEqual(parsearIndiceSpread('SOFR+2'), { indice: 'sofr', spreadPct: 2 });
+});
+
+test('parsearIndiceSpread sin texto reconocible devuelve índice null', () => {
+  assert.deepStrictEqual(parsearIndiceSpread(''), { indice: null, spreadPct: 0 });
+  assert.deepStrictEqual(parsearIndiceSpread('Tasa fija'), { indice: null, spreadPct: 0 });
+});
+
+test('tasaEfectivaDeFila usa tasaEA si es legible, ignora periodicidad', () => {
+  const fila = { tasaEA: '4,540% Efectivo Anual', periodicidad: 'LIBOR + 9 puntos' };
+  assert.strictEqual(tasaEfectivaDeFila(fila, {}), 4.54);
+});
+
+test('tasaEfectivaDeFila resuelve índice+spread cuando no hay tasaEA (Alciautos)', () => {
+  const fila = { tasaEA: '', periodicidad: 'LIBOR + 1 punto', fechaPacto: '2018-06-30' };
+  const tasasPrestamo = { porFecha: { '2018-06-30': { libor: { valor: 4.535 } } } };
+  assert.strictEqual(tasaEfectivaDeFila(fila, tasasPrestamo), 5.535);
+});
+
+test('tasaEfectivaDeFila es null sin tasaEA, sin índice reconocible, o sin el valor del índice capturado', () => {
+  assert.strictEqual(tasaEfectivaDeFila({ tasaEA: '', periodicidad: '' }, {}), null);
+  assert.strictEqual(tasaEfectivaDeFila({ tasaEA: '', periodicidad: 'Tasa fija 5%' }, {}), null);
+  assert.strictEqual(tasaEfectivaDeFila(
+    { tasaEA: '', periodicidad: 'LIBOR + 1 punto', fechaPacto: '2018-06-30' }, { porFecha: {} },
+  ), null);
+});
+
+test('serieDisponible: LIBOR no disponible después del 30/06/2023', () => {
+  assert.strictEqual(serieDisponible('libor', '2018-06-30'), true);
+  assert.strictEqual(serieDisponible('libor', '2024-01-01'), false);
 });
