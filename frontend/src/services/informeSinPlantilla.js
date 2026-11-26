@@ -193,7 +193,13 @@ function anexoEeff(e) {
 export function construirHtmlSinPlantilla(estudio, analisisMercado, analisisSector) {
   const e = estudio || {};
   const year = Number(e.anio) || new Date().getFullYear();
-  const tPrestamo = filasPrestamoConVinculado(e);
+  /* Fase 7: una sección por cada vinculado distinto (`gruposDePrestamos`, caso real:
+     Sungrow 2024, Singapur + Chile) — el nombre del vinculado solo se agrega al título
+     cuando hay más de uno, para no cambiar el título de un estudio de un solo vinculado. */
+  const gruposPrestamo = filasPrestamoConVinculado(e) || [];
+  const gruposTransacciones = filasTablaTransaccionesPrestamos(e) || [];
+  const gruposHistorico = filasTablaHistoricoDeudaPrestamos(e) || [];
+  const tituloPorGrupo = (base, lista, t) => (lista.length > 1 ? base + ' — ' + t.vinculado : base);
 
   const partes = [
     '<h1>Informe Local de Precios de Transferencia — Borrador sin plantilla</h1>',
@@ -205,12 +211,15 @@ export function construirHtmlSinPlantilla(estudio, analisisMercado, analisisSect
     seccion('Composición accionaria', tablaDesde(filasComposicionAccionaria(e))),
     seccion('Operación analizada', tablaDesde(filasOperacionAnalizar(e))),
     seccion('Operaciones con el vinculado', tablaDesde(filasOperacionesDeIngreso(e))),
-    seccion(
-      tPrestamo ? 'Préstamo con su vinculado — ' + tPrestamo.vinculado : 'Préstamo con su vinculado',
-      tablaDesde(tPrestamo),
-    ),
-    seccion('Transacciones Intercompañías', tablaDesde(aMatrizPlana(filasTablaTransaccionesPrestamos(e)))),
-    seccion('Histórico de la deuda', tablaDesde(aMatrizPlana(filasTablaHistoricoDeudaPrestamos(e)))),
+    ...gruposPrestamo.map((t) => seccion(
+      tituloPorGrupo('Préstamo con su vinculado', gruposPrestamo, t), tablaDesde(t),
+    )),
+    ...gruposTransacciones.map((t) => seccion(
+      tituloPorGrupo('Transacciones Intercompañías', gruposTransacciones, t), tablaDesde(aMatrizPlana(t)),
+    )),
+    ...gruposHistorico.map((t) => seccion(
+      tituloPorGrupo('Histórico de la deuda', gruposHistorico, t), tablaDesde(aMatrizPlana(t)),
+    )),
     seccion('Estados financieros', tablaDesde(filasActivos(e))),
     seccion('Muestra de comparables seleccionadas', tablaDesde({
       nombre: 'Muestra de comparables seleccionadas',

@@ -972,3 +972,22 @@ test('actualizarTablasOperacionesHtml borra la tabla de préstamo si el estudio 
   const salida = actualizarTablasOperacionesHtml(TABLA_PRESTAMO_EN_PLANTILLA, estudioEstandar);
   assert.ok(!salida.includes('Préstamo con su vinculado'));
 });
+
+test('actualizarTablasOperacionesHtml: con más de un vinculado, publica solo el primero y avisa de los demás (alcance Fase 7)', () => {
+  const estudio = {
+    ...ESTUDIO_PRESTAMO,
+    prestamos: [
+      ...ESTUDIO_PRESTAMO.prestamos,
+      {
+        otorga: 'Otra Matriz SA', recibe: 'Autoland SAS',
+        fechaPacto: '2021-01-01', valorDesembolsoMoneda: 500000, moneda: 'USD',
+        valorCOPDesembolso: 2000000000, tasaEA: '5,000% Efectivo Anual',
+      },
+    ],
+  };
+  const avisos = [];
+  const salida = actualizarTablasOperacionesHtml(TABLA_PRESTAMO_EN_PLANTILLA, estudio, avisos);
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(!salida.includes('Otra Matriz SA'), 'esta ruta no duplica la tabla, solo publica el primer vinculado');
+  assert.ok(avisos.some((a) => a.includes('2 vinculados') && a.includes('Otra Matriz SA')));
+});

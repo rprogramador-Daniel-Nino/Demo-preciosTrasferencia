@@ -81,35 +81,61 @@ export function filasVinculadoEconomicoPrestamo(estudio) {
   };
 }
 
+/**
+ * Agrupa `estudio.prestamos` por contraparte distinta (normalizada, mismo criterio que
+ * `vinculadoDePrestamo`), en el orden en que cada una aparece por primera vez. Caso real que
+ * lo exige: Sungrow 2024 tuvo dos vinculados de préstamo distintos (Singapur y Chile) en el
+ * mismo estudio.
+ */
+export function gruposDePrestamos(estudio) {
+  if (!tienePrestamos(estudio)) return [];
+  const porClave = new Map();
+  estudio.prestamos.forEach((p) => {
+    const vinculado = vinculadoDePrestamo(p, estudio.ent);
+    const clave = normalizarNombreCompania(vinculado);
+    if (!porClave.has(clave)) porClave.set(clave, { vinculado, prestamos: [] });
+    porClave.get(clave).prestamos.push(p);
+  });
+  return [...porClave.values()];
+}
+
+/**
+ * Una tabla por cada vinculado distinto (`gruposDePrestamos`) — antes de la Fase 7 se
+ * devolvía un solo objeto, forzando todas las filas bajo el vinculado de la primera. `null`
+ * si NINGÚN grupo tiene un préstamo con desembolso real.
+ */
 export function filasPrestamoConVinculado(estudio) {
   if (!tienePrestamos(estudio)) return null;
   const e = estudio;
-  /* Sin un Valor en COP real en la fecha de desembolso, la fila no es un préstamo nuevo que
-     declarar aquí: un abono a capital o un movimiento sin desembolso real llega del Excel
-     con `valorCOPDesembolso` en 0 o ausente (visto en un informe real: dos filas con monto
-     negativo y "0" de COP) — pedido el 2026-10-10. Se excluye de ESTA tabla nada más; el
-     préstamo sigue existiendo en `estudio.prestamos` para lo que otras tablas necesiten. */
-  const prestamosConDesembolso = e.prestamos.filter((p) => num(p.valorCOPDesembolso) > 0);
-  if (!prestamosConDesembolso.length) return null;
-  const vinculado = vinculadoDePrestamo(prestamosConDesembolso[0], e.ent);
-  const moneda = prestamosConDesembolso[0].moneda || 'moneda pactada';
-  return {
-    nombre: 'Préstamo con su vinculado',
-    vinculado,
-    encabezados: [
-      'Fecha original en la que se pactó',
-      `Valor del desembolso en ${moneda}`,
-      'Moneda pactada',
-      'Valor en COP en la fecha de desembolso',
-      'E. A',
-    ],
-    filas: prestamosConDesembolso.map((p) => [
-      fechaTexto(p.fechaPacto),
-      montoTexto(p.valorDesembolsoMoneda),
-      p.moneda || '—',
-      montoTexto(p.valorCOPDesembolso),
-      p.tasaEA || '—',
-    ]),
-    fuente: 'Información suministrada por ' + (e.ent || 'la Compañía') + '.',
-  };
+  const tablas = gruposDePrestamos(e).map(({ vinculado, prestamos }) => {
+    /* Sin un Valor en COP real en la fecha de desembolso, la fila no es un préstamo nuevo
+       que declarar aquí: un abono a capital o un movimiento sin desembolso real llega del
+       Excel con `valorCOPDesembolso` en 0 o ausente (visto en un informe real: dos filas con
+       monto negativo y "0" de COP) — pedido el 2026-10-10. Se excluye de ESTA tabla nada
+       más; el préstamo sigue existiendo en `estudio.prestamos` para lo que otras tablas
+       necesiten. */
+    const prestamosConDesembolso = prestamos.filter((p) => num(p.valorCOPDesembolso) > 0);
+    if (!prestamosConDesembolso.length) return null;
+    const moneda = prestamosConDesembolso[0].moneda || 'moneda pactada';
+    return {
+      nombre: 'Préstamo con su vinculado',
+      vinculado,
+      encabezados: [
+        'Fecha original en la que se pactó',
+        `Valor del desembolso en ${moneda}`,
+        'Moneda pactada',
+        'Valor en COP en la fecha de desembolso',
+        'E. A',
+      ],
+      filas: prestamosConDesembolso.map((p) => [
+        fechaTexto(p.fechaPacto),
+        montoTexto(p.valorDesembolsoMoneda),
+        p.moneda || '—',
+        montoTexto(p.valorCOPDesembolso),
+        p.tasaEA || '—',
+      ]),
+      fuente: 'Información suministrada por ' + (e.ent || 'la Compañía') + '.',
+    };
+  }).filter(Boolean);
+  return tablas.length ? tablas : null;
 }

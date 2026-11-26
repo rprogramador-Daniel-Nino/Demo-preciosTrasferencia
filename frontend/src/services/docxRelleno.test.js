@@ -5093,3 +5093,29 @@ test('préstamo: tampoco avisa del ANEXO B si el estudio arrastra `comparables` 
   assert.ok(!avisosTablas.some((a) => /ANEXO B|Descripciones de comparables/.test(a)),
     'el tipo de estudio manda sobre lo que haya quedado en `comparables`');
 });
+
+test('préstamo: con dos vinculados distintos, la Tabla "Préstamo con su vinculado" se concatena dos veces (Sungrow 2024)', () => {
+  const xml = '<w:p><w:t>Tabla 1. Préstamo con su vinculado</w:t></w:p>'
+    + '<w:tbl><w:tr><w:tc><w:p><w:t>viejo</w:t></w:p></w:tc></w:tr></w:tbl>';
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Sungrow Renewables Colombia S.A.S', anio: 2024,
+    prestamos: [
+      {
+        otorga: 'Sungrow Renewable Energy Investment Pte Ltd', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2021-10-29', valorDesembolsoMoneda: 2111995542, moneda: 'USD',
+        valorCOPDesembolso: 2111995542, tasaEA: '8,0% E.A.',
+      },
+      {
+        otorga: 'Sungrow Power Chile SpA', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2024-01-15', valorDesembolsoMoneda: 70963333, moneda: 'USD',
+        valorCOPDesembolso: 70963333, tasaEA: '8,0% E.A.',
+      },
+    ],
+  };
+  const salida = actualizarTablasOperacionesOoxml(xml, estudio, []);
+  assert.ok(salida.includes('Sungrow Renewable Energy Investment Pte Ltd'));
+  assert.ok(salida.includes('Sungrow Power Chile SpA'));
+  assert.ok(!salida.includes('viejo'));
+  const apariciones = (salida.match(/Préstamo con su vinculado/g) || []).length;
+  assert.strictEqual(apariciones, 2, 'una tabla por vinculado, ambas en el único slot que traía la plantilla');
+});

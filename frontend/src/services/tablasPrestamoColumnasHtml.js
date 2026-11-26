@@ -125,20 +125,26 @@ export function insertarTablasPrestamoColumnasHtml(html, estudio, avisos) {
       + 'antes de radicar';
   }
 
+  /* Una tabla por cada vinculado distinto (`filasTablaTransaccionesPrestamos`/
+     `filasTablaHistoricoDeudaPrestamos` — Fase 7), numeradas en cadena. Caso real: Sungrow
+     2024 (Singapur + Chile). */
   [
-    { nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS, tabla: filasTablaTransaccionesPrestamos(estudio) },
-    { nombre: NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS, tabla: filasTablaHistoricoDeudaPrestamos(estudio) },
-  ].forEach(({ nombre, tabla }) => {
-    if (!tabla) return;
-    if (tabla.avisoVinculados && Array.isArray(avisos)) avisos.push(tabla.avisoVinculados);
-    if (numero != null) numero += 1;
-    const titulo = numero != null ? 'Tabla ' + numero + '. ' + nombre : nombre;
-    const plano = aMatrizPlana(tabla);
-    const bloque = tablaHTML(titulo, plano.encabezados, plano.filas, plano.fuente) + '\n';
-    out = out.slice(0, cursor) + bloque + out.slice(cursor);
-    cursor += bloque.length;
+    { nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS, tablas: filasTablaTransaccionesPrestamos(estudio) },
+    { nombre: NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS, tablas: filasTablaHistoricoDeudaPrestamos(estudio) },
+  ].forEach(({ nombre, tablas }) => {
+    const lista = (tablas || []).filter(Boolean);
+    if (!lista.length) return;
+    lista.forEach((tabla) => {
+      if (numero != null) numero += 1;
+      const titulo = numero != null ? 'Tabla ' + numero + '. ' + nombre : nombre;
+      const plano = aMatrizPlana(tabla);
+      const bloque = tablaHTML(titulo, plano.encabezados, plano.filas, plano.fuente) + '\n';
+      out = out.slice(0, cursor) + bloque + out.slice(cursor);
+      cursor += bloque.length;
+    });
     if (Array.isArray(avisos)) {
-      avisos.push('se insertó la tabla «' + nombre + '» ' + descripcionAncla + '.');
+      avisos.push('se insertó la tabla «' + nombre + '»'
+        + (lista.length > 1 ? ' (' + lista.length + ' vinculados)' : '') + ' ' + descripcionAncla + '.');
     }
   });
 

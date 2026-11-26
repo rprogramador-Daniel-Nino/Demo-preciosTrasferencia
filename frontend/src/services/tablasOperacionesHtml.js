@@ -299,6 +299,23 @@ export function actualizarTablasOperacionesHtml(html, estudio, avisos) {
      tiene esa fila fusionada y fabricar un `colspan` en HTML no está probado en este código,
      así que el nombre del vinculado va en el propio título de la tabla insertada. */
   if (tienePrestamos(estudio)) {
+    /* Fase 7: `filasPrestamoConVinculado` ya devuelve una tabla por vinculado distinto, pero
+       ESTA ruta (reescribe filas dentro de una tabla ya existente en el HTML extraído del
+       PDF) sigue publicando solo la del PRIMER vinculado — por decisión explícita de
+       alcance, duplicar la estructura de una tabla ya localizada en el PDF N veces no tiene
+       precedente en este archivo y no se puede verificar sin un caso real con más de un
+       vinculado en esta ruta. Si hay más de uno, se avisa nombrándolos para que el analista
+       los agregue a mano (ver spec Fase 7). */
+    const grupos = filasPrestamoConVinculado(estudio) || [];
+    const tPrestamo = grupos[0] || null;
+    if (grupos.length > 1 && Array.isArray(avisos)) {
+      avisos.push(
+        'el estudio trae préstamos con ' + grupos.length + ' vinculados distintos; en esta ruta '
+        + '(plantilla PDF) solo se publicó la tabla de «' + tPrestamo.vinculado + '»: agregue a mano '
+        + 'la de ' + grupos.slice(1).map((g) => '«' + g.vinculado + '»').join(', ')
+      );
+    }
+
     const bloquesPrestamo = localizarTablasHtml(out, NOMBRES_TABLA_PRESTAMO);
     if (bloquesPrestamo.length) {
       for (const bloque of [...bloquesPrestamo].reverse()) {
@@ -308,13 +325,12 @@ export function actualizarTablasOperacionesHtml(html, estudio, avisos) {
            `reescribirFilasHtml` (que por defecto solo respeta 1 fila de encabezado) confunde
            la fila real de "Fecha"/"Valor"/... con una fila de datos y la sobrescribe. */
         const filasEncabezado = bloque.columnas === 1 ? 2 : 1;
-        out = sustituir(out, bloque, filasPrestamoConVinculado(estudio), false, 0, filasEncabezado);
+        out = sustituir(out, bloque, tPrestamo, false, 0, filasEncabezado);
       }
     } else {
       const anclaPrestamo = localizarTablaHtml(out, NOMBRES_TABLA_TRANSACCIONES, {
         excluir: NOMBRES_TABLA_ADICIONAL.concat(NOMBRES_TABLA_PRESTAMO),
       });
-      const tPrestamo = filasPrestamoConVinculado(estudio);
       /* `insertarTablaHtml` clona la FORMA del ancla (sus columnas, su encabezado) y solo
          reescribe las filas de datos — no fabrica columnas nuevas. La ficha de
          "Transacciones Inter compañía" tiene 2 columnas; esta tabla tiene 5. Insertar ahí

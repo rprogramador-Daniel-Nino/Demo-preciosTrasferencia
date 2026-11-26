@@ -2744,10 +2744,14 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
      la segunda aparición vive en el análisis de comparabilidad de tasas, que todavía no
      existe (Fase 4). */
   if (tienePrestamos(estudio)) {
-    const t = filasPrestamoConVinculado(estudio);
-    const emitirPrestamo = (b) => generarTablaOoxmlConVinculado(
+    /* Fase 7: `filasPrestamoConVinculado` devuelve una tabla por cada vinculado distinto
+       (caso real: Sungrow 2024, Singapur + Chile). Cada ocurrencia/inserción pasa de 1 tabla
+       a las N concatenadas — el número de VECES que se toca el documento (refrescar hasta
+       dos apariciones, o insertar una sola vez si falta) no cambia. */
+    const grupos = filasPrestamoConVinculado(estudio);
+    const emitirPrestamo = (b) => grupos.map((t) => generarTablaOoxmlConVinculado(
       tituloDe(b, nombreSegunPlantilla(b, NOMBRES_TABLA_PRESTAMO)), t.vinculado, t.encabezados, t.filas, t.fuente
-    );
+    )).join('');
 
     const bloquesPrestamo = candidatosBloqueTabla(doc.xml, NOMBRES_TABLA_PRESTAMO);
     if (bloquesPrestamo.length) {
@@ -2758,14 +2762,18 @@ export function actualizarTablasOperacionesOoxml(xml, estudio, avisos) {
       const insertadaPrestamo = doc.insertar(
         NOMBRES_TABLA_TRANSACCIONES,
         (ancla) => {
-          const titulo = ancla.numero != null ? 'Tabla ' + (ancla.numero + 1) + '. ' + t.nombre : t.nombre;
-          return generarTablaOoxmlConVinculado(titulo, t.vinculado, t.encabezados, t.filas, t.fuente);
+          let numero = ancla.numero != null ? ancla.numero : null;
+          return grupos.map((t) => {
+            const titulo = numero != null ? 'Tabla ' + (numero + 1) + '. ' + t.nombre : t.nombre;
+            if (numero != null) numero += 1;
+            return generarTablaOoxmlConVinculado(titulo, t.vinculado, t.encabezados, t.filas, t.fuente);
+          }).join('');
         },
         { excluir: NOMBRES_TABLA_ADICIONAL.concat(NOMBRES_TABLA_PRESTAMO) }
       );
       if (Array.isArray(avisos)) {
         avisos.push(insertadaPrestamo
-          ? 'se insertó la tabla «' + t.nombre + '» después de «Transacciones Inter compañía» ' +
+          ? 'se insertó la tabla «' + grupos[0].nombre + '» después de «Transacciones Inter compañía» ' +
             'porque la plantilla no la traía: revise la numeración de las tablas siguientes'
           : NOMBRES_TABLA_PRESTAMO[0]);
       }

@@ -33,7 +33,7 @@ const ESTUDIO_PRESTAMO = {
 /* ══════ generarTablaOoxmlPorColumnas ══════ */
 
 test('generarTablaOoxmlPorColumnas: el banner y las fusionadas funden todas las columnas de préstamo', () => {
-  const tabla = filasTablaTransaccionesPrestamos(ESTUDIO_PRESTAMO);
+  const [tabla] = filasTablaTransaccionesPrestamos(ESTUDIO_PRESTAMO);
   const xml = generarTablaOoxmlPorColumnas('Tabla 4. ' + tabla.titulo, tabla);
   /* 1 (rótulo) + 2 préstamos = 3 columnas; el banner funde las 3, cada fusionada funde las 2
      de prestamo (todas menos la del rótulo). */
@@ -48,7 +48,7 @@ test('generarTablaOoxmlPorColumnas: el banner y las fusionadas funden todas las 
 });
 
 test('generarTablaOoxmlPorColumnas: las filas de datos NO funden nada', () => {
-  const tabla = filasTablaTransaccionesPrestamos(ESTUDIO_PRESTAMO);
+  const [tabla] = filasTablaTransaccionesPrestamos(ESTUDIO_PRESTAMO);
   const xml = generarTablaOoxmlPorColumnas('Tabla 4. ' + tabla.titulo, tabla);
   const filaIntereses = xml.slice(xml.indexOf('Monto de intereses'), xml.indexOf('Monto de intereses') + 400);
   assert.ok(!filaIntereses.includes('gridSpan'), 'una fila de datos no debe fundir columnas');
@@ -222,7 +222,7 @@ test('insertarTablasPrestamoColumnasOoxml: Transacciones Intercompañías se anc
   assert.match(salida, /Tabla 4\. Transacciones Intercompañías/, 'numerada como Tabla 4, no Tabla 2');
 });
 
-test('insertarTablasPrestamoColumnasOoxml: avisa si el estudio mezcla más de un vinculado', () => {
+test('insertarTablasPrestamoColumnasOoxml: con más de un vinculado, inserta una tabla por cada uno (Fase 7)', () => {
   const xml =
     '<w:p><w:t>Tabla 3. Transacciones Inter compañía</w:t></w:p>'
     + '<w:tbl><w:tr><w:tc><w:p><w:t>x</w:t></w:p></w:tc></w:tr></w:tbl>';
@@ -231,8 +231,12 @@ test('insertarTablasPrestamoColumnasOoxml: avisa si el estudio mezcla más de un
     prestamos: [...PRESTAMOS_AUTOLAND, { ...PRESTAMOS_AUTOLAND[0], otorga: 'Otra Matriz SA' }],
   };
   const avisos = [];
-  insertarTablasPrestamoColumnasOoxml(xml, conOtroVinculado, avisos);
-  assert.ok(avisos.some((a) => a.includes('más de un vinculado')));
+  const salida = insertarTablasPrestamoColumnasOoxml(xml, conOtroVinculado, avisos);
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(salida.includes('Otra Matriz SA'));
+  const apariciones = (salida.match(/Transacciones Intercompañías/g) || []).length;
+  assert.strictEqual(apariciones, 2, 'una tabla por vinculado');
+  assert.ok(avisos.some((a) => a.includes('2 vinculados')));
 });
 
 /* ══════ El guardián: el nombre literal de la Tabla 4 no puede pisar la ficha genérica ══════

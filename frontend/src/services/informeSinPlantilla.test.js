@@ -259,3 +259,26 @@ test('no incluye las tablas de columnas-por-préstamo en un estudio estándar', 
   assert.ok(!html.includes('Transacciones Intercompañías'));
   assert.ok(!html.includes('Histórico de la deuda intereses sobre Préstamos'));
 });
+
+test('con varios vinculados, incluye una sección por cada uno con su nombre en el título (Sungrow 2024)', () => {
+  const estudio = {
+    ent: 'Sungrow Renewables Colombia S.A.S', nit: '900123456-7', anio: 2024, tipo_estudio: 'prestamo',
+    prestamos: [
+      {
+        otorga: 'Sungrow Renewable Energy Investment Pte Ltd', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2021-10-29', valorDesembolsoMoneda: 2111995542, moneda: 'USD',
+        valorCOPDesembolso: 2111995542, tasaEA: '8,0% E.A.', interesesCOP: 100, fechaDesembolso: '2021-10-29',
+      },
+      {
+        otorga: 'Sungrow Power Chile SpA', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2024-01-15', valorDesembolsoMoneda: 70963333, moneda: 'USD',
+        valorCOPDesembolso: 70963333, tasaEA: '8,0% E.A.', interesesCOP: 50, fechaDesembolso: '2024-01-15',
+      },
+    ],
+  };
+  const html = construirHtmlSinPlantilla(estudio, null, null);
+  assert.ok(html.includes('Préstamo con su vinculado — Sungrow Renewable Energy Investment Pte Ltd'));
+  assert.ok(html.includes('Préstamo con su vinculado — Sungrow Power Chile SpA'));
+  assert.ok(html.includes('Transacciones Intercompañías — Sungrow Renewable Energy Investment Pte Ltd'));
+  assert.ok(html.includes('Transacciones Intercompañías — Sungrow Power Chile SpA'));
+});

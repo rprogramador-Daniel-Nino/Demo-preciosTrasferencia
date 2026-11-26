@@ -164,3 +164,19 @@ test('la Tabla 13 no colisiona con ningún nombre ya registrado, ni ninguna de l
     assert.ok(!claveHistorico.includes(claveP) && !claveP.includes(claveHistorico));
   });
 });
+
+test('insertarTablasPrestamoColumnasHtml: con más de un vinculado, inserta una tabla HTML por cada uno (Fase 7)', () => {
+  const html = '<p><strong> Tabla 3. Transacciones Inter compañía</strong></p>'
+    + '<table><tr><th><p><strong> Razón social</strong></p></th></tr><tr><td><p> x</p></td></tr></table>';
+  const conOtroVinculado = {
+    ...ESTUDIO_PRESTAMO,
+    prestamos: [...PRESTAMOS_AUTOLAND, { ...PRESTAMOS_AUTOLAND[0], otorga: 'Otra Matriz SA' }],
+  };
+  const avisos = [];
+  const salida = insertarTablasPrestamoColumnasHtml(html, conOtroVinculado, avisos);
+  assert.ok(salida.includes('Inversiones San Jeronimo SpA'));
+  assert.ok(salida.includes('Otra Matriz SA'));
+  const apariciones = (salida.match(/Transacciones Intercompañías/g) || []).length;
+  assert.strictEqual(apariciones, 2, 'una tabla por vinculado');
+  assert.ok(avisos.some((a) => a.includes('2 vinculados')));
+});

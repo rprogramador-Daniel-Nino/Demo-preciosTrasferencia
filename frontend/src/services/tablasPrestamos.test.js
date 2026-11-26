@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   NOMBRES_TABLA_PRESTAMO, tienePrestamos, filasPrestamoConVinculado, filasVinculadoEconomicoPrestamo,
-  direccionPrestamo, direccionPrestamoEstudio,
+  direccionPrestamo, direccionPrestamoEstudio, gruposDePrestamos,
 } from './tablasPrestamos.js';
 
 const PRESTAMOS_AUTOLAND = [
@@ -33,7 +33,9 @@ test('filasPrestamoConVinculado devuelve null si tienePrestamos es falso', () =>
 
 test('filasPrestamoConVinculado arma la tabla real de Autoland: el contribuyente RECIBE el préstamo', () => {
   const estudio = { tipo_estudio: 'prestamo', ent: 'Autoland SAS', prestamos: PRESTAMOS_AUTOLAND };
-  const t = filasPrestamoConVinculado(estudio);
+  const grupos = filasPrestamoConVinculado(estudio);
+  assert.strictEqual(grupos.length, 1, 'un solo vinculado -> un solo grupo');
+  const t = grupos[0];
 
   assert.strictEqual(t.nombre, 'Préstamo con su vinculado');
   assert.strictEqual(t.vinculado, 'Inversiones San Jeronimo SpA', 'el vinculado es quien otorga, no el contribuyente que recibe');
@@ -55,21 +57,34 @@ test('filasPrestamoConVinculado identifica al vinculado cuando el contribuyente 
     tipo_estudio: 'prestamo', ent: 'Inversiones San Jeronimo SpA',
     prestamos: [PRESTAMOS_AUTOLAND[0]],
   };
-  const t = filasPrestamoConVinculado(estudio);
-  assert.strictEqual(t.vinculado, 'Autoland SAS');
+  const grupos = filasPrestamoConVinculado(estudio);
+  assert.strictEqual(grupos[0].vinculado, 'Autoland SAS');
 });
 
-test('filasPrestamoConVinculado con varios vinculados usa el de la primera fila para todos', () => {
+/* Caso real: Sungrow 2024 tuvo dos vinculados de préstamo distintos (Singapur y Chile) —
+   Fase 7 produce una tabla por cada uno, en vez de forzar todo bajo el primero. */
+test('filasPrestamoConVinculado con varios vinculados produce una tabla por cada uno (Sungrow 2024)', () => {
   const estudio = {
-    tipo_estudio: 'prestamo', ent: 'Autoland SAS',
+    tipo_estudio: 'prestamo', ent: 'Sungrow Renewables Colombia S.A.S',
     prestamos: [
-      PRESTAMOS_AUTOLAND[0],
-      { ...PRESTAMOS_AUTOLAND[1], otorga: 'Otro Vinculado Ltda' },
+      {
+        otorga: 'Sungrow Renewable Energy Investment Pte Ltd', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2021-10-29', valorDesembolsoMoneda: 2111995542, moneda: 'USD',
+        valorCOPDesembolso: 2111995542, tasaEA: '8,0% E.A.',
+      },
+      {
+        otorga: 'Sungrow Power Chile SpA', recibe: 'Sungrow Renewables Colombia S.A.S',
+        fechaPacto: '2024-01-15', valorDesembolsoMoneda: 70963333, moneda: 'USD',
+        valorCOPDesembolso: 70963333, tasaEA: '8,0% E.A.',
+      },
     ],
   };
-  const t = filasPrestamoConVinculado(estudio);
-  assert.strictEqual(t.vinculado, 'Inversiones San Jeronimo SpA');
-  assert.strictEqual(t.filas.length, 2);
+  const grupos = filasPrestamoConVinculado(estudio);
+  assert.strictEqual(grupos.length, 2);
+  assert.strictEqual(grupos[0].vinculado, 'Sungrow Renewable Energy Investment Pte Ltd');
+  assert.strictEqual(grupos[0].filas.length, 1);
+  assert.strictEqual(grupos[1].vinculado, 'Sungrow Power Chile SpA');
+  assert.strictEqual(grupos[1].filas.length, 1);
 });
 
 test('filasPrestamoConVinculado muestra "—" para fecha o montos ausentes, salvo el Valor en COP real', () => {
@@ -79,8 +94,29 @@ test('filasPrestamoConVinculado muestra "—" para fecha o montos ausentes, salv
     tipo_estudio: 'prestamo', ent: 'Autoland SAS',
     prestamos: [{ otorga: 'Vinc SAS', recibe: 'Autoland SAS', fechaPacto: null, valorDesembolsoMoneda: null, moneda: '', valorCOPDesembolso: 500000, tasaEA: '' }],
   };
-  const t = filasPrestamoConVinculado(estudio);
-  assert.deepStrictEqual(t.filas[0], ['—', '—', '—', '500.000', '—']);
+  const grupos = filasPrestamoConVinculado(estudio);
+  assert.deepStrictEqual(grupos[0].filas[0], ['—', '—', '—', '500.000', '—']);
+});
+
+test('gruposDePrestamos agrupa en orden de primera aparición, uno por contraparte distinta', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Autoland SAS',
+    prestamos: [
+      PRESTAMOS_AUTOLAND[0],
+      { ...PRESTAMOS_AUTOLAND[1], otorga: 'Otro Vinculado Ltda' },
+      PRESTAMOS_AUTOLAND[2],
+    ],
+  };
+  const grupos = gruposDePrestamos(estudio);
+  assert.strictEqual(grupos.length, 2);
+  assert.strictEqual(grupos[0].vinculado, 'Inversiones San Jeronimo SpA');
+  assert.strictEqual(grupos[0].prestamos.length, 2);
+  assert.strictEqual(grupos[1].vinculado, 'Otro Vinculado Ltda');
+  assert.strictEqual(grupos[1].prestamos.length, 1);
+});
+
+test('gruposDePrestamos: vacío sin préstamos', () => {
+  assert.deepStrictEqual(gruposDePrestamos({ tipo_estudio: 'estandar' }), []);
 });
 
 /* ══════ Tabla 11. Vinculado económica — mismo criterio otorga/recibe que la Tabla 1,
@@ -140,9 +176,9 @@ test('filasPrestamoConVinculado excluye los préstamos sin Valor en COP en la fe
       { ...PRESTAMOS_AUTOLAND[3], valorCOPDesembolso: undefined },
     ],
   };
-  const t = filasPrestamoConVinculado(estudio);
-  assert.strictEqual(t.filas.length, 1, 'solo el préstamo con un Valor en COP real queda en la tabla');
-  assert.strictEqual(t.filas[0][3], '10.431.000.000');
+  const grupos = filasPrestamoConVinculado(estudio);
+  assert.strictEqual(grupos[0].filas.length, 1, 'solo el préstamo con un Valor en COP real queda en la tabla');
+  assert.strictEqual(grupos[0].filas[0][3], '10.431.000.000');
 });
 
 test('filasPrestamoConVinculado: null si NINGÚN préstamo trae Valor en COP (nada que indexar)', () => {

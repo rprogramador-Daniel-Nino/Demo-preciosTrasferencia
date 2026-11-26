@@ -31,7 +31,7 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { fmt, num } from '../utils/calculations.js';
-import { tienePrestamos, vinculadoDePrestamo } from './tablasPrestamos.js';
+import { tienePrestamos, gruposDePrestamos } from './tablasPrestamos.js';
 import { conceptoDeOperacion } from './tablasOperaciones.js';
 
 export const NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS = 'Transacciones Intercompañías';
@@ -67,109 +67,94 @@ export function tipoOperacionPrestamo(estudio) {
   return desc && cod ? desc + ' (' + cod + ')' : 'Intereses sobre préstamos';
 }
 
-const normalizarNombreCompania = (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
-
-/** ¿`estudio.prestamos` mezcla más de una contraparte distinta? Reutiliza la misma
- *  normalización que `vinculadoDePrestamo` de la Fase 2 (privada ahí, trivial de repetir
- *  aquí) para decidir, por cada préstamo, cuál de los dos lados es «el vinculado». */
-export function prestamosConMasDeUnVinculado(estudio) {
-  const ent = normalizarNombreCompania(estudio && estudio.ent);
-  const contrapartes = new Set();
-  ((estudio && estudio.prestamos) || []).forEach((p) => {
-    const o = normalizarNombreCompania(p.otorga);
-    const r = normalizarNombreCompania(p.recibe);
-    contrapartes.add(o === ent ? r : (r === ent ? o : (o || r)));
-  });
-  return contrapartes.size > 1;
-}
-
 /**
- * Filas de "Transacciones de Préstamos Intercompañía", como descriptores.
+ * Filas de "Transacciones de Préstamos Intercompañía", una por cada vinculado distinto
+ * (`gruposDePrestamos` — Fase 7; antes de agruparse, varias contrapartes distintas se
+ * forzaban bajo el nombre de la primera y solo se avisaba "revísala"). Caso real que lo
+ * exige: Sungrow 2024 (Singapur + Chile).
  *
  * @param {object} estudio
- * @returns {{
- *   nombre:string, titulo:string, etiquetasPrestamo:string[],
+ * @returns {Array<{
+ *   nombre:string, titulo:string, vinculado:string, etiquetasPrestamo:string[],
  *   filas: Array<
  *     {tipo:'banner', texto:string} |
  *     {tipo:'encabezado', etiqueta:string, valores:string[]} |
  *     {tipo:'fusionada', clave:string, etiqueta:string, valor:string} |
  *     {tipo:'datos', clave:string, etiqueta:string, valores:string[]}
  *   >,
- *   fuente:string, avisoVinculados:string|null,
- * }|null}
+ *   fuente:string,
+ * }>|null}
  */
 export function filasTablaTransaccionesPrestamos(estudio) {
   if (!tienePrestamos(estudio)) return null;
   const e = estudio;
-  const prestamos = e.prestamos;
-  const etiquetasPrestamo = prestamos.map((_, i) => 'Préstamo ' + (i + 1));
-  const razonSocial = vinculadoDePrestamo(prestamos[0], e.ent);
-
-  return {
-    nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS,
-    titulo: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS,
-    etiquetasPrestamo,
-    filas: [
-      { tipo: 'banner', texto: 'Compañía Vinculada' },
-      { tipo: 'encabezado', etiqueta: 'Nº de prestamos', valores: etiquetasPrestamo },
-      { tipo: 'fusionada', clave: 'razonSocial', etiqueta: 'Razón social', valor: wrap(razonSocial) },
-      { tipo: 'fusionada', clave: 'idFiscal', etiqueta: 'Identificación fiscal', valor: wrap(e.vinc_id) },
-      { tipo: 'fusionada', clave: 'pais', etiqueta: 'País-Residencia fiscal', valor: wrap(e.pais_vinc) },
-      {
-        tipo: 'fusionada', clave: 'tipoVinculacion', etiqueta: 'Tipo de vinculación',
-        valor: wrap(e.tipo_vinculacion || 'Art 260-1 E-T Inciso 1'),
-      },
-      { tipo: 'fusionada', clave: 'tipoOperacion', etiqueta: 'Tipo de operación', valor: tipoOperacionPrestamo(e) },
-      {
-        tipo: 'datos', clave: 'montoIntereses', etiqueta: 'Monto de intereses',
-        valores: prestamos.map((p) => montoTexto(p.interesesCOP)),
-      },
-      {
-        tipo: 'datos', clave: 'fechaDesembolso', etiqueta: 'Fecha de Desembolso',
-        valores: prestamos.map((p) => fechaLargaEs(p.fechaDesembolso)),
-      },
-      {
-        /* `p.tasaEA || p.periodicidad || p.tasaPactada`: cuando el Excel no trae una tasa
-           Efectiva Anual (visto en un informe real: Alciautos, tasa pactada "LIBOR + 1
-           punto", capturada solo en `periodicidad`), se muestra el texto que sí haya en vez
-           de "—" — el número a usar para cálculos sale de `tasaEfectivaDeFila`
-           (`prestamoTasasCalculo.js`), no de este texto. */
-        tipo: 'datos', clave: 'tasaPactada', etiqueta: 'Tasa Pactada',
-        valores: prestamos.map((p) => wrap(p.tasaEA || p.periodicidad || p.tasaPactada)),
-      },
-      {
-        tipo: 'datos', clave: 'periodicidad', etiqueta: 'Periodicidad de intereses',
-        valores: prestamos.map((p) => wrap(p.periodicidad)),
-      },
-      {
-        tipo: 'datos', clave: 'montoPrincipal', etiqueta: 'Monto en Principal (Préstamo)',
-        /* valorCOPDesembolso, NO saldoCOP — ver la nota de cabecera del archivo. */
-        valores: prestamos.map((p) => montoTexto(p.valorCOPDesembolso)),
-      },
-    ],
-    fuente: 'Información suministrada por la administración de la Compañía.',
-    avisoVinculados: prestamosConMasDeUnVinculado(e)
-      ? 'el estudio trae préstamos con más de un vinculado; la tabla "' + NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS
-        + '" declara un solo vinculado para todos, revísala'
-      : null,
-  };
+  const tablas = gruposDePrestamos(e).map(({ vinculado, prestamos }) => {
+    const etiquetasPrestamo = prestamos.map((_, i) => 'Préstamo ' + (i + 1));
+    return {
+      nombre: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS,
+      titulo: NOMBRE_TABLA_TRANSACCIONES_PRESTAMOS,
+      vinculado,
+      etiquetasPrestamo,
+      filas: [
+        { tipo: 'banner', texto: 'Compañía Vinculada' },
+        { tipo: 'encabezado', etiqueta: 'Nº de prestamos', valores: etiquetasPrestamo },
+        { tipo: 'fusionada', clave: 'razonSocial', etiqueta: 'Razón social', valor: wrap(vinculado) },
+        { tipo: 'fusionada', clave: 'idFiscal', etiqueta: 'Identificación fiscal', valor: wrap(e.vinc_id) },
+        { tipo: 'fusionada', clave: 'pais', etiqueta: 'País-Residencia fiscal', valor: wrap(e.pais_vinc) },
+        {
+          tipo: 'fusionada', clave: 'tipoVinculacion', etiqueta: 'Tipo de vinculación',
+          valor: wrap(e.tipo_vinculacion || 'Art 260-1 E-T Inciso 1'),
+        },
+        { tipo: 'fusionada', clave: 'tipoOperacion', etiqueta: 'Tipo de operación', valor: tipoOperacionPrestamo(e) },
+        {
+          tipo: 'datos', clave: 'montoIntereses', etiqueta: 'Monto de intereses',
+          valores: prestamos.map((p) => montoTexto(p.interesesCOP)),
+        },
+        {
+          tipo: 'datos', clave: 'fechaDesembolso', etiqueta: 'Fecha de Desembolso',
+          valores: prestamos.map((p) => fechaLargaEs(p.fechaDesembolso)),
+        },
+        {
+          /* `p.tasaEA || p.periodicidad || p.tasaPactada`: cuando el Excel no trae una tasa
+             Efectiva Anual (visto en un informe real: Alciautos, tasa pactada "LIBOR + 1
+             punto", capturada solo en `periodicidad`), se muestra el texto que sí haya en vez
+             de "—" — el número a usar para cálculos sale de `tasaEfectivaDeFila`
+             (`prestamoTasasCalculo.js`), no de este texto. */
+          tipo: 'datos', clave: 'tasaPactada', etiqueta: 'Tasa Pactada',
+          valores: prestamos.map((p) => wrap(p.tasaEA || p.periodicidad || p.tasaPactada)),
+        },
+        {
+          tipo: 'datos', clave: 'periodicidad', etiqueta: 'Periodicidad de intereses',
+          valores: prestamos.map((p) => wrap(p.periodicidad)),
+        },
+        {
+          tipo: 'datos', clave: 'montoPrincipal', etiqueta: 'Monto en Principal (Préstamo)',
+          /* valorCOPDesembolso, NO saldoCOP — ver la nota de cabecera del archivo. */
+          valores: prestamos.map((p) => montoTexto(p.valorCOPDesembolso)),
+        },
+      ],
+      fuente: 'Información suministrada por la administración de la Compañía.',
+    };
+  });
+  return tablas.length ? tablas : null;
 }
 
 /**
  * Filas de "Histórico de la deuda intereses sobre Préstamos (42)": el mismo molde de
- * "Transacciones de Préstamos Intercompañía", sin las filas de monto de intereses, fecha
- * de desembolso y periodicidad — una sola fuente de cifras para las dos tablas.
+ * "Transacciones de Préstamos Intercompañía" (una por vinculado), sin las filas de monto de
+ * intereses, fecha de desembolso y periodicidad — una sola fuente de cifras para las dos
+ * tablas.
  */
 export function filasTablaHistoricoDeudaPrestamos(estudio) {
   const base = filasTablaTransaccionesPrestamos(estudio);
   if (!base) return null;
   const OMITIR = new Set(['montoIntereses', 'fechaDesembolso', 'periodicidad']);
-  return {
-    ...base,
+  return base.map((tabla) => ({
+    ...tabla,
     nombre: NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS,
     titulo: NOMBRE_TABLA_HISTORICO_DEUDA_PRESTAMOS,
-    filas: base.filas.filter((f) => !OMITIR.has(f.clave)),
-  };
+    filas: tabla.filas.filter((f) => !OMITIR.has(f.clave)),
+  }));
 }
 
 /**

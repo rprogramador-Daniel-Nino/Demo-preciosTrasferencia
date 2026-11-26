@@ -250,18 +250,26 @@ export function insertarTablasPrestamoColumnasOoxml(xml, estudio, avisos) {
   let out = String(xml || '');
   if (!tienePrestamos(estudio)) return out;
 
-  /* Inserta `tabla` en `cursor`, numerada a partir de `numeroAncla` (la tabla que la precede),
-     y devuelve dónde quedó el cursor y qué número usó — lo que la siguiente tabla necesita
-     para numerarse en cadena si le toca caer en el mismo sitio (respaldo de Histórico cuando
-     no hay «Criterios de vinculación»). */
-  const insertarEn = (cursor, tabla, numeroAncla, descripcion) => {
-    if (!tabla) return { cursor, numero: numeroAncla };
-    if (tabla.avisoVinculados && Array.isArray(avisos)) avisos.push(tabla.avisoVinculados);
-    const numero = numeroAncla != null ? numeroAncla + 1 : null;
-    const titulo = numero != null ? 'Tabla ' + numero + '. ' + tabla.nombre : tabla.nombre;
-    const ooxml = generarTablaOoxmlPorColumnas(titulo, tabla);
+  /* Inserta UNA tabla por cada vinculado distinto (`tablas` — Fase 7, `gruposDePrestamos`),
+     numeradas en cadena a partir de `numeroAncla` (la tabla que las precede), y devuelve
+     dónde quedó el cursor y el ÚLTIMO número usado — lo que la siguiente tabla necesita para
+     seguir numerándose en cadena si le toca caer en el mismo sitio (respaldo de Histórico
+     cuando no hay «Criterios de vinculación»). Caso real: Sungrow 2024 (Singapur + Chile). */
+  const insertarEn = (cursor, tablas, numeroAncla, descripcion) => {
+    const lista = (tablas || []).filter(Boolean);
+    if (!lista.length) return { cursor, numero: numeroAncla };
+    let numero = numeroAncla;
+    let ooxml = '';
+    lista.forEach((tabla) => {
+      numero = numero != null ? numero + 1 : null;
+      const titulo = numero != null ? 'Tabla ' + numero + '. ' + tabla.nombre : tabla.nombre;
+      ooxml += generarTablaOoxmlPorColumnas(titulo, tabla);
+    });
     out = out.slice(0, cursor) + ooxml + out.slice(cursor);
-    if (Array.isArray(avisos)) avisos.push('se insertó la tabla «' + tabla.nombre + '» ' + descripcion + '.');
+    if (Array.isArray(avisos)) {
+      avisos.push('se insertó la tabla «' + lista[0].nombre + '»'
+        + (lista.length > 1 ? ' (' + lista.length + ' vinculados)' : '') + ' ' + descripcion + '.');
+    }
     return { cursor: cursor + ooxml.length, numero };
   };
 
