@@ -6,19 +6,23 @@ import {
   construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
   trocearFechas, combinarResultadosTasas,
 } from '../services/prestamoTasasPrompts';
-import { FECHA_INICIO_SOFR } from '../services/prestamoTasasCalculo';
+import { serieDisponible, trioDeDireccion, aplicaRiesgoPais } from '../services/prestamoTasasCalculo';
 import {
   fechasPactoUnicas, filasTablaRangoIntercuartil, filasTablaTasasSeleccionadas,
   filasTablaAnalisisTasasAjustadas,
 } from '../services/tablasPrestamoTasas';
+import { direccionPrestamoEstudio } from '../services/tablasPrestamos';
 import { prestamoTasasCompleto } from '../services/flujoEstudio';
 
-const SERIES = [
-  { clave: 'prime', etiqueta: 'PRIME' },
-  { clave: 'sofr', etiqueta: 'SOFR' },
-  { clave: 'tmc', etiqueta: 'TMC' },
-  { clave: 'moodys', etiqueta: "Moody's" },
-];
+const ETIQUETA_SERIE = {
+  prime: 'PRIME', sofr: 'SOFR', tmc: 'TMC', cirr: 'CIRR', libor: 'LIBOR', moodys: "Moody's",
+};
+
+/* El trío de tasas de referencia depende de la dirección del préstamo (pasivo: el
+   contribuyente recibe, PRIME+SOFR+TMC; activo: el contribuyente otorga, PRIME+CIRR+LIBOR —
+   ver prestamoTasasCalculo.js). Moody's acompaña a cualquier trío. */
+const seriesParaDireccion = (direccion) => [...trioDeDireccion(direccion), 'moodys']
+  .map((clave) => ({ clave, etiqueta: ETIQUETA_SERIE[clave] }));
 
 /* Mismo criterio que `generarTablaOoxml`/`tablaHTML`: un porcentaje se muestra con 3
    decimales y coma, como ya lo hace el resto del informe para estas tasas. */
@@ -33,6 +37,10 @@ export default function PrestamoTasas({ study, updateStudy }) {
   const tasas = study.tasasPrestamo || { riesgoPais: {}, porFecha: {} };
   const fechas = fechasPactoUnicas(study);
   const completo = prestamoTasasCompleto(study);
+  const direccion = direccionPrestamoEstudio(study);
+  const trio = trioDeDireccion(direccion);
+  const series = seriesParaDireccion(direccion);
+  const riesgoPaisAplica = aplicaRiesgoPais(direccion);
 
   const guardarTasas = (siguiente) => updateStudy({ tasasPrestamo: siguiente });
 
@@ -120,17 +128,18 @@ export default function PrestamoTasas({ study, updateStudy }) {
         if (lotes.length > 1) {
           setMensaje(`Buscando tasas con Inteligencia Artificial... lote ${i + 1} de ${lotes.length}`);
         } else {
-          setMensaje('Buscando PRIME, SOFR, TMC, Moody\'s y Riesgo País con Inteligencia Artificial...');
+          const nombresTrio = trio.map((s) => ETIQUETA_SERIE[s]).join(', ');
+          setMensaje(`Buscando ${nombresTrio}, Moody's y Riesgo País con Inteligencia Artificial...`);
         }
-        const prompt = construirPromptTasasPrestamo(lotes[i], study.anio);
+        const prompt = construirPromptTasasPrestamo(lotes[i], study.anio, trio);
         // Secuencial, no en paralelo: son varias fechas pidiendo lo mismo con
         // Google Search, y no hay necesidad de disparar varias búsquedas a la vez.
         // eslint-disable-next-line no-await-in-loop
         const { texto, groundingChunks, webSearchQueries } = await consultarGeminiConBusqueda(prompt);
-        resultadosPorLote.push(parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries));
+        resultadosPorLote.push(parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries, trio));
       }
       const resultado = combinarResultadosTasas(resultadosPorLote);
-      guardarTasas(fusionarTasasPrestamo(tasas, resultado));
+      guardarTasas(fusionarTasasPrestamo(tasas, resultado, trio));
       setMensaje('✅ Tasas encontradas. Revise cada valor y su fuente antes de confirmar la etapa.');
     } catch (err) {
       console.error('Error buscando tasas de préstamo con IA:', err);
@@ -160,6 +169,13 @@ export default function PrestamoTasas({ study, updateStudy }) {
         >
           Tasas de préstamo* — obligatorias para avanzar a la siguiente etapa
         </p>
+        {direccion && (
+          <p className="text-xs text-zinc-500">
+            {direccion === 'pasivo'
+              ? 'Préstamo pasivo — el contribuyente recibe el préstamo: trío de referencia PRIME + SOFR + TMC.'
+              : 'Préstamo activo — el contribuyente otorga el préstamo: trío de referencia PRIME + CIRR + LIBOR.'}
+          </p>
+        )}
       </div>
 
       <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-3">
@@ -203,13 +219,16 @@ export default function PrestamoTasas({ study, updateStudy }) {
             </label>
             <input
               type="number" step="0.001"
+              disabled={!riesgoPaisAplica}
               value={tasas.riesgoPais?.valor ?? ''}
               onChange={(e) => handleCambiarRiesgoPais(e.target.value)}
               placeholder="Ej: 2.845"
-              className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100 w-48"
+              className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm disabled:opacity-40 disabled:bg-zinc-100 dark:disabled:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100 w-48"
             />
             <p className="text-[10px] text-zinc-500 mt-1.5">
-              Country Risk Premium (Damodaran, NYU Stern), para el año {study.anio || 'del estudio'}.
+              {riesgoPaisAplica
+                ? `Country Risk Premium (Damodaran, NYU Stern), para el año ${study.anio || 'del estudio'}.`
+                : 'No aplica en un préstamo activo (el contribuyente es acreedor) — no se usa en el cálculo.'}
             </p>
           </div>
           <button
@@ -237,8 +256,8 @@ export default function PrestamoTasas({ study, updateStudy }) {
             <div key={fecha} className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 space-y-3">
               <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{fecha}</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {SERIES.map(({ clave, etiqueta }) => {
-                  const disponible = clave !== 'sofr' || fecha >= FECHA_INICIO_SOFR;
+                {series.map(({ clave, etiqueta }) => {
+                  const disponible = serieDisponible(clave, fecha);
                   const campo = porFecha[clave] || {};
                   return (
                     <div key={clave} className="flex flex-col">
@@ -259,7 +278,11 @@ export default function PrestamoTasas({ study, updateStudy }) {
                         className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[10px] py-[6px] text-sm disabled:opacity-40 disabled:bg-zinc-100 dark:disabled:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 text-zinc-950 dark:text-zinc-100"
                       />
                       {!disponible && (
-                        <p className="text-[9px] text-zinc-400 mt-1">SOFR no existía antes del 2/04/2018</p>
+                        <p className="text-[9px] text-zinc-400 mt-1">
+                          {clave === 'sofr' ? 'SOFR no existía antes del 2/04/2018'
+                            : clave === 'libor' ? 'LIBOR dejó de publicarse el 30/06/2023'
+                              : 'No disponible para esta fecha'}
+                        </p>
                       )}
                       {disponible && campo.fuenteUrl && (
                         <a href={campo.fuenteUrl} target="_blank" rel="noreferrer"
