@@ -73,6 +73,10 @@
         "function": "extraerCamara"
       },
       {
+        "source": "/api/extraer-eeff",
+        "function": "extraerEeff"
+      },
+      {
         "source": "/api/gemini",
         "function": "gemini"
       },

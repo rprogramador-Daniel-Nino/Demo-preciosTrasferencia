@@ -28,6 +28,7 @@ const limitadorClaude = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorGemini = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorExtraerRut = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorExtraerCamara = crearLimitadorPorIp({ maxPorMinuto: 20 });
+const limitadorExtraerEeff = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorAnalisisSector = crearLimitadorPorIp({ maxPorMinuto: 20 });
 async function bloqueadoAcceso(req, res, limitador) {
   if (!(await peticionAutenticada(req))) {
@@ -388,6 +389,94 @@ exports.extraerCamara = onRequest(
     } catch (err) {
       console.error('Error extrayendo Cámara de Comercio:', err);
       res.status(502).json({ error: 'Error procesando Cámara de Comercio con Gemini API', detail: err.message });
+    }
+  }
+);
+
+/* Fase 8 de los estudios tipo préstamo: lectura de EEFF (a menudo PDFs escaneados sin capa
+   de texto — confirmado en 2 de 3 casos reales revisados, Suma y parte de Alciautos), vía
+   Gemini Vision, mismo patrón que RUT/Cámara. No se pagina: Gemini ya acepta el PDF completo
+   como `inline_data` igual que las otras dos rutas; si en la práctica aparece un límite de
+   tamaño, se revisita entonces. */
+exports.extraerEeff = onRequest(
+  { secrets: [GEMINI_API_KEY], region: 'us-central1', cors: true, timeoutSeconds: 180 },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+    if (await bloqueadoAcceso(req, res, limitadorExtraerEeff)) return;
+    try {
+      const apiKey = GEMINI_API_KEY.value();
+      if (!apiKey) {
+        res.status(500).json({ error: 'GEMINI_API_KEY no está configurada en Secret Manager.' });
+        return;
+      }
+
+      const { archivo_base64, tipo } = req.body || {};
+      if (!archivo_base64) {
+        res.status(400).json({ error: 'Falta archivo_base64.' });
+        return;
+      }
+
+      const mimeType = (tipo || '').includes('pdf')
+        ? 'application/pdf'
+        : ((tipo || '').includes('png') ? 'image/png' : 'image/jpeg');
+
+      const promptText = "Extrae la información de la nota de partes relacionadas/vinculados económicos de estos Estados Financieros en formato JSON estricto con las siguientes llaves:\n"
+        + "- es_separado: boolean — true si los estados financieros son SEPARADOS/INDIVIDUALES, false si son CONSOLIDADOS (revisa el título del estado o el dictamen del revisor fiscal), null si no se puede determinar\n"
+        + "- unidad: string — 'pesos' o 'miles de pesos', según cómo estén expresadas las cifras en el estado\n"
+        + "- saldo_partes_relacionadas: number — el saldo de cuentas por cobrar o por pagar a partes relacionadas/vinculados económicos al cierre del ejercicio, EN LA MISMA unidad que el resto del estado (no conviertas a pesos si está en miles), null si no lo encuentra\n"
+        + "- vinculado: string con el nombre de la parte relacionada principal mencionada en la nota, null si no aplica\n"
+        + "- nota_texto: string con el texto literal de la nota de partes relacionadas/vinculados económicos (o su extracto más relevante si es muy extensa), null si no existe esa nota\n"
+        + "- confianza: número de 0 a 100\n\n"
+        + "NO inviertas ni estimes ningún valor que no encuentres publicado: usa null.\n"
+        + "Responde ÚNICAMENTE con el objeto JSON válido sin marcas markdown.";
+
+      const upstream = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_DEFAULT}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inline_data: { mime_type: mimeType, data: archivo_base64 } },
+                { text: promptText }
+              ]
+            }]
+          }),
+        }
+      );
+
+      const data = await upstream.json();
+      const cand = data && data.candidates && data.candidates[0];
+      const texto = cand && cand.content && cand.content.parts
+        ? cand.content.parts.map(p => p.text || '').join('')
+        : '';
+      if (upstream.ok && texto) {
+        const cleanJsonStr = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+        const parsed = JSON.parse(cleanJsonStr);
+        res.json({
+          ...parsed,
+          _uso: {
+            modelo: GEMINI_MODEL_DEFAULT,
+            proveedor: 'gemini',
+            usage: {
+              input_tokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
+              output_tokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
+            },
+          },
+        });
+      } else {
+        res.status(upstream.status).json({ error: 'No se pudo extraer los EEFF', raw: data });
+      }
+    } catch (err) {
+      console.error('Error extrayendo EEFF:', err);
+      res.status(502).json({ error: 'Error procesando EEFF con Gemini API', detail: err.message });
     }
   }
 );

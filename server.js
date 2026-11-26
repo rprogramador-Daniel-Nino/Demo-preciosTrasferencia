@@ -22,9 +22,9 @@ const API_KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL_DEFAULT = 'gemini-3.5-flash';
 
-/* Filtro común de las cuatro rutas que hablan con una API de pago (Anthropic/Gemini):
-   /api/claude, /api/gemini, /api/extraer-rut y /api/extraer-camara. Ninguna comprobaba
-   sesión, solo el método HTTP. Ver functions/verificarSesion.js,
+/* Filtro común de las rutas que hablan con una API de pago (Anthropic/Gemini):
+   /api/claude, /api/gemini, /api/extraer-rut, /api/extraer-camara y /api/extraer-eeff.
+   Ninguna comprobaba sesión, solo el método HTTP. Ver functions/verificarSesion.js,
    functions/origenesPermitidos.js y functions/limitadorTasa.js para el porqué de cada
    capa. Mismo filtro que functions/index.js. Un limitador por ruta: que una se llene no
    debe tapar a las demás. */
@@ -32,6 +32,7 @@ const limitadorClaude = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorGemini = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorExtraerRut = crearLimitadorPorIp({ maxPorMinuto: 20 });
 const limitadorExtraerCamara = crearLimitadorPorIp({ maxPorMinuto: 20 });
+const limitadorExtraerEeff = crearLimitadorPorIp({ maxPorMinuto: 20 });
 async function bloqueadoAcceso(req, res, limitador) {
   if (!(await peticionAutenticada(req))) {
     res.status(401).json({ error: 'Se requiere iniciar sesión.' });
@@ -387,6 +388,84 @@ const handlerExtraerCamara = async (req, res) => {
 
 app.post('/api/extraer-camara', handlerExtraerCamara);
 app.post('/extraer-camara', handlerExtraerCamara);
+
+/* Fase 8 de los estudios tipo préstamo: lectura de EEFF (a menudo PDFs escaneados sin capa
+   de texto — confirmado en 2 de 3 casos reales revisados, Suma y parte de Alciautos), vía
+   Gemini Vision, mismo patrón que RUT/Cámara. No se pagina: Gemini ya acepta el PDF completo
+   como `inline_data` igual que las otras dos rutas; si en la práctica aparece un límite de
+   tamaño, se revisita entonces. */
+const handlerExtraerEeff = async (req, res) => {
+  if (await bloqueadoAcceso(req, res, limitadorExtraerEeff)) return;
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Servidor sin GEMINI_API_KEY configurada.' });
+  }
+  try {
+    const { archivo_base64, tipo } = req.body;
+    if (!archivo_base64) {
+      return res.status(400).json({ error: 'Falta archivo_base64.' });
+    }
+    const mimeType = (tipo || '').includes('pdf')
+      ? 'application/pdf'
+      : ((tipo || '').includes('png') ? 'image/png' : 'image/jpeg');
+
+    const promptText = "Extrae la información de la nota de partes relacionadas/vinculados económicos de estos Estados Financieros en formato JSON estricto con las siguientes llaves:\n"
+      + "- es_separado: boolean — true si los estados financieros son SEPARADOS/INDIVIDUALES, false si son CONSOLIDADOS (revisa el título del estado o el dictamen del revisor fiscal), null si no se puede determinar\n"
+      + "- unidad: string — 'pesos' o 'miles de pesos', según cómo estén expresadas las cifras en el estado\n"
+      + "- saldo_partes_relacionadas: number — el saldo de cuentas por cobrar o por pagar a partes relacionadas/vinculados económicos al cierre del ejercicio, EN LA MISMA unidad que el resto del estado (no conviertas a pesos si está en miles), null si no lo encuentra\n"
+      + "- vinculado: string con el nombre de la parte relacionada principal mencionada en la nota, null si no aplica\n"
+      + "- nota_texto: string con el texto literal de la nota de partes relacionadas/vinculados económicos (o su extracto más relevante si es muy extensa), null si no existe esa nota\n"
+      + "- confianza: número de 0 a 100\n\n"
+      + "NO inviertas ni estimes ningún valor que no encuentres publicado: usa null.\n"
+      + "Responde ÚNICAMENTE con el objeto JSON válido sin marcas markdown.";
+
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_DEFAULT}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: archivo_base64 } },
+              { text: promptText }
+            ]
+          }]
+        }),
+      }
+    );
+
+    const data = await upstream.json();
+    const cand = data && data.candidates && data.candidates[0];
+    const texto = cand && cand.content && cand.content.parts
+      ? cand.content.parts.map(p => p.text || '').join('')
+      : '';
+    if (upstream.ok && texto) {
+      const cleanJsonStr = texto.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(cleanJsonStr);
+      return res.json({
+        ...parsed,
+        _uso: {
+          modelo: GEMINI_MODEL_DEFAULT,
+          proveedor: 'gemini',
+          usage: {
+            input_tokens: (data.usageMetadata && data.usageMetadata.promptTokenCount) || 0,
+            output_tokens: (data.usageMetadata && data.usageMetadata.candidatesTokenCount) || 0,
+          },
+        },
+      });
+    }
+    res.status(upstream.status).json({ error: 'No se pudo extraer los EEFF', raw: data });
+  } catch (err) {
+    console.error('Error extrayendo EEFF:', err);
+    res.status(502).json({ error: 'Error procesando EEFF con Gemini API', detail: err.message });
+  }
+};
+
+app.post('/api/extraer-eeff', handlerExtraerEeff);
+app.post('/extraer-eeff', handlerExtraerEeff);
 
 // Estado del servidor local, para el panel de diagnóstico ("Probar conector").
 // Nunca devuelve la clave real, solo si está configurada.

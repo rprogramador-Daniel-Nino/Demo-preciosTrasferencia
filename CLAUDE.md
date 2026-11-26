@@ -56,8 +56,12 @@ deben mantenerse sincronizadas al cambiar prompts o contratos:
 | Hosting cPanel (legado) | `Cpanel/public_html/api/*.php` + `.htaccess` | `api/config.php` (gitignored) |
 
 Endpoints: `POST /api/claude`, `POST /api/gemini`, `POST /api/extraer-rut`,
-`POST /api/extraer-camara` (+ `GET /api/estado`, solo en `server.js`, para el panel
-"Probar conector"). `firebase.json` mapea cada ruta a su función.
+`POST /api/extraer-camara`, `POST /api/extraer-eeff` (+ `GET /api/estado`, solo en
+`server.js`, para el panel "Probar conector"). `firebase.json` mapea cada ruta a su función.
+`extraer-eeff` (Fase 8 de los estudios tipo préstamo, 2026-11-26) lee la nota de partes
+relacionadas de los EEFF vía Gemini Vision — útil porque varios EEFF reales llegan como PDF
+escaneado sin capa de texto. Como `extraer-camara`, solo existe en `server.js`/
+`functions/index.js`; el PHP de cPanel no lo porta (tampoco porta `extraer-camara`).
 
 **Reparto de modelos por costo:** Claude (`claude-haiku-4-5` por defecto, `claude-sonnet-5`
 en la redacción pesada) para redacción y razonamiento; Gemini (`gemini-3-flash-preview`)
