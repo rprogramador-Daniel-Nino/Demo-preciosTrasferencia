@@ -4818,7 +4818,10 @@ test('actualizarTablasOperacionesOoxml borra la tabla de préstamo si el estudio
 const ESTUDIO_PRESTAMO_DOCX = {
   tipo_estudio: 'prestamo', ent: 'Autoland SAS', vinc: 'Inversiones San Jeronimo SpA', anio: 2025,
   vinc_tipo: 'Intereses Sobre Préstamos (42)',
-  prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.', valorDesembolsoMoneda: 3000000 }],
+  prestamos: [{
+    otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+    fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.', valorDesembolsoMoneda: 3000000,
+  }],
   tasasPrestamo: {
     riesgoPais: { valor: 2.845 },
     porFecha: {

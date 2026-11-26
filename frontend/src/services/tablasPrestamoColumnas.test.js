@@ -182,3 +182,16 @@ test('aMatrizPlana: encabezados trae una columna por préstamo más el rótulo',
 test('aMatrizPlana: null si la tabla es null', () => {
   assert.strictEqual(aMatrizPlana(null), null);
 });
+
+test('filasTablaTransaccionesPrestamos: "Tasa Pactada" cae a periodicidad cuando falta tasaEA (Alciautos)', () => {
+  const estudio = {
+    tipo_estudio: 'prestamo', ent: 'Alciautos S.A.S.', vinc_id: '900629498', pais_vinc: 'Panamá',
+    prestamos: [{
+      otorga: 'Alciautos S.A.S.', recibe: 'Favina Holdings Inc',
+      tasaEA: '', periodicidad: 'LIBOR + 1 punto',
+      valorCOPDesembolso: 9436452900, interesesCOP: 890410340, fechaDesembolso: '2019-03-01',
+    }],
+  };
+  const t = filasTablaTransaccionesPrestamos(estudio);
+  assert.deepStrictEqual(filaDe(t, 'tasaPactada').valores, ['LIBOR + 1 punto']);
+});

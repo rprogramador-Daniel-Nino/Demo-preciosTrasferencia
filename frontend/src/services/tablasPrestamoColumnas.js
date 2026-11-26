@@ -129,8 +129,13 @@ export function filasTablaTransaccionesPrestamos(estudio) {
         valores: prestamos.map((p) => fechaLargaEs(p.fechaDesembolso)),
       },
       {
+        /* `p.tasaEA || p.periodicidad || p.tasaPactada`: cuando el Excel no trae una tasa
+           Efectiva Anual (visto en un informe real: Alciautos, tasa pactada "LIBOR + 1
+           punto", capturada solo en `periodicidad`), se muestra el texto que sí haya en vez
+           de "—" — el número a usar para cálculos sale de `tasaEfectivaDeFila`
+           (`prestamoTasasCalculo.js`), no de este texto. */
         tipo: 'datos', clave: 'tasaPactada', etiqueta: 'Tasa Pactada',
-        valores: prestamos.map((p) => wrap(p.tasaEA)),
+        valores: prestamos.map((p) => wrap(p.tasaEA || p.periodicidad || p.tasaPactada)),
       },
       {
         tipo: 'datos', clave: 'periodicidad', etiqueta: 'Periodicidad de intereses',

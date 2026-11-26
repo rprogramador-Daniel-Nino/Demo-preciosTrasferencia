@@ -154,7 +154,10 @@ test('filasTablaAnalisisTasasAjustadas: omite SOFR (no 3 filas) si la fecha es a
 const ESTUDIO_UN_PRESTAMO = {
   ent: 'Autoland SAS', vinc: 'Inversiones San Jeronimo SpA', anio: 2025,
   tipo_estudio: 'prestamo',
-  prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.' }],
+  prestamos: [{
+    otorga: 'Inversiones San Jeronimo SpA', recibe: 'Autoland SAS',
+    fechaPacto: '2020-10-27', tasaEA: '4,500% E.A.',
+  }],
 };
 const TASAS_UNA_FECHA = {
   riesgoPais: { valor: 2.845 },
@@ -246,4 +249,72 @@ test('conclusión: nula cuando falta alguna tasa para calcular el rango de un pr
 test('conclusión: nula cuando no hay E.A. legible para comparar contra el rango', () => {
   const estudio = { ...ESTUDIO_UN_PRESTAMO, prestamos: [{ fechaPacto: '2020-10-27', tasaEA: '' }] };
   assert.strictEqual(conclusionRangoIntercuartilPrestamo(estudio, TASAS_UNA_FECHA), null);
+});
+
+/* ══════ Fase 6: dirección, trío condicionado, índice+spread, bug de estudio.vinc ══════ */
+
+test('filasTablaRangoIntercuartil usa vinculadoDePrestamo, no estudio.vinc (regresión 2026-11-25)', () => {
+  const estudio = {
+    ...ESTUDIO_PRESTAMO,
+    vinc: 'BRUNO FRITSCH SA', // campo desactualizado, del motor de márgenes — no debe usarse
+  };
+  const t = filasTablaRangoIntercuartil(estudio, TASAS_PRESTAMO_27_10_2020);
+  assert.strictEqual(t.filas[0].vinculado, 'Inversiones San Jeronimo SpA');
+  assert.notStrictEqual(t.filas[0].vinculado, 'BRUNO FRITSCH SA');
+});
+
+test('conclusionRangoIntercuartilPrestamo usa vinculadoDePrestamo, no estudio.vinc', () => {
+  const estudio = { ...ESTUDIO_UN_PRESTAMO, vinc: 'BRUNO FRITSCH SA' };
+  const c = conclusionRangoIntercuartilPrestamo(estudio, TASAS_UNA_FECHA);
+  assert.ok(c.parrafos[0].includes('Inversiones San Jeronimo SpA'));
+  assert.ok(!c.parrafos[0].includes('BRUNO FRITSCH SA'));
+});
+
+/* Estudio activo (Alciautos: el contribuyente otorga el préstamo a Favina Holdings), sin
+   tasaEA (solo "LIBOR + 1 punto"), con riesgo país de 99% para confirmar que NO se aplica. */
+const ESTUDIO_ACTIVO_ALCIAUTOS = {
+  ent: 'Alciautos S.A.S.', anio: 2025, tipo_estudio: 'prestamo',
+  prestamos: [{
+    otorga: 'Alciautos S.A.S.', recibe: 'Favina Holdings Inc',
+    fechaPacto: '2018-06-30', valorDesembolsoMoneda: 1190800,
+    tasaEA: '', periodicidad: 'LIBOR + 1 punto',
+  }],
+};
+const TASAS_ACTIVO_ALCIAUTOS = {
+  riesgoPais: { valor: 99 }, // si se aplicara en 'activo', el rango se dispararía — no debe usarse
+  porFecha: {
+    '2018-06-30': {
+      prime: { valor: 8 }, cirr: { valor: 5 }, libor: { valor: 4.535 }, moodys: { valor: 1.14 },
+    },
+  },
+};
+
+test('filasTablaRangoIntercuartil: en un préstamo activo usa PRIME+CIRR+LIBOR y no aplica riesgo país', () => {
+  const t = filasTablaRangoIntercuartil(ESTUDIO_ACTIVO_ALCIAUTOS, TASAS_ACTIVO_ALCIAUTOS);
+  const fila = t.filas[0];
+  assert.ok(fila.rango.superior < 50, `el riesgo país de 99 no debe haberse aplicado: ${fila.rango.superior}`);
+  assert.strictEqual(fila.rango.n, 3, 'debe haber calculado con las 3 series del trío activo (prime/cirr/libor)');
+});
+
+test('filasTablaRangoIntercuartil: resuelve la tasa pactada por índice+spread cuando falta tasaEA', () => {
+  const t = filasTablaRangoIntercuartil(ESTUDIO_ACTIVO_ALCIAUTOS, TASAS_ACTIVO_ALCIAUTOS);
+  assert.strictEqual(t.filas[0].tasaEA, 'LIBOR + 1 punto', 'el texto mostrado sigue siendo el original');
+});
+
+test('filasTablaTasasSeleccionadas: en dirección activa describe PRIME/CIRR/LIBOR, no SOFR/TMC', () => {
+  const t = filasTablaTasasSeleccionadas(ESTUDIO_ACTIVO_ALCIAUTOS);
+  assert.strictEqual(t.filas.length, 3);
+  assert.ok(t.filas.some((f) => /PRIME/.test(f.tasa)));
+  assert.ok(t.filas.some((f) => /CIRR/.test(f.tasa)));
+  assert.ok(t.filas.some((f) => /LIBOR/.test(f.tasa)));
+  assert.ok(!t.filas.some((f) => /SOFR/.test(f.tasa)));
+  assert.ok(!t.filas.some((f) => /TMC|Monetaria/.test(f.tasa)));
+});
+
+test('filasTablaAnalisisTasasAjustadas: en dirección activa arma 3 filas PRIME/CIRR/LIBOR, sin riesgo país', () => {
+  const t = filasTablaAnalisisTasasAjustadas(ESTUDIO_ACTIVO_ALCIAUTOS, TASAS_ACTIVO_ALCIAUTOS);
+  assert.strictEqual(t.filas.length, 3);
+  assert.ok(t.filas.some((f) => f.tasa === 'CIRR'));
+  assert.ok(t.filas.some((f) => f.tasa === 'LIBOR'));
+  assert.ok(t.filas.every((f) => f.riesgoPais === null || f.riesgoPais === 0));
 });
