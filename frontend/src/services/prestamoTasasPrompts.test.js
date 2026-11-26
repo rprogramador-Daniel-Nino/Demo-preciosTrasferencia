@@ -4,6 +4,7 @@ import {
   construirPromptTasasPrestamo, parsearRespuestaTasasPrestamo, fusionarTasasPrestamo,
   trocearFechas, combinarResultadosTasas, TAMANO_LOTE_FECHAS,
 } from './prestamoTasasPrompts.js';
+import { TRIOS_POR_DIRECCION } from './prestamoTasasCalculo.js';
 
 /* ══════ construirPromptTasasPrestamo ══════ */
 
@@ -162,4 +163,34 @@ test('combinarResultadosTasas: con una lista vacía, da porFecha vacío y riesgo
   const combinado = combinarResultadosTasas([]);
   assert.deepStrictEqual(combinado.porFecha, {});
   assert.strictEqual(combinado.riesgoPais.valor, null);
+});
+
+/* ══════ trío condicionado por dirección (Fase 6) ══════ */
+
+test('construirPromptTasasPrestamo con trío activo pide CIRR y LIBOR, no SOFR/TMC', () => {
+  const prompt = construirPromptTasasPrestamo(['2018-06-30'], 2025, TRIOS_POR_DIRECCION.activo);
+  assert.match(prompt, /CIRR/);
+  assert.match(prompt, /LIBOR/);
+  assert.doesNotMatch(prompt, /\bSOFR\b/);
+  assert.doesNotMatch(prompt, /\bTMC\b/);
+});
+
+test('construirPromptTasasPrestamo sin trío sigue pidiendo PRIME/SOFR/TMC (regresión)', () => {
+  const prompt = construirPromptTasasPrestamo(['2023-01-01'], 2025);
+  assert.match(prompt, /\bSOFR\b/);
+  assert.match(prompt, /\bTMC\b/);
+  assert.doesNotMatch(prompt, /\bCIRR\b/);
+  assert.doesNotMatch(prompt, /\bLIBOR\b/);
+});
+
+test('parsearRespuestaTasasPrestamo con trío activo procesa cirr/libor y no sofr/tmc', () => {
+  const texto = JSON.stringify({
+    porFecha: { '2018-06-30': { prime: 8, cirr: 5, libor: 5.535, moodys: 1.14 } },
+    riesgoPais: { valor: 2.5 },
+  });
+  const r = parsearRespuestaTasasPrestamo(texto, ['x'], [], TRIOS_POR_DIRECCION.activo);
+  assert.strictEqual(r.porFecha['2018-06-30'].cirr.valor, 5);
+  assert.strictEqual(r.porFecha['2018-06-30'].libor.valor, 5.535);
+  assert.strictEqual(r.porFecha['2018-06-30'].sofr, undefined);
+  assert.strictEqual(r.porFecha['2018-06-30'].tmc, undefined);
 });

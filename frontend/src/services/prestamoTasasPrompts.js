@@ -16,9 +16,32 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 import { extraerJSON } from './comparablesEngine.js';
-import { serieDisponible } from './prestamoTasasCalculo.js';
+import { serieDisponible, TRIOS_POR_DIRECCION } from './prestamoTasasCalculo.js';
 
-const SERIES = ['prime', 'sofr', 'tmc', 'moodys'];
+/** Series a pedir/parsear para un trío dado: el trío mismo más Moody's, que siempre
+ *  acompaña a cualquier trío (es el ajuste de rendimiento corporativo, no una tasa de
+ *  referencia que varíe por dirección). */
+const seriesDePrompt = (trio) => [...trio, 'moodys'];
+
+/* Descripción de cada serie reconocida, para armar el prompt según el trío que
+ * corresponda (condicionado por dirección — ver TRIOS_POR_DIRECCION). */
+const DESCRIPCION_SERIE = {
+  prime: '- PRIME: Bank Prime Loan Rate de Estados Unidos (Reserva Federal, H.15, serie FRED\n'
+    + '  RIFSPBLPNA), tasa diaria vigente en la fecha.',
+  sofr: '- SOFR: Secured Overnight Financing Rate, promedio mensual del mes que contiene la fecha.\n'
+    + '  Esta serie no existe antes del 2 de abril de 2018 — si la fecha es anterior, OMITE la\n'
+    + '  clave "sofr" para esa fecha, nunca pongas un 0 ni una estimación.',
+  tmc: '- TMC: Tasa de Interés Monetaria (tasa de intervención) del Banco de la República de\n'
+    + '  Colombia, promedio mensual del mes que contiene la fecha.',
+  cirr: '- CIRR: Commercial Interest Reference Rate de la OCDE (Arrangement on Officially\n'
+    + '  Supported Export Credits, Anexo XVI), para la moneda del préstamo, tasa vigente en la\n'
+    + '  fecha.',
+  libor: '- LIBOR: London Interbank Offered Rate, USD, a 12 meses, tasa diaria vigente en la\n'
+    + '  fecha. Esta serie dejó de publicarse el 30 de junio de 2023 — si la fecha es posterior,\n'
+    + '  OMITE la clave "libor" para esa fecha, nunca inventes ni estimes un valor publicado\n'
+    + '  después de esa fecha de cesación.',
+  moodys: "- MOODY'S: Moody's Seasoned Aaa Corporate Bond Yield, valor más cercano a la fecha.",
+};
 
 /* Un estudio con muchos préstamos de fechas distintas puede tener más de 8 fechas de pacto
    únicas. Pedirlas todas en un solo prompt arriesga el corte de `GEMINI_CORTE_MS` (50 s,
@@ -35,20 +58,17 @@ export function trocearFechas(fechasPacto) {
   return lotes;
 }
 
-export function construirPromptTasasPrestamo(fechasPacto, anioInforme) {
+export function construirPromptTasasPrestamo(fechasPacto, anioInforme, trio = TRIOS_POR_DIRECCION.pasivo) {
   const listaFechas = (fechasPacto || []).map((f) => `- ${f}`).join('\n');
+  const series = seriesDePrompt(trio);
+  const descripciones = series.map((s) => DESCRIPCION_SERIE[s]).join('\n');
+  const clavesJson = series.map((s) => `"${s}": <número>`).join(', ');
+  const fuentesJson = series.map((s) => `"${s}": "<url>"`).join(', ');
   return `Eres un asistente de investigación de precios de transferencia. Para cada una de
 las siguientes fechas de pacto de un préstamo intercompañía, busca el valor real y publicado
-de estas 4 tasas/series de referencia:
+de estas ${series.length} tasas/series de referencia:
 
-- PRIME: Bank Prime Loan Rate de Estados Unidos (Reserva Federal, H.15, serie FRED
-  RIFSPBLPNA), tasa diaria vigente en la fecha.
-- SOFR: Secured Overnight Financing Rate, promedio mensual del mes que contiene la fecha.
-  Esta serie no existe antes del 2 de abril de 2018 — si la fecha es anterior, OMITE la
-  clave "sofr" para esa fecha, nunca pongas un 0 ni una estimación.
-- TMC: Tasa de Interés Monetaria (tasa de intervención) del Banco de la República de
-  Colombia, promedio mensual del mes que contiene la fecha.
-- MOODY'S: Moody's Seasoned Aaa Corporate Bond Yield, valor más cercano a la fecha.
+${descripciones}
 
 Fechas de pacto a buscar:
 ${listaFechas}
@@ -63,8 +83,8 @@ Reglas estrictas:
 
 {
   "porFecha": {
-    "<fecha ISO>": { "prime": <número>, "sofr": <número>, "tmc": <número>, "moodys": <número>,
-      "fuentes": { "prime": "<url>", "sofr": "<url>", "tmc": "<url>", "moodys": "<url>" } }
+    "<fecha ISO>": { ${clavesJson},
+      "fuentes": { ${fuentesJson} } }
   },
   "riesgoPais": { "valor": <número>, "fuenteUrl": "<url>" }
 }
@@ -84,7 +104,7 @@ const esNumero = (v) => typeof v === 'number' && Number.isFinite(v);
  * devuelve un `sofr` para una fecha anterior a abril de 2018 (no debería, pero puede
  * equivocarse), se descarta: `valor` sale `null` y `disponible:false` igual.
  */
-export function parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries) {
+export function parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQueries, trio = TRIOS_POR_DIRECCION.pasivo) {
   const datos = extraerJSON(texto);
   const confiable = Boolean((groundingChunks || []).length) || Boolean((webSearchQueries || []).length);
 
@@ -92,7 +112,7 @@ export function parsearRespuestaTasasPrestamo(texto, groundingChunks, webSearchQ
   Object.entries(datos.porFecha || {}).forEach(([fecha, valores]) => {
     const fuentes = valores?.fuentes || {};
     const fila = {};
-    SERIES.forEach((serie) => {
+    seriesDePrompt(trio).forEach((serie) => {
       const disponible = serieDisponible(serie, fecha);
       const crudo = valores?.[serie];
       fila[serie] = {
@@ -139,7 +159,7 @@ export function combinarResultadosTasas(resultados) {
  * `editadoManualmente: false`, para que una futura búsqueda SÍ pueda refrescarlo si todavía
  * nadie lo tocó.
  */
-export function fusionarTasasPrestamo(actual, nuevo) {
+export function fusionarTasasPrestamo(actual, nuevo, trio = TRIOS_POR_DIRECCION.pasivo) {
   const a = actual || {};
   const adoptar = (campoActual, campoNuevo) => (
     campoActual?.editadoManualmente ? campoActual : { ...campoNuevo, editadoManualmente: false }
@@ -149,7 +169,11 @@ export function fusionarTasasPrestamo(actual, nuevo) {
   Object.entries(nuevo?.porFecha || {}).forEach(([fecha, valores]) => {
     const actualFecha = a.porFecha?.[fecha] || {};
     const filaFusionada = {};
-    SERIES.forEach((serie) => {
+    /* Unión del trío esperado con las claves que de verdad trae `valores`: así una fusión no
+       pierde una serie que el resultado nuevo sí trajo (p.ej. si se fusiona con el trío por
+       defecto pero `nuevo` viene de una búsqueda hecha con otro trío). */
+    const claves = new Set([...seriesDePrompt(trio), ...Object.keys(valores || {})]);
+    claves.forEach((serie) => {
       filaFusionada[serie] = adoptar(actualFecha[serie], valores[serie]);
     });
     porFecha[fecha] = filaFusionada;
