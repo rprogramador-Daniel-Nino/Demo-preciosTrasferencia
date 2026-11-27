@@ -7,6 +7,8 @@ import {
 import {
   verificarEeff, camposAplicables, camposParaLimpiar, candidataParaAprender, utilidadOperacionalDe,
 } from '../services/eeffVerificacion';
+import { parseEeffSegmentadoWithGeminiOCR } from '../services/eeffSegmentacionParser';
+import { verificarEeffSegmentado } from '../services/eeffSegmentacionVerificacion';
 import {
   resolverFaltantesConNotas, aprenderDeLecturaExitosa, aprenderRotuloConfirmado,
 } from '../services/notasEeffOrquestacion';
@@ -79,6 +81,21 @@ export default function IngestaCifras({ study, updateStudy }) {
   /* Los estados por campo que la ingesta no pudo resolver ni con la pasada a notas —
      solo se llena cuando hay algo que de verdad merece un popup, no en cada carga. */
   const [popupFaltantes, setPopupFaltantes] = useState(null);
+
+  /* Estado propio de la ingesta SEGMENTADA (tipo_estudio === 'segmentacion'). No comparte
+     estado con la ingesta estándar de arriba porque describe una lectura distinta —una
+     `LecturaSegmentada` con varios segmentos, ninguno aplicado todavía— y las dos cartas
+     nunca se muestran a la vez (ver el render más abajo). */
+  const [loadingEeffSegmentado, setLoadingEeffSegmentado] = useState(false);
+  const [eeffSegmentadoMsg, setEeffSegmentadoMsg] = useState('');
+  const [loadingSegmento, setLoadingSegmento] = useState(false);
+  /* La `LecturaSegmentada` completa (Task 3) y el archivo que la produjo, para poder
+     reverificar otro segmento sin releer el PDF. Vive en el componente, no en el estudio:
+     es un insumo intermedio de la lectura, no una cifra del estudio — lo que SÍ se
+     persiste al elegir un segmento es `t_lecturaSegmentacion` (el resumen de Task 4) y las
+     cifras aplicadas, vía `updateStudy`. */
+  const [segmentosLeidos, setSegmentosLeidos] = useState(null);
+  const [archivoSegmentado, setArchivoSegmentado] = useState(null);
 
   /* Los tres insumos de la utilidad operacional. Cambiar cualquiera obliga a recalcularla:
      es un valor derivado, no un dato, y dejarlo con la cifra de la carga anterior es peor
@@ -384,6 +401,71 @@ export default function IngestaCifras({ study, updateStudy }) {
     }
   };
 
+  /* Carga de EEFF SEGMENTADOS (tipo_estudio === 'segmentacion'): a diferencia de
+     `handleEeffUpload`, aquí NO se aplica ninguna cifra todavía — el documento trae varias
+     columnas (una por segmento) y hace falta que el analista elija cuál es la del
+     contribuyente antes de poder verificarla y aplicarla. Guarda la lectura completa y el
+     archivo en estado local para que `handleElegirSegmento` pueda reverificar otro segmento
+     sin volver a subir el archivo. */
+  const handleEeffSegmentadoUpload = async (file) => {
+    if (!file) return;
+    setLoadingEeffSegmentado(true);
+    setSegmentosLeidos(null);
+    setArchivoSegmentado(null);
+    setEeffSegmentadoMsg('🤖 Leyendo el estado de resultados segmentado…');
+
+    try {
+      const lectura = await parseEeffSegmentadoWithGeminiOCR(file, study.anio);
+      setSegmentosLeidos(lectura);
+      setArchivoSegmentado(file);
+
+      const n = lectura.segmentos.length;
+      if (n > 0) {
+        setEeffSegmentadoMsg(`✅ Se identificaron ${n} segmento(s) en el documento. Elija abajo el del contribuyente bajo estudio.`);
+      } else {
+        setEeffSegmentadoMsg('⚠ No se identificó ningún segmento en el documento. Puede ingresar las cifras manualmente.');
+      }
+    } catch (err) {
+      console.error('Error procesando EEFF segmentado con OCR:', err);
+      setEeffSegmentadoMsg('⚠ No se pudo procesar el archivo. Puede ingresar las cifras manualmente.');
+    } finally {
+      setLoadingEeffSegmentado(false);
+    }
+  };
+
+  /* Elegir el segmento del contribuyente entre los que la lectura identificó: verifica SUS
+     cuatro rubros contra la columna correspondiente del PDF (Task 4) y aplica el resultado
+     al estudio. Reemplaza lo que hubiera de una elección anterior —cambiar de segmento es
+     una operación normal, no una corrección excepcional—. */
+  const handleElegirSegmento = async (etiqueta) => {
+    if (!segmentosLeidos) return;
+    setLoadingSegmento(true);
+    try {
+      const verificacion = await verificarEeffSegmentado(segmentosLeidos, {
+        etiquetaSegmento: etiqueta,
+        anioEstudio: study.anio,
+        archivo: archivoSegmentado,
+      });
+
+      /* Mismo `repararCifrasDelEstudio` que usa la ingesta estándar, sobre las cifras que
+         la verificación acaba de producir (ver eeffParser.js). */
+      updateStudy({
+        ...repararCifrasDelEstudio(verificacion.campos),
+        segmentoSeleccionado: etiqueta,
+        t_lecturaSegmentacion: {
+          advertencias: verificacion.advertencias,
+          verificadoContraTexto: verificacion.verificadoContraTexto,
+          segmentosDisponibles: verificacion.segmentosDisponibles,
+        },
+      });
+    } catch (err) {
+      console.error('Error verificando el segmento elegido:', err);
+      setEeffSegmentadoMsg('⚠ No se pudo verificar el segmento elegido. Intente de nuevo.');
+    } finally {
+      setLoadingSegmento(false);
+    }
+  };
+
   /* Sin coaccionar a 0: un `t_op` (o `t_s`) faltante es `null`, no una utilidad de cero, y
      `pliOf` ya sabe devolver `null` en ese caso — coaccionarlo aquí antes de llamarlo es lo
      que hacía que la tarjeta de Resultado Preliminar mostrara «0,000 %» cuando en realidad
@@ -400,7 +482,152 @@ export default function IngestaCifras({ study, updateStudy }) {
       {/* Columna Izquierda: Formulario de Cifras e Ingesta */}
       <div className="lg:col-span-2 space-y-6">
 
-        {/* 1. Sección: Ingesta de Estados Financieros (EEFF) */}
+        {/* 1. Sección: Ingesta de Estados Financieros (EEFF) — variante SEGMENTADA. El
+            estudio tipo_estudio === 'segmentacion' no lee una sola columna del documento:
+            lee varias (una por segmento), y el analista tiene que elegir cuál aplica antes
+            de que ninguna cifra llegue al estudio. Es una carta aparte y no una rama dentro
+            de la de abajo porque el flujo entero —qué sube, qué se verifica, qué se pinta—
+            es distinto; lo único que comparten es el estilo visual. */}
+        {study.tipo_estudio === 'segmentacion' ? (
+          <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <h3 className="text-md font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#0FA3A1]" />
+                Ingesta de Estados Financieros Segmentados (EEFF de la Empresa)
+              </h3>
+              {archivoSegmentado && (
+                <span className="text-xs bg-[#0FA3A1]/10 text-[#0FA3A1] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
+                  <FileCheck className="w-3.5 h-3.5" />
+                  {archivoSegmentado.name}
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Adjunte el estado de resultados segmentado por línea de negocio, unidad de
+              negocio o geografía (PDF o imagen). El documento trae una columna por segmento
+              —y normalmente una adicional de total o consolidado de la compañía—; se leen
+              los cuatro rubros de cada columna (ingresos, costo de ventas, gastos de ventas
+              y de administración). Elija abajo el segmento del contribuyente bajo estudio
+              para verificar sus cifras contra el documento y aplicarlas.
+            </p>
+
+            <div className="border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-[#0FA3A1] transition-colors relative cursor-pointer bg-zinc-50/50 dark:bg-zinc-900/30">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.pdf,image/*"
+                disabled={loadingEeffSegmentado}
+                onChange={(e) => {
+                  if (e.target.files[0]) {
+                    handleEeffSegmentadoUpload(e.target.files[0]);
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              {loadingEeffSegmentado ? (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <Loader2 className="w-8 h-8 text-[#0FA3A1] animate-spin" />
+                  <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Extrayendo los segmentos del documento...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <Upload className="w-8 h-8 text-zinc-400" />
+                  <span className="text-xs text-zinc-700 dark:text-zinc-300 font-semibold">
+                    Seleccionar o arrastrar el Estado de Resultados Segmentado (PDF o Imagen)
+                  </span>
+                  <span className="text-[11px] text-zinc-400">Lectura por columna con Gemini Vision, con verificación contra el documento</span>
+                </div>
+              )}
+            </div>
+
+            {eeffSegmentadoMsg && (
+              <div className={`p-3 rounded-lg text-xs flex gap-2 items-center ${
+                eeffSegmentadoMsg.includes('✅')
+                  ? 'bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-800 dark:text-rose-300'
+              }`}>
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <span>{eeffSegmentadoMsg}</span>
+              </div>
+            )}
+
+            {/* Un botón por segmento que la lectura identificó, incluido uno cuyo
+                encabezado no se pudo transcribir (etiqueta vacía: ver la cabecera de
+                eeffSegmentacionParser.js) — descartarlo en silencio escondería una
+                columna real del documento. */}
+            {segmentosLeidos && Array.isArray(segmentosLeidos.segmentos) && segmentosLeidos.segmentos.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                  Segmento del contribuyente bajo estudio:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {segmentosLeidos.segmentos.map((seg, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={loadingSegmento}
+                      onClick={() => handleElegirSegmento(seg.etiqueta)}
+                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
+                        study.segmentoSeleccionado === seg.etiqueta
+                          ? 'bg-[#0FA3A1] border-[#0FA3A1] text-white'
+                          : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {seg.etiqueta ? `Usar «${seg.etiqueta}»` : 'Usar segmento sin etiqueta identificada'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Advertencias de la última verificación por columna: mismo bloque visual que
+                usa la ingesta estándar para `hallazgos.advertencias`, con
+                `study.t_lecturaSegmentacion.advertencias` como fuente — es lo que persiste
+                en el estudio (Task 4), no un estado de componente. */}
+            {study.t_lecturaSegmentacion && study.t_lecturaSegmentacion.advertencias
+              && study.t_lecturaSegmentacion.advertencias.length > 0 && (
+              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 space-y-2">
+                <div className="flex items-center gap-2 text-rose-800 dark:text-rose-300">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-bold">
+                    {study.t_lecturaSegmentacion.advertencias.length} punto(s) que requieren su revisión
+                  </span>
+                </div>
+                <ul className="list-disc pl-4 space-y-1">
+                  {study.t_lecturaSegmentacion.advertencias.map((a, i) => (
+                    <li key={i} className="text-[11px] text-rose-900 dark:text-rose-200 leading-snug">
+                      {a.mensaje}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {study.t_lecturaSegmentacion && study.t_lecturaSegmentacion.verificadoContraTexto === false && (
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 text-[11px] text-amber-900 dark:text-amber-200 flex gap-2 items-center">
+                <FileWarning className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  Este documento no tiene una capa de texto legible (es un escaneo o sus
+                  fuentes no se pueden leer): ninguna cifra del segmento elegido pudo
+                  cotejarse contra el texto del PDF. Revise el estado financiero a mano antes
+                  de confiar en esta lectura.
+                </span>
+              </div>
+            )}
+
+            {study.t_lecturaSegmentacion
+              && (!study.t_lecturaSegmentacion.advertencias || study.t_lecturaSegmentacion.advertencias.length === 0)
+              && study.t_lecturaSegmentacion.verificadoContraTexto && (
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 text-[11px] text-emerald-800 dark:text-emerald-300 flex gap-2 items-center">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  Lectura verificada: los cuatro rubros del segmento elegido están impresos
+                  en su columna del documento.
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <h3 className="text-md font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
@@ -553,6 +780,7 @@ export default function IngestaCifras({ study, updateStudy }) {
             </div>
           )}
         </div>
+        )}
 
         {/* Cifras P&L */}
         <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
@@ -624,28 +852,36 @@ export default function IngestaCifras({ study, updateStudy }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-            <div className="flex flex-col">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Monto Excluido (Operación No Vinculada)</label>
-              <CampoMoneda
-                value={study.seg_excluido ?? ''}
-                onChange={(v) => handleFieldChange('seg_excluido', v)}
-                placeholder="COP a excluir del ingreso/gasto"
-                className={CLASE_CASILLA}
-              />
-            </div>
+          {/* Monto Excluido / Motivo de la Exclusión: es la exclusión MANUAL de una
+              operación no vinculada dentro de un estado financiero único — no aplica a un
+              estudio tipo_estudio === 'segmentacion', que ya aísla el segmento del
+              contribuyente en su propia columna del documento (ver la carta de ingesta de
+              arriba). Se oculta, no se elimina: un estudio que cambie de tipo más adelante
+              no debe perder lo que el analista ya hubiera escrito aquí. */}
+          {study.tipo_estudio !== 'segmentacion' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex flex-col">
+                <label className="text-xs font-semibold text-zinc-500 mb-1.5">Monto Excluido (Operación No Vinculada)</label>
+                <CampoMoneda
+                  value={study.seg_excluido ?? ''}
+                  onChange={(v) => handleFieldChange('seg_excluido', v)}
+                  placeholder="COP a excluir del ingreso/gasto"
+                  className={CLASE_CASILLA}
+                />
+              </div>
 
-            <div className="flex flex-col md:col-span-2">
-              <label className="text-xs font-semibold text-zinc-500 mb-1.5">Motivo de la Exclusión (Segmentación)</label>
-              <textarea
-                value={study.seg_motivo || ''}
-                onChange={(e) => handleFieldChange('seg_motivo', e.target.value)}
-                placeholder="Ej: proyecto CoCrea con un tercero no vinculado, ajeno a la operación con la vinculada"
-                rows={2}
-                className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100"
-              />
+              <div className="flex flex-col md:col-span-2">
+                <label className="text-xs font-semibold text-zinc-500 mb-1.5">Motivo de la Exclusión (Segmentación)</label>
+                <textarea
+                  value={study.seg_motivo || ''}
+                  onChange={(e) => handleFieldChange('seg_motivo', e.target.value)}
+                  placeholder="Ej: proyecto CoCrea con un tercero no vinculado, ajeno a la operación con la vinculada"
+                  rows={2}
+                  className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Cifras del Estado de Situación Financiera: las tres partidas y el subtotal */}

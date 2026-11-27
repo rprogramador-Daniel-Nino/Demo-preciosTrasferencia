@@ -167,6 +167,16 @@ try {
   const margen = html3.match(/-?[\d.,]+\s*%/);
   if (margen) console.log('   · margen que muestra la tarjeta:', margen[0]);
 
+  /* ── 5. Estudio de segmentación: la ingesta cambia de carta y oculta la exclusión manual ── */
+  const html4 = renderToStaticMarkup(React.createElement(IngestaCifras, {
+    study: { tipo_estudio: 'segmentacion', anio: 2025, t_s: null, t_c: null },
+    updateStudy: () => {},
+  }));
+  console.log(`
+═══ INGESTA DE EEFF (estudio segmentado) · render OK, ${html4.length} caracteres ═══
+`);
+  comprobar('estudio segmentado: no muestra el bloque de exclusión manual', !/Monto Excluido/.test(html4));
+
   console.log(fallos === 0
     ? '\n→ todas las comprobaciones pasaron'
     : `\n→ ${fallos} comprobación(es) fallaron`);
