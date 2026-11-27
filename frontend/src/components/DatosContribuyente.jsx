@@ -6,6 +6,7 @@ import { mensajeAccionistas, mensajeDocumentoIdentidad } from '../services/mensa
 import { resolverComposicionAccionaria } from '../services/tablasContribuyente';
 import { fmt } from '../utils/calculations';
 import { registrarUsoIA } from '../services/gastoIA';
+import { limpiezaAlCambiarTipoEstudio, teniaLecturaSegmentacion } from '../services/flujoEstudio';
 
 export default function DatosContribuyente({ study, updateStudy }) {
   const [loadingRut, setLoadingRut] = useState(false);
@@ -20,6 +21,15 @@ export default function DatosContribuyente({ study, updateStudy }) {
 
   const handleFieldChange = (key, value) => {
     updateStudy({ [key]: value });
+  };
+
+  /* Al salir de "Segmentación" se borran las cifras del segmento, solo si alguna vez corrió
+     una lectura segmentada (ver limpiezaAlCambiarTipoEstudio). */
+  const handleTipoEstudioChange = (nuevoTipo) => {
+    const limpieza = limpiezaAlCambiarTipoEstudio(
+      study.tipo_estudio, nuevoTipo, teniaLecturaSegmentacion(study),
+    );
+    updateStudy({ tipo_estudio: nuevoTipo, ...(limpieza || {}) });
   };
 
   /* TODA lectura termina en un mensaje, y el mensaje lo decide `mensajesIngesta.js`.
@@ -124,7 +134,7 @@ export default function DatosContribuyente({ study, updateStudy }) {
               <label className="text-xs font-semibold text-zinc-500 mb-1.5">Tipo de Estudio*</label>
               <select
                 value={study.tipo_estudio || 'estandar'}
-                onChange={(e) => handleFieldChange('tipo_estudio', e.target.value)}
+                onChange={(e) => handleTipoEstudioChange(e.target.value)}
                 className="bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100"
               >
                 <option value="estandar">Estándar</option>

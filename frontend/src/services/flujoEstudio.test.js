@@ -5,7 +5,10 @@ import {
   contribuyenteCompleto, CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, motorComparableCompleto,
   operacionesPrestamoCompleto, prestamoTasasCompleto,
   estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
+  segmentacionCompleto, limpiezaAlCambiarTipoEstudio, teniaLecturaSegmentacion,
+  parcheAlAplicarSegmento, parcheAlCargarEeffSegmentado,
 } from './flujoEstudio.js';
+import { analizarRango } from './rangoIntercuartil.js';
 
 const PRESTAMO_BASE = { tipo_estudio: 'prestamo', actividad_especifica: 'Comercio de vehículos' };
 const PRESTAMOS_DOS_FECHAS = [
@@ -206,4 +209,117 @@ test('etapaMaximaEfectiva trata un estudio sin el campo como completamente desbl
   assert.strictEqual(etapaMaximaEfectiva({}), 6);
   assert.strictEqual(etapaMaximaEfectiva(null), 6);
   assert.strictEqual(etapaMaximaEfectiva(undefined), 6);
+});
+
+test('segmentacionCompleto exige lectura Y segmento elegido', () => {
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion' }), false);
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {} }), false, 'sin segmento elegido no basta');
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {}, segmentoSeleccionado: 'Tecnologia' }), true);
+});
+
+test('motorComparableCompleto exige segmentacionCompleto solo para tipo_estudio segmentacion', () => {
+  const base = { actividad_especifica: 'Comercio de tecnología' };
+  assert.equal(motorComparableCompleto({ ...base, tipo_estudio: 'segmentacion' }), false);
+  assert.equal(motorComparableCompleto({
+    ...base, tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {}, segmentoSeleccionado: 'Tecnologia',
+  }), true);
+  // no rompe el caso existente de préstamo ni el estándar:
+  assert.equal(motorComparableCompleto({ ...base, tipo_estudio: 'estandar' }), true);
+});
+
+test('segmentacionCompleto no acepta un segmento elegido que es solo espacios', () => {
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {}, segmentoSeleccionado: '   ' }), false);
+});
+
+test('limpiezaAlCambiarTipoEstudio limpia los campos del segmento al salir de segmentación con una lectura corrida', () => {
+  const patch = limpiezaAlCambiarTipoEstudio('segmentacion', 'estandar', true);
+  assert.deepEqual(patch, {
+    t_s: null, t_c: null, t_gastos: null, t_op: null,
+    t_lecturaSegmentacion: null, segmentoSeleccionado: null,
+  });
+});
+
+test('limpiezaAlCambiarTipoEstudio no hace nada si no se sale de segmentación', () => {
+  assert.equal(limpiezaAlCambiarTipoEstudio('estandar', 'prestamo', true), null);
+  assert.equal(limpiezaAlCambiarTipoEstudio('estandar', 'prestamo', false), null);
+  assert.equal(limpiezaAlCambiarTipoEstudio('segmentacion', 'segmentacion', true), null);
+});
+
+/* Revisión final (I4): el spec solo autoriza borrar las cifras al salir de Segmentación
+   «después de haber corrido una lectura de segmentación». Un clic errado en Segmentación
+   sobre un estudio con cifras estándar —o un estudio de la era anterior con cifras a mano—
+   no debe perderlas al volver. */
+test('limpiezaAlCambiarTipoEstudio: segmentacion → estandar sin haber corrido nunca una lectura no borra las cifras', () => {
+  assert.equal(limpiezaAlCambiarTipoEstudio('segmentacion', 'estandar', false), null);
+  assert.equal(limpiezaAlCambiarTipoEstudio('segmentacion', 'prestamo', false), null);
+  assert.equal(limpiezaAlCambiarTipoEstudio('segmentacion', 'estandar'), null, 'sin el flag, no se asume lectura');
+});
+
+test('teniaLecturaSegmentacion: basta la lectura o el segmento elegido', () => {
+  assert.equal(teniaLecturaSegmentacion({}), false);
+  assert.equal(teniaLecturaSegmentacion(null), false);
+  assert.equal(teniaLecturaSegmentacion({ t_s: 1000, t_op: 100 }), false, 'cifras a mano no son una lectura');
+  assert.equal(teniaLecturaSegmentacion({ t_lecturaSegmentacion: { advertencias: [] } }), true);
+  assert.equal(teniaLecturaSegmentacion({ segmentoSeleccionado: 'Tecnologia' }), true);
+});
+
+/* Revisión final (C1): para segmentación, `seg_excluido` «no se muestra ni se usa». El campo
+   ya no se ve en la UI, pero ~9 cálculos (rango, auditoría, informe, Excel…) siguen restando
+   `t_s − seg_excluido` y `t_op − seg_excluido`. Aplicar un segmento lo deja en null en el mismo
+   parche, así ninguno de ellos descuenta dos veces una exclusión pensada para la compañía
+   entera. `seg_motivo` se conserva como rastro de auditoría. */
+const VERIFICACION_TECNOLOGIA = {
+  campos: { t_s: 1000, t_c: 600, t_gastos: 300, t_op: 100 },
+  advertencias: [{ tipo: 'descuadre-segmentos', campo: 't_s', mensaje: 'x' }],
+  verificadoContraTexto: true,
+  segmentosDisponibles: ['Tecnologia', 'Otros'],
+};
+
+test('parcheAlAplicarSegmento aplica las cifras, el segmento, la lectura y anula seg_excluido', () => {
+  const parche = parcheAlAplicarSegmento(VERIFICACION_TECNOLOGIA.campos, 'Tecnologia', VERIFICACION_TECNOLOGIA);
+  assert.deepEqual(parche, {
+    t_s: 1000, t_c: 600, t_gastos: 300, t_op: 100,
+    seg_excluido: null,
+    segmentoSeleccionado: 'Tecnologia',
+    t_lecturaSegmentacion: {
+      advertencias: VERIFICACION_TECNOLOGIA.advertencias,
+      verificadoContraTexto: true,
+      segmentosDisponibles: ['Tecnologia', 'Otros'],
+    },
+  });
+  assert.equal('seg_motivo' in parche, false, 'seg_motivo no se toca: queda como rastro');
+});
+
+test('un estudio de segmentación con seg_excluido viejo mide el margen del segmento tras aplicarlo, sin descontar dos veces', () => {
+  const estudio = {
+    tipo_estudio: 'segmentacion', pli: 'MO',
+    t_s: 9000, t_c: 5000, t_op: 900,
+    seg_excluido: 500, seg_motivo: 'Ingreso no operacional de la compañía',
+  };
+  // Antes de aplicar el segmento, el seg_excluido viejo sí entra al cálculo (comportamiento existente).
+  const antes = analizarRango(estudio).tPLI;
+  const despues = { ...estudio, ...parcheAlAplicarSegmento(VERIFICACION_TECNOLOGIA.campos, 'Tecnologia', VERIFICACION_TECNOLOGIA) };
+  const { tPLI } = analizarRango(despues);
+  assert.ok(Math.abs(tPLI - 100 / 1000) < 1e-9, `margen del segmento 10 %, no ${tPLI}`);
+  assert.notEqual(antes, tPLI);
+  assert.equal(despues.seg_motivo, 'Ingreso no operacional de la compañía');
+  assert.equal(segmentacionCompleto(despues), true);
+});
+
+/* Revisión final (I5): subir un documento nuevo deja sin efecto la elección hecha sobre el
+   anterior —vuelve a cerrar la etapa 4 y ningún botón del documento nuevo aparece como ya
+   elegido—, pero NO borra las cifras: se reemplazan cuando se elija un segmento del nuevo. */
+test('parcheAlCargarEeffSegmentado anula la elección y la lectura anteriores sin tocar las cifras', () => {
+  const parche = parcheAlCargarEeffSegmentado();
+  assert.deepEqual(parche, { segmentoSeleccionado: null, t_lecturaSegmentacion: null });
+
+  const estudioPrevio = {
+    tipo_estudio: 'segmentacion', actividad_especifica: 'Comercio de tecnología',
+    t_s: 1000, t_c: 600, t_gastos: 300, t_op: 100,
+    segmentoSeleccionado: 'Tecnologia', t_lecturaSegmentacion: { advertencias: [] },
+  };
+  assert.equal(motorComparableCompleto(estudioPrevio), true);
+  const tras = { ...estudioPrevio, ...parche };
+  assert.equal(motorComparableCompleto(tras), false, 'la etapa 4 vuelve a cerrarse');
+  assert.deepEqual([tras.t_s, tras.t_c, tras.t_gastos, tras.t_op], [1000, 600, 300, 100]);
 });
