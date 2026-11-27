@@ -9,6 +9,7 @@ import {
 } from '../services/eeffVerificacion';
 import { parseEeffSegmentadoWithGeminiOCR } from '../services/eeffSegmentacionParser';
 import { verificarEeffSegmentado } from '../services/eeffSegmentacionVerificacion';
+import { parcheAlAplicarSegmento, parcheAlCargarEeffSegmentado } from '../services/flujoEstudio';
 import {
   resolverFaltantesConNotas, aprenderDeLecturaExitosa, aprenderRotuloConfirmado,
 } from '../services/notasEeffOrquestacion';
@@ -412,6 +413,10 @@ export default function IngestaCifras({ study, updateStudy }) {
     setLoadingEeffSegmentado(true);
     setSegmentosLeidos(null);
     setArchivoSegmentado(null);
+    /* La elección hecha sobre el documento anterior deja de valer: vuelve a cerrar la etapa 4
+       hasta que se elija un segmento de ESTE documento. Las cifras se conservan hasta entonces
+       (ver parcheAlCargarEeffSegmentado). */
+    updateStudy(parcheAlCargarEeffSegmentado());
     setEeffSegmentadoMsg('🤖 Leyendo el estado de resultados segmentado…');
 
     try {
@@ -448,16 +453,11 @@ export default function IngestaCifras({ study, updateStudy }) {
       });
 
       /* Mismo `repararCifrasDelEstudio` que usa la ingesta estándar, sobre las cifras que
-         la verificación acaba de producir (ver eeffParser.js). */
-      updateStudy({
-        ...repararCifrasDelEstudio(verificacion.campos),
-        segmentoSeleccionado: etiqueta,
-        t_lecturaSegmentacion: {
-          advertencias: verificacion.advertencias,
-          verificadoContraTexto: verificacion.verificadoContraTexto,
-          segmentosDisponibles: verificacion.segmentosDisponibles,
-        },
-      });
+         la verificación acaba de producir (ver eeffParser.js). El parche también anula
+         `seg_excluido` para que no se descuente dos veces (ver parcheAlAplicarSegmento). */
+      updateStudy(parcheAlAplicarSegmento(
+        repararCifrasDelEstudio(verificacion.campos), etiqueta, verificacion,
+      ));
     } catch (err) {
       console.error('Error verificando el segmento elegido:', err);
       setEeffSegmentadoMsg('⚠ No se pudo verificar el segmento elegido. Intente de nuevo.');

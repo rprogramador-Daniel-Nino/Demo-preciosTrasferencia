@@ -6,7 +6,7 @@ import { mensajeAccionistas, mensajeDocumentoIdentidad } from '../services/mensa
 import { resolverComposicionAccionaria } from '../services/tablasContribuyente';
 import { fmt } from '../utils/calculations';
 import { registrarUsoIA } from '../services/gastoIA';
-import { limpiezaAlCambiarTipoEstudio } from '../services/flujoEstudio';
+import { limpiezaAlCambiarTipoEstudio, teniaLecturaSegmentacion } from '../services/flujoEstudio';
 
 export default function DatosContribuyente({ study, updateStudy }) {
   const [loadingRut, setLoadingRut] = useState(false);
@@ -23,9 +23,12 @@ export default function DatosContribuyente({ study, updateStudy }) {
     updateStudy({ [key]: value });
   };
 
-  /* Al salir de "Segmentación" se borran las cifras del segmento (ver limpiezaAlCambiarTipoEstudio). */
+  /* Al salir de "Segmentación" se borran las cifras del segmento, solo si alguna vez corrió
+     una lectura segmentada (ver limpiezaAlCambiarTipoEstudio). */
   const handleTipoEstudioChange = (nuevoTipo) => {
-    const limpieza = limpiezaAlCambiarTipoEstudio(study.tipo_estudio, nuevoTipo);
+    const limpieza = limpiezaAlCambiarTipoEstudio(
+      study.tipo_estudio, nuevoTipo, teniaLecturaSegmentacion(study),
+    );
     updateStudy({ tipo_estudio: nuevoTipo, ...(limpieza || {}) });
   };
 

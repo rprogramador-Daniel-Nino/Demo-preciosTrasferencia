@@ -95,17 +95,57 @@ export function segmentacionCompleto(study) {
   return Boolean(study.t_lecturaSegmentacion) && segmentoOk;
 }
 
-/* Al salir de segmentación, los campos del segmento (tasas t_s/t_c/t_gastos/t_op, la lectura
-   y el segmento elegido) dejan de tener sentido para el nuevo tipo: se devuelven en `null`
-   para que el llamador los fusione sobre el estudio. `null` si no hay nada que limpiar. */
-export function limpiezaAlCambiarTipoEstudio(tipoAnterior, tipoNuevo) {
-  if (tipoAnterior === 'segmentacion' && tipoNuevo !== 'segmentacion') {
+/* ¿Corrió alguna vez una lectura de EEFF segmentado sobre este estudio? Basta la lectura o el
+   segmento elegido: cualquiera de los dos solo los escribe la ingesta segmentada. */
+export function teniaLecturaSegmentacion(study) {
+  return Boolean(study && (study.t_lecturaSegmentacion || study.segmentoSeleccionado));
+}
+
+/* Al salir de segmentación DESPUÉS de haber corrido una lectura segmentada (spec §6), los
+   campos del segmento (tasas t_s/t_c/t_gastos/t_op, la lectura y el segmento elegido) dejan
+   de tener sentido para el nuevo tipo: se devuelven en `null` para que el llamador los
+   fusione sobre el estudio. `null` si no hay nada que limpiar — en particular si nunca hubo
+   lectura (`teniaLectura` falso): un clic errado en «Segmentación» sobre un estudio con
+   cifras estándar, o un estudio con cifras a mano, no debe perderlas al volver. */
+export function limpiezaAlCambiarTipoEstudio(tipoAnterior, tipoNuevo, teniaLectura = false) {
+  if (tipoAnterior === 'segmentacion' && tipoNuevo !== 'segmentacion' && teniaLectura) {
     return {
       t_s: null, t_c: null, t_gastos: null, t_op: null,
       t_lecturaSegmentacion: null, segmentoSeleccionado: null,
     };
   }
   return null;
+}
+
+/* El parche que aplica al estudio el segmento elegido de un EEFF segmentado: sus cifras (ya
+   reparadas por el llamador con `repararCifrasDelEstudio`), el segmento y el resumen de la
+   lectura que exige `segmentacionCompleto`.
+
+   Anula además `seg_excluido`: para segmentación el spec dice que ese campo «no se muestra ni
+   se usa», y aunque ya no se ve en la UI, los cálculos del rango, la auditoría, el informe y
+   el Excel siguen restando `t_s − seg_excluido` / `t_op − seg_excluido`. Las cifras de un
+   segmento ya vienen aisladas; restarles una exclusión pensada para la compañía entera la
+   descontaría dos veces. `seg_motivo` no se toca: queda como rastro de auditoría. */
+export function parcheAlAplicarSegmento(cifras, etiqueta, verificacion) {
+  const v = verificacion || {};
+  return {
+    ...(cifras || {}),
+    seg_excluido: null,
+    segmentoSeleccionado: etiqueta,
+    t_lecturaSegmentacion: {
+      advertencias: v.advertencias,
+      verificadoContraTexto: v.verificadoContraTexto,
+      segmentosDisponibles: v.segmentosDisponibles,
+    },
+  };
+}
+
+/* Al empezar a cargar un EEFF segmentado NUEVO, la elección hecha sobre el documento anterior
+   deja de valer: se anulan el segmento y la lectura para volver a cerrar la etapa 4 hasta que
+   se elija un segmento del documento nuevo (y para que ningún botón del nuevo aparezca como
+   ya elegido). Las cifras se conservan: las reemplaza la próxima elección. */
+export function parcheAlCargarEeffSegmentado() {
+  return { segmentoSeleccionado: null, t_lecturaSegmentacion: null };
 }
 
 /* En un estudio de tipo préstamo, la etapa de Ingesta de Operaciones no se puede confirmar
