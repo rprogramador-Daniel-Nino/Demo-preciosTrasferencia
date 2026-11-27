@@ -43,7 +43,14 @@ import {
  * @returns {{y:number, columnas:Array<{etiqueta:string, derecha:number}>, tolerancia:number}|null}
  */
 export function encabezadoDeSegmentos(filas, etiquetas) {
-  const buscadas = (etiquetas || []).map(normalizarPalabra).filter(Boolean);
+  /* Se busca por la forma normalizada, pero cada columna guarda la etiqueta TAL COMO LA PIDIÓ
+     el llamador (no el texto crudo de la celda del PDF): `ubicacionDeCifraSegmento` compara
+     la columna de una celda con la etiqueta pedida por igualdad estricta, y una diferencia de
+     solo mayúsculas, tildes o forma NFC/NFD del acento entre el PDF y la lectura dejaba a
+     todas las cifras en «otra-columna». */
+  const buscadas = (etiquetas || [])
+    .map((e) => ({ clave: normalizarPalabra(e), etiqueta: String(e || '').trim() }))
+    .filter((b) => b.clave);
   if (buscadas.length < 1) return null;
 
   const lista = filas || [];
@@ -95,17 +102,27 @@ function cifrasExplicadasSegmento(filas, encabezado) {
      · ninguna OTRA celda de la fila puede tener forma de cifra. En el original esto descarta
        un «31» suelto de una fecha en prosa; aquí descarta la misma clase de frase, y además
        una fila de datos que por azar repitiera dos rótulos de columna como parte de su
-       propio texto. */
+       propio texto.
+
+   Y una tercera, propia de este módulo: si una etiqueta pedida aparece en MÁS de una celda
+   de la fila, la fila es ambigua y no se acepta. Es el caso del estado segmentado
+   comparativo («Tecnologia | Otros | Tecnologia | Otros», un bloque por año): quedarse en
+   silencio con la primera celda verificaba siempre contra el bloque de la izquierda, y una
+   cifra leída del año equivocado podía salir como «coincide». Sin cruzar el año (pendiente),
+   lo honesto es no reconocer el encabezado y que la verificación quede «sin-verificar». */
 function encabezadoDeFilaSegmentos(fila, buscadas) {
   const celdas = (fila && fila.celdas) || [];
   const columnas = [];
   const usadas = new Set();
 
-  for (const clave of buscadas) {
-    const idx = celdas.findIndex((c, i) => !usadas.has(i) && normalizarPalabra(c.texto) === clave);
-    if (idx === -1) return null;
+  for (const { clave, etiqueta } of buscadas) {
+    const coincidentes = [];
+    celdas.forEach((c, i) => { if (normalizarPalabra(c.texto) === clave) coincidentes.push(i); });
+    if (coincidentes.length > 1) return null;
+    const idx = coincidentes.find((i) => !usadas.has(i));
+    if (idx === undefined) return null;
     usadas.add(idx);
-    columnas.push({ etiqueta: celdas[idx].texto, derecha: celdas[idx].derecha });
+    columnas.push({ etiqueta, derecha: celdas[idx].derecha });
   }
 
   const otraCifra = celdas.some((c, i) => !usadas.has(i) && esCeldaDeCifra(c.texto));
