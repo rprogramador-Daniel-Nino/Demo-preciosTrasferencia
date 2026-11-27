@@ -476,6 +476,25 @@ export default function IngestaCifras({ study, updateStudy }) {
     op: study.t_op,
   }, study.pli || 'MO');
 
+  /* `verificarEeffSegmentado` ubica el segmento a verificar buscando por IGUALDAD de
+     `etiqueta` (eeffSegmentacionVerificacion.js:140), no por índice ni identidad. Con un
+     único segmento de etiqueta vacía eso no es ambiguo (un solo candidato con esa
+     etiqueta); pero si el documento trae DOS O MÁS segmentos cuyo encabezado no se pudo
+     transcribir, los botones de todos ellos lucirían y se comportarían idénticos —
+     "Usar segmento sin etiqueta identificada"—, y el clic en el segundo resolvería
+     siempre contra el PRIMERO que calce esa búsqueda (el `.find` se detiene en la primera
+     coincidencia). Aplicar en silencio las cifras de un segmento distinto al que el
+     analista cree haber elegido es peor que no ofrecer el botón: por eso ese caso no se
+     deja elegir aquí, se avisa en su lugar. Los segmentos con etiqueta real no se ven
+     afectados, sin importar cuántos segmentos vacíos traiga el mismo documento. */
+  const segmentosParaElegir = (segmentosLeidos && Array.isArray(segmentosLeidos.segmentos))
+    ? segmentosLeidos.segmentos
+    : [];
+  const segmentosSinEtiqueta = segmentosParaElegir.filter(
+    (s) => !s || !s.etiqueta || !String(s.etiqueta).trim(),
+  );
+  const hayAmbiguedadDeEtiquetaVacia = segmentosSinEtiqueta.length > 1;
+
   return (
     <>
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -555,28 +574,49 @@ export default function IngestaCifras({ study, updateStudy }) {
                 encabezado no se pudo transcribir (etiqueta vacía: ver la cabecera de
                 eeffSegmentacionParser.js) — descartarlo en silencio escondería una
                 columna real del documento. */}
-            {segmentosLeidos && Array.isArray(segmentosLeidos.segmentos) && segmentosLeidos.segmentos.length > 0 && (
+            {segmentosParaElegir.length > 0 && (
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                   Segmento del contribuyente bajo estudio:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {segmentosLeidos.segmentos.map((seg, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      disabled={loadingSegmento}
-                      onClick={() => handleElegirSegmento(seg.etiqueta)}
-                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
-                        study.segmentoSeleccionado === seg.etiqueta
-                          ? 'bg-[#0FA3A1] border-[#0FA3A1] text-white'
-                          : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                      }`}
-                    >
-                      {seg.etiqueta ? `Usar «${seg.etiqueta}»` : 'Usar segmento sin etiqueta identificada'}
-                    </button>
-                  ))}
+                  {segmentosParaElegir.map((seg, i) => {
+                    const sinEtiqueta = !seg || !seg.etiqueta || !String(seg.etiqueta).trim();
+                    /* Con dos o más segmentos sin etiqueta no hay forma segura de saber
+                       cuál de ellos resolvería `verificarEeffSegmentado` (ver el
+                       comentario de `hayAmbiguedadDeEtiquetaVacia` más arriba): no se
+                       ofrece un botón que silenciosamente podría aplicar el OTRO
+                       segmento vacío. Los segmentos CON etiqueta siguen intactos. */
+                    if (sinEtiqueta && hayAmbiguedadDeEtiquetaVacia) return null;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={loadingSegmento}
+                        onClick={() => handleElegirSegmento(seg.etiqueta)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 ${
+                          study.segmentoSeleccionado === seg.etiqueta
+                            ? 'bg-[#0FA3A1] border-[#0FA3A1] text-white'
+                            : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        {seg.etiqueta ? `Usar «${seg.etiqueta}»` : 'Usar segmento sin etiqueta identificada'}
+                      </button>
+                    );
+                  })}
                 </div>
+                {hayAmbiguedadDeEtiquetaVacia && (
+                  <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 text-[11px] text-amber-900 dark:text-amber-200 flex gap-2 items-start">
+                    <FileWarning className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      El documento trae {segmentosSinEtiqueta.length} segmentos sin encabezado
+                      legible: no es posible distinguirlos de forma segura, así que ninguno de
+                      ellos se puede elegir aquí (aplicar el equivocado dejaría cifras de otro
+                      segmento en el estudio, sin aviso). Vuelva a cargar una imagen más nítida
+                      del encabezado del documento, o escriba a mano las cifras de ese segmento.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
