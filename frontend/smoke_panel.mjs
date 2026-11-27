@@ -177,6 +177,16 @@ try {
 `);
   comprobar('estudio segmentado: no muestra el bloque de exclusión manual', !/Monto Excluido/.test(html4));
 
+  const html5 = renderToStaticMarkup(React.createElement(IngestaCifras, {
+    study: { tipo_estudio: 'segmentacion', anio: 2025 },
+    updateStudy: () => {},
+  }));
+  /* El regex del plan original (`/EEFF.*toda la compañía|balance/i`) ya daba falso positivo
+     antes de implementar nada: por precedencia de `|`, la alternativa suelta "balance" ya
+     calzaba con el texto existente de RUBROS_BALANCE_ADICIONALES ("...si el balance los
+     trae."), fuera de la rama de segmentación. Se ajusta a una frase que sí es nueva. */
+  comprobar('estudio segmentado: muestra la segunda carga para el EEFF normal (balance)', /EEFF de toda la compañía/i.test(html5));
+
   console.log(fallos === 0
     ? '\n→ todas las comprobaciones pasaron'
     : `\n→ ${fallos} comprobación(es) fallaron`);

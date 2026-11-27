@@ -69,6 +69,15 @@ const RUBROS_BALANCE_ADICIONALES = CLAVES_RUBROS_BALANCE_ADICIONALES.map(
   (clave) => RUBROS_EXAMINADA.find((r) => r.clave === clave),
 );
 
+/* El allowlist de la segunda carga de un estudio segmentado (caso OFIMIO, 2026-11-27): el
+   EEFF de toda la compañía SOLO alimenta el balance. Nunca `t_s/t_c/t_gastos/t_op` (son del
+   segmento, ya verificados y aplicados por la carga de arriba) ni `t_correcciones`/
+   `t_lecturaEeff`/`t_camposAMano` (son el rastro de ESA otra lectura, no de esta). */
+const CAMPOS_BALANCE_NORMAL = [
+  't_ar', 't_ap', 't_inv', 't_act_curr', 't_ppe', 't_act_tot', 't_activos_detalle',
+  'eeffImages', 't_cash', 't_inv_assoc', 't_tax', 't_intang', 't_dif', 't_act_nocurr',
+];
+
 const CLASE_CASILLA = 'bg-[#ffffff] dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-[8px] px-[12px] py-[8px] text-sm focus:outline-none focus:ring-2 focus:ring-[#0FA3A1]/50 focus:border-[#0FA3A1] text-zinc-950 dark:text-zinc-100 font-mono';
 
 export default function IngestaCifras({ study, updateStudy }) {
@@ -97,6 +106,15 @@ export default function IngestaCifras({ study, updateStudy }) {
      cifras aplicadas, vía `updateStudy`. */
   const [segmentosLeidos, setSegmentosLeidos] = useState(null);
   const [archivoSegmentado, setArchivoSegmentado] = useState(null);
+
+  /* Estado propio de la SEGUNDA carga del estudio segmentado: el EEFF de toda la compañía,
+     que solo alimenta el balance (ver `CAMPOS_BALANCE_NORMAL`). No comparte estado con
+     `loadingEeff`/`eeffMsg`/`eeffFileName` (ingesta estándar) ni con
+     `loadingEeffSegmentado`/`eeffSegmentadoMsg` (lectura del documento segmentado): describe
+     una tercera lectura distinta, sobre un tercer documento. */
+  const [loadingEeffBalance, setLoadingEeffBalance] = useState(false);
+  const [eeffBalanceMsg, setEeffBalanceMsg] = useState('');
+  const [eeffBalanceFileName, setEeffBalanceFileName] = useState('');
 
   /* Los tres insumos de la utilidad operacional. Cambiar cualquiera obliga a recalcularla:
      es un valor derivado, no un dato, y dejarlo con la cifra de la carga anterior es peor
@@ -466,6 +484,115 @@ export default function IngestaCifras({ study, updateStudy }) {
     }
   };
 
+  /* Carga del EEFF NORMAL (toda la compañía) para el balance de un estudio segmentado: el
+     documento segmentado de arriba trae varias columnas del ESTADO DE RESULTADOS, pero
+     ninguna del Estado de Situación Financiera —no hay "balance por segmento"—, así que esas
+     cifras siempre salen del EEFF de toda la compañía (caso OFIMIO, 2026-11-27).
+
+     Es deliberadamente una COPIA filtrada del pipeline de `handleEeffUpload`, no una
+     abstracción compartida (misma razón que separa `segmentosLeidos` de los estados de
+     arriba: cada una describe una lectura distinta). La diferencia está solo al final: el
+     resultado combinado se filtra contra `CAMPOS_BALANCE_NORMAL` antes de aplicarlo, para
+     que las cifras de resultados de ESTE documento (que es un EEFF completo y sí trae
+     `t_s/t_c/t_gastos/t_op`) nunca pisen el segmento ya verificado y aplicado arriba. */
+  const handleEeffBalanceUpload = async (file) => {
+    if (!file) return;
+    setLoadingEeffBalance(true);
+    setEeffBalanceFileName(file.name);
+    setEeffBalanceMsg('🤖 Leyendo el EEFF de toda la compañía…');
+
+    try {
+      const eeffImages = await convertPdfToImages(file);
+      const [res, diccionarioRelacionadaGlobal, rotulosConfirmadosEmpresa] = await Promise.all([
+        parseEeffWithGeminiOCR(file, study.anio),
+        Promise.all([
+          leerVocabularioEeff('t_ar_relacionada'),
+          leerVocabularioEeff('t_ap_relacionada'),
+        ]).then(([t_ar, t_ap]) => ({ t_ar, t_ap }))
+          .catch((err) => { console.warn('No se pudo leer el diccionario de rótulos relacionados:', err); return {}; }),
+        study.nit
+          ? leerRotulosConfirmadosPorEmpresa(study.nit)
+            .catch((err) => { console.warn('No se pudieron leer los rótulos confirmados de la empresa:', err); return {}; })
+          : Promise.resolve({}),
+      ]);
+
+      const resultadoCombinado = {};
+      if (eeffImages && eeffImages.length > 0) {
+        resultadoCombinado.eeffImages = eeffImages;
+      }
+
+      /* `respaldoOcr` no se usa aquí: esta carga no publica `t_lecturaEeff` (no está en el
+         allowlist — es el rastro de la lectura del segmento, no de esta), así que no hay
+         dónde dejar constancia de si se usó OCR de respaldo. */
+      const { lectura } = await respaldarLecturaConOcr({
+        file,
+        lectura: res,
+        alAvanzar: ({ lote, lotes, paginas }) => setEeffBalanceMsg(
+          `🤖 Transcribiendo las páginas escaneadas del documento… lote ${lote} de ${lotes} `
+          + `(página${paginas.length > 1 ? 's' : ''} ${paginas.join(', ')})`,
+        ),
+      });
+
+      const primeraVerificacion = verificarEeff(lectura, {
+        anioEstudio: study.anio, diccionarioRelacionadaGlobal, rotulosConfirmadosEmpresa,
+      });
+
+      let verificacion = primeraVerificacion;
+      try {
+        verificacion = await resolverFaltantesConNotas({
+          file,
+          lectura,
+          diccionarioRelacionadaGlobal,
+          rotulosConfirmadosEmpresa,
+          verificacion: primeraVerificacion,
+          anioEstudio: study.anio,
+          leerVocabulario: leerVocabularioEeff,
+          guardarVocabulario: guardarVocabularioEeff,
+        });
+      } catch (err) {
+        console.error('No se pudo completar la pasada a notas:', err);
+      }
+
+      aprenderDeLecturaExitosa({
+        campos: verificacion.campos,
+        rotulos: lectura.rotulos,
+        leerVocabulario: leerVocabularioEeff,
+        guardarVocabulario: guardarVocabularioEeff,
+      }).catch((err) => console.warn('No se pudo actualizar el diccionario de vocabulario:', err));
+
+      Object.assign(resultadoCombinado, repararCifrasDelEstudio(camposAplicables(verificacion.campos)));
+      Object.assign(resultadoCombinado, camposParaLimpiar(verificacion.campos, verificacion.advertencias));
+
+      /* El filtro: de TODO lo que esta lectura produjo (que incluye, sí, `t_s/t_c/t_gastos/
+         t_op` — es un EEFF completo, no uno recortado), solo pasan las claves del balance. */
+      const updates = Object.fromEntries(
+        Object.entries(resultadoCombinado).filter(([clave]) => CAMPOS_BALANCE_NORMAL.includes(clave)),
+      );
+
+      /* `t_camposAMano`: se quitan del arreglo existente únicamente las claves del balance
+         que SÍ llegaron con valor en esta lectura (ya no son "a mano", la lectura las acaba
+         de reescribir). Las entradas de `t_s/t_c/t_gastos/t_op` (y cualquier otra que ya
+         estuviera) se dejan intactas — no son de esta lectura. */
+      const yaEstaban = Array.isArray(study.t_camposAMano) ? study.t_camposAMano : [];
+      const leidosEnEstaLectura = CAMPOS_BALANCE_NORMAL.filter((clave) => clave in updates);
+      updates.t_camposAMano = yaEstaban.filter((clave) => !leidosEnEstaLectura.includes(clave));
+
+      updateStudy(updates);
+
+      const paginasAdjuntas = eeffImages ? eeffImages.length : 0;
+      if (paginasAdjuntas > 0) {
+        setEeffBalanceMsg(`✅ Balance leído y ${paginasAdjuntas} página(s) del PDF adjuntadas para el ANEXO A.`);
+      } else {
+        setEeffBalanceMsg('⚠ Se leyeron las cifras del balance, pero no se pudieron adjuntar las páginas del PDF para el ANEXO A (revise que el archivo no esté dañado, o inténtelo de nuevo).');
+      }
+    } catch (err) {
+      console.error('Error procesando el EEFF de toda la compañía (balance) con OCR:', err);
+      setEeffBalanceMsg('⚠ No se pudo procesar el archivo. Puede ingresar las cifras del balance manualmente.');
+    } finally {
+      setLoadingEeffBalance(false);
+    }
+  };
+
   /* Sin coaccionar a 0: un `t_op` (o `t_s`) faltante es `null`, no una utilidad de cero, y
      `pliOf` ya sabe devolver `null` en ese caso — coaccionarlo aquí antes de llamarlo es lo
      que hacía que la tarjeta de Resultado Preliminar mostrara «0,000 %» cuando en realidad
@@ -666,6 +793,74 @@ export default function IngestaCifras({ study, updateStudy }) {
                 </span>
               </div>
             )}
+
+            {/* Segunda carga de esta tarjeta: el EEFF NORMAL (toda la compañía), solo para el
+                balance. El documento segmentado de arriba no desglosa el Estado de Situación
+                Financiera por segmento —ninguna columna lo trae—, así que esas cifras siempre
+                salen del EEFF de toda la compañía (caso OFIMIO, 2026-11-27). No toca el
+                resultado del segmento ya elegido arriba: ver `handleEeffBalanceUpload`. */}
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#0FA3A1]" />
+                  EEFF de toda la compañía (balance)
+                </h4>
+                {eeffBalanceFileName && (
+                  <span className="text-xs bg-[#0FA3A1]/10 text-[#0FA3A1] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <FileCheck className="w-3.5 h-3.5" />
+                    {eeffBalanceFileName}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-zinc-500 leading-relaxed">
+                Adjunte el Estado de Situación Financiera y de Resultados de TODA la compañía
+                (no el documento segmentado). El segmentado no trae desglose del balance, así
+                que esta carga solo llena las «Cifras del Estado de Situación Financiera» más
+                abajo (CxC y CxP a partes relacionadas, inventarios, total activo corriente,
+                PP&E y los rubros adicionales); no cambia los ingresos, el costo, los gastos
+                ni la utilidad operacional del segmento ya elegido arriba.
+              </p>
+
+              <div className="border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center text-center hover:border-[#0FA3A1] transition-colors relative cursor-pointer bg-zinc-50/50 dark:bg-zinc-900/30">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.pdf,image/*"
+                  disabled={loadingEeffBalance}
+                  onChange={(e) => {
+                    if (e.target.files[0]) {
+                      handleEeffBalanceUpload(e.target.files[0]);
+                    }
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                {loadingEeffBalance ? (
+                  <div className="flex flex-col items-center gap-2 py-2">
+                    <Loader2 className="w-8 h-8 text-[#0FA3A1] animate-spin" />
+                    <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">Extrayendo el balance de toda la compañía...</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-2">
+                    <Upload className="w-8 h-8 text-zinc-400" />
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300 font-semibold">
+                      Seleccionar o arrastrar el EEFF de toda la compañía (Excel, PDF o Imagen)
+                    </span>
+                    <span className="text-[11px] text-zinc-400">Lectura con Gemini Vision; solo se aplica al balance</span>
+                  </div>
+                )}
+              </div>
+
+              {eeffBalanceMsg && (
+                <div className={`p-3 rounded-lg text-xs flex gap-2 items-center ${
+                  eeffBalanceMsg.includes('✅')
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-800 dark:text-rose-300'
+                }`}>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  <span>{eeffBalanceMsg}</span>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
         <div className="bg-white dark:bg-[#0c0c0f] border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm space-y-4">
