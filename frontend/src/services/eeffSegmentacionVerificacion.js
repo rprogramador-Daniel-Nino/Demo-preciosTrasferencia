@@ -196,8 +196,13 @@ export async function verificarEeffSegmentado(lectura, {
      Por rubro, no en bruto: un segmento de más en t_s y uno de menos en t_c, en la misma
      magnitud, no deben cancelarse y esconder un descuadre real. */
   RUBROS_CUADRE.forEach((campo) => {
+    /* Solo si el documento imprime el total de ese rubro: `Number(null)` es 0 —finito—, y
+       sin este corte un documento sin columna de total (o un `total_compania` vacío del
+       modelo) "descuadraba" cada rubro contra un total de 0. */
+    const bruto = totalCompania[campo];
+    if (bruto === null || bruto === undefined) return;
     const suma = segmentos.reduce((acc, s) => acc + (Number(s && s[campo]) || 0), 0);
-    const total = Number(totalCompania[campo]);
+    const total = Number(bruto);
     if (!Number.isFinite(total)) return;
 
     const escala = Math.max(Math.abs(total), 1);
