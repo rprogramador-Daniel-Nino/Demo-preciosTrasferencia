@@ -115,7 +115,13 @@ function mensajeDeColumna(campo, valor, etiquetaSegmento, donde) {
  *
  * @param {object} lectura - `LecturaSegmentada` (eeffSegmentacionParser.js).
  * @param {{etiquetaSegmento:string, anioEstudio:string|number, archivo?:File|null,
- *          toleranciaCuadre?:number}} opciones
+ *          toleranciaCuadre?:number, extraerEstructura?:Function}} opciones
+ *   `extraerEstructura` es un punto de inyección para pruebas (default:
+ *   `extraerEstructuraPdfSegmentos`, la real que lee el PDF): el llamador de producción
+ *   nunca lo pasa, y un test puede sustituirlo por una función que devuelva una
+ *   `estructura` construida a mano con fixtures, sin tocar `pdfjs` ni un PDF real — misma
+ *   técnica que ya usa `extraerEstructuraPdfSegmentos` con su propio parámetro
+ *   `getDocument` (eeffSegmentacionColumnas.js).
  * @returns {Promise<{campos:{t_s:number|null,t_c:number|null,t_gastos:number|null,
  *   t_op:number|null}, advertencias:Array<{tipo:string,mensaje:string,campo?:string}>,
  *   verificadoContraTexto:boolean, segmentosDisponibles:string[]}>}
@@ -125,6 +131,7 @@ export async function verificarEeffSegmentado(lectura, {
   anioEstudio, // eslint-disable-line no-unused-vars -- parte del contrato (Task 6 lo pasa), sin uso propio todavía: no hay columna por AÑO que cruzar aquí (ver cabecera de eeffSegmentacionParser.js).
   archivo = null,
   toleranciaCuadre = TOLERANCIA_CUADRE,
+  extraerEstructura = extraerEstructuraPdfSegmentos,
 } = {}) {
   const l = lectura || {};
   const segmentos = Array.isArray(l.segmentos) ? l.segmentos : [];
@@ -163,7 +170,7 @@ export async function verificarEeffSegmentado(lectura, {
 
   if (verificadoContraTexto) {
     const etiquetasSegmentos = segmentos.map((s) => s && s.etiqueta).filter(Boolean);
-    const estructura = await extraerEstructuraPdfSegmentos(archivo, etiquetasSegmentos);
+    const estructura = await extraerEstructura(archivo, etiquetasSegmentos);
     const rotulos = segmento.rotulos || {};
 
     RUBROS_VERIFICABLES.forEach((campo) => {
