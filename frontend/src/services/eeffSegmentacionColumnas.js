@@ -30,11 +30,15 @@ import {
  * El encabezado que declara los segmentos de un estado segmentado, con la posición de cada
  * columna y la tolerancia con la que se le puede atribuir una cifra.
  *
- * A diferencia de `encabezadoDeAnios`, aquí no hace falta desempatar candidatas por cuántas
- * cifras explican debajo: las etiquetas las trae quien llama —ya las leyó una pasada
- * anterior—, así que una fila es encabezado si y solo si trae, como celdas DISTINTAS, un
- * texto que normalizado coincide con CADA una de las etiquetas pedidas. No hay ambigüedad
- * que resolver con la geometría de las filas de abajo.
+ * Que la etiqueta sea texto conocido de antemano (en vez de una regex de año) quita UNA de
+ * las dos fuentes de ambigüedad de `encabezadoDeAnios`: no hace falta desempatar candidatas
+ * por una coincidencia de FORMA, porque el rótulo exacto no se confunde con nada más que él
+ * mismo. Pero la OTRA fuente sigue intacta: un documento puede repetir las mismas etiquetas
+ * dos veces —un título o una leyenda que las cita arriba de la tabla, antes del encabezado de
+ * verdad—, y eso no es una coincidencia de forma sino una fila de datos distinta. Por eso se
+ * conserva el mismo criterio que usa el original para resolverla: cada candidata se prueba
+ * contra las cifras de las filas que vienen después y gana la que más explica (ver
+ * `cifrasExplicadasSegmento`), exactamente como `cifrasExplicadas` en `eeffColumnas.js`.
  *
  * @returns {{y:number, columnas:Array<{etiqueta:string, derecha:number}>, tolerancia:number}|null}
  */
@@ -42,35 +46,80 @@ export function encabezadoDeSegmentos(filas, etiquetas) {
   const buscadas = (etiquetas || []).map(normalizarPalabra).filter(Boolean);
   if (buscadas.length < 1) return null;
 
-  for (const fila of filas || []) {
-    const candidata = encabezadoDeFilaSegmentos(fila, buscadas);
-    if (candidata) return candidata;
+  const lista = filas || [];
+  let mejor = null;
+
+  for (let i = 0; i < lista.length; i += 1) {
+    const candidata = encabezadoDeFilaSegmentos(lista[i], buscadas);
+    if (!candidata) continue;
+    const respaldo = cifrasExplicadasSegmento(lista.slice(i + 1), candidata);
+    if (!mejor || respaldo > mejor.respaldo) mejor = { candidata, respaldo };
   }
-  return null;
+
+  if (!mejor) return null;
+  /* Sin backing de al menos dos columnas (o de la única columna, si solo se pidió una
+     etiqueta) no hay nada que sostenga que esto es un encabezado real y no un título que
+     repite las etiquetas sueltas. */
+  const minimo = Math.min(MINIMO_CIFRAS_QUE_RESPALDAN, mejor.candidata.columnas.length);
+  if (mejor.respaldo < minimo) return null;
+  return mejor.candidata;
 }
 
-/* La fila leída COMO encabezado de segmentos, o `null` si no puede serlo. Cada etiqueta
-   buscada debe calzar con una celda DISTINTA de la fila: dos etiquetas no pueden compartir
-   la misma celda, igual que dos años no pueden compartir la misma celda en el original. */
+/* Cuántas columnas hacen falta backing debajo para creerle a un encabezado candidato. Dos,
+   igual que en `eeffColumnas.js`: una sola podría caer por casualidad cerca de una celda
+   suelta de un título, dos columnas alineadas en filas distintas ya no. Con una sola
+   etiqueta pedida (un solo segmento en el documento) se exige esa única columna. */
+const MINIMO_CIFRAS_QUE_RESPALDAN = 2;
+
+/* Cuántas celdas con forma de cifra de estas filas caen en alguna columna del encabezado
+   candidato. Mismo criterio que `cifrasExplicadas` en `eeffColumnas.js`: se cuentan por
+   columna distinta y no en bruto, para que una fila con varios números pegados a una misma
+   etiqueta no infle el respaldo de un candidato que en realidad no explica nada. */
+function cifrasExplicadasSegmento(filas, encabezado) {
+  const porColumna = new Set();
+  let total = 0;
+  (filas || []).forEach((fila) => {
+    const etiquetas = asignarSegmentos(fila, encabezado);
+    etiquetas.forEach((etiqueta) => { porColumna.add(etiqueta); total += 1; });
+  });
+  const minimo = Math.min(MINIMO_CIFRAS_QUE_RESPALDAN, encabezado.columnas.length);
+  return porColumna.size >= minimo ? total : 0;
+}
+
+/* La fila leída COMO encabezado de segmentos, o `null` si no puede serlo. Sin mirar el resto
+   del documento. Dos reglas, calcadas de `encabezadoDeFila`:
+
+     · cada etiqueta buscada debe calzar con una celda DISTINTA de la fila: dos etiquetas no
+       pueden compartir la misma celda, igual que dos años no pueden compartir la misma celda
+       en el original;
+     · ninguna OTRA celda de la fila puede tener forma de cifra. En el original esto descarta
+       un «31» suelto de una fecha en prosa; aquí descarta la misma clase de frase, y además
+       una fila de datos que por azar repitiera dos rótulos de columna como parte de su
+       propio texto. */
 function encabezadoDeFilaSegmentos(fila, buscadas) {
   const celdas = (fila && fila.celdas) || [];
   const columnas = [];
   const usadas = new Set();
 
   for (const clave of buscadas) {
-    const hallada = celdas.find((c, i) => !usadas.has(i) && normalizarPalabra(c.texto) === clave);
-    if (!hallada) return null;
-    usadas.add(celdas.indexOf(hallada));
-    columnas.push({ etiqueta: hallada.texto, derecha: hallada.derecha });
+    const idx = celdas.findIndex((c, i) => !usadas.has(i) && normalizarPalabra(c.texto) === clave);
+    if (idx === -1) return null;
+    usadas.add(idx);
+    columnas.push({ etiqueta: celdas[idx].texto, derecha: celdas[idx].derecha });
   }
+
+  const otraCifra = celdas.some((c, i) => !usadas.has(i) && esCeldaDeCifra(c.texto));
+  if (otraCifra) return null;
 
   const ordenadas = [...columnas].sort((a, b) => a.derecha - b.derecha);
   let hueco = Infinity;
   for (let i = 1; i < ordenadas.length; i += 1) {
     hueco = Math.min(hueco, ordenadas[i].derecha - ordenadas[i - 1].derecha);
   }
-  /* Con una sola etiqueta no hay hueco que medir: se usa una tolerancia generosa fija,
-     porque no hay con qué calibrarla desde el propio documento (no hay columna contigua). */
+  /* Hueco nulo o negativo con dos o más etiquetas: dos columnas en la misma posición, no se
+     puede distinguir cuál es cuál. Con una sola etiqueta no hay hueco que medir —se usa una
+     tolerancia generosa fija, porque no hay columna contigua con la que calibrarla. */
+  if (ordenadas.length > 1 && (!Number.isFinite(hueco) || hueco <= 0)) return null;
   const tolerancia = Number.isFinite(hueco) && hueco > 0 ? hueco / 2 : 50;
 
   return { y: fila.y, columnas: ordenadas, tolerancia };
