@@ -5,6 +5,7 @@ import {
   contribuyenteCompleto, CAMPOS_OBLIGATORIOS_MOTOR_COMPARABLES, motorComparableCompleto,
   operacionesPrestamoCompleto, prestamoTasasCompleto,
   estadoDesdeEtapa, etapaAlcanzable, etapaMaximaEfectiva,
+  segmentacionCompleto, limpiezaAlCambiarTipoEstudio,
 } from './flujoEstudio.js';
 
 const PRESTAMO_BASE = { tipo_estudio: 'prestamo', actividad_especifica: 'Comercio de vehículos' };
@@ -206,4 +207,33 @@ test('etapaMaximaEfectiva trata un estudio sin el campo como completamente desbl
   assert.strictEqual(etapaMaximaEfectiva({}), 6);
   assert.strictEqual(etapaMaximaEfectiva(null), 6);
   assert.strictEqual(etapaMaximaEfectiva(undefined), 6);
+});
+
+test('segmentacionCompleto exige lectura Y segmento elegido', () => {
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion' }), false);
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {} }), false, 'sin segmento elegido no basta');
+  assert.equal(segmentacionCompleto({ tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {}, segmentoSeleccionado: 'Tecnologia' }), true);
+});
+
+test('motorComparableCompleto exige segmentacionCompleto solo para tipo_estudio segmentacion', () => {
+  const base = { actividad_especifica: 'Comercio de tecnología' };
+  assert.equal(motorComparableCompleto({ ...base, tipo_estudio: 'segmentacion' }), false);
+  assert.equal(motorComparableCompleto({
+    ...base, tipo_estudio: 'segmentacion', t_lecturaSegmentacion: {}, segmentoSeleccionado: 'Tecnologia',
+  }), true);
+  // no rompe el caso existente de préstamo ni el estándar:
+  assert.equal(motorComparableCompleto({ ...base, tipo_estudio: 'estandar' }), true);
+});
+
+test('limpiezaAlCambiarTipoEstudio limpia los campos del segmento al salir de segmentación', () => {
+  const patch = limpiezaAlCambiarTipoEstudio('segmentacion', 'estandar');
+  assert.deepEqual(patch, {
+    t_s: null, t_c: null, t_gastos: null, t_op: null,
+    t_lecturaSegmentacion: null, segmentoSeleccionado: null,
+  });
+});
+
+test('limpiezaAlCambiarTipoEstudio no hace nada si no se sale de segmentación', () => {
+  assert.equal(limpiezaAlCambiarTipoEstudio('estandar', 'prestamo'), null);
+  assert.equal(limpiezaAlCambiarTipoEstudio('segmentacion', 'segmentacion'), null);
 });

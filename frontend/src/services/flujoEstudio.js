@@ -81,7 +81,31 @@ export function motorComparableCompleto(study) {
     return typeof valor === 'string' && valor.trim().length > 0;
   });
   if (!actividadOk) return false;
-  return study.tipo_estudio === 'prestamo' ? prestamoTasasCompleto(study) : true;
+  if (study.tipo_estudio === 'prestamo') return prestamoTasasCompleto(study);
+  if (study.tipo_estudio === 'segmentacion') return segmentacionCompleto(study);
+  return true;
+}
+
+/* En un estudio de segmentación, la etapa de Motor de Comparables no se puede confirmar sin
+   una lectura segmentada de los EEFF (`t_lecturaSegmentacion`) Y un segmento elegido: una
+   lectura sin segmento todavía no decidió qué cifras son las del estudio. */
+export function segmentacionCompleto(study) {
+  if (!study) return false;
+  const segmentoOk = typeof study.segmentoSeleccionado === 'string' && study.segmentoSeleccionado.trim().length > 0;
+  return Boolean(study.t_lecturaSegmentacion) && segmentoOk;
+}
+
+/* Al salir de segmentación, los campos del segmento (tasas t_s/t_c/t_gastos/t_op, la lectura
+   y el segmento elegido) dejan de tener sentido para el nuevo tipo: se devuelven en `null`
+   para que el llamador los fusione sobre el estudio. `null` si no hay nada que limpiar. */
+export function limpiezaAlCambiarTipoEstudio(tipoAnterior, tipoNuevo) {
+  if (tipoAnterior === 'segmentacion' && tipoNuevo !== 'segmentacion') {
+    return {
+      t_s: null, t_c: null, t_gastos: null, t_op: null,
+      t_lecturaSegmentacion: null, segmentoSeleccionado: null,
+    };
+  }
+  return null;
 }
 
 /* En un estudio de tipo préstamo, la etapa de Ingesta de Operaciones no se puede confirmar
