@@ -1036,7 +1036,7 @@ export async function parseEEFFComparablesLote(file, studyYear) {
 
 /* Extraídos para que la lectura individual y la de lote no dupliquen el manejo
    del archivo. */
-async function leerBase64(file) {
+export async function leerBase64(file) {
   if (typeof FileReader === 'undefined') {
     const arrayBuffer = await file.arrayBuffer();
     return Buffer.from(arrayBuffer).toString('base64');
@@ -1049,7 +1049,7 @@ async function leerBase64(file) {
   });
 }
 
-function mimeDe(file) {
+export function mimeDe(file) {
   if (file.type?.includes('image') || file.name.match(/\.(png|jpg|jpeg|webp)$/i)) {
     return file.type || 'image/jpeg';
   }

@@ -8,6 +8,7 @@ import {
   verifyAccountingEqualities,
   CAMPOS_CON_FALLBACK_NOTAS, promptFaltantesEnNotas, buscarFaltantesEnNotas,
   repararMilesComoDecimal, repararCifrasDelEstudio,
+  leerBase64, mimeDe,
 } from './eeffParser.js';
 import { CLAVES_RUBROS_EXAMINADA } from './memoriaCalculoRangoOptimo.js';
 
@@ -832,4 +833,12 @@ test('buscarFaltantesEnNotas interpreta la respuesta de Gemini, encontrado y aus
   } finally {
     axios.post = originalPost;
   }
+});
+
+test('mimeDe reconoce una imagen por su nombre de archivo', () => {
+  assert.equal(mimeDe({ type: '', name: 'foto.jpg' }), 'image/jpeg');
+});
+
+test('mimeDe cae en application/pdf para lo demás', () => {
+  assert.equal(mimeDe({ type: '', name: 'estado.pdf' }), 'application/pdf');
 });
