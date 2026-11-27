@@ -109,13 +109,13 @@ test('parseEeffSegmentadoWithGeminiOCR mapea los segmentos y el total de la comp
   }
 });
 
-test('parseEeffSegmentadoWithGeminiOCR no revienta si el documento no imprime un segmento con cifra', async () => {
+test('un segmento con etiqueta vacía (el modelo no transcribió el encabezado) NO se descarta', async () => {
   const axios = (await import('axios')).default;
   const originalPost = axios.post;
 
   axios.post = async () => respuestaGemini({
     segmentos: [
-      { etiqueta: '', ingresos_operacionales: { valor: null, rotulo: '' } },
+      { etiqueta: '', ingresos_operacionales: { valor: 450000000, rotulo: 'Ingresos' } },
       {
         etiqueta: 'Tecnologia',
         ingresos_operacionales: { valor: 100, rotulo: 'Ingresos' },
@@ -126,10 +126,18 @@ test('parseEeffSegmentadoWithGeminiOCR no revienta si el documento no imprime un
 
   try {
     const lectura = await parseEeffSegmentadoWithGeminiOCR(mockFile(), 2025);
-    /* La columna sin etiqueta (encabezado vacío, probablemente ruido de la tabla) se
-       descarta: no hay forma de que Task 2 la ubique sin un rótulo de columna. */
-    assert.equal(lectura.segmentos.length, 1);
-    assert.equal(lectura.segmentos[0].etiqueta, 'Tecnologia');
+    /* El documento SÍ imprime esta columna y su cifra: perderla en silencio por un
+       encabezado que el modelo no pudo transcribir sería el mismo defecto que el
+       prompt existe para evitar. Se conserva con la misma forma que cualquier otro
+       segmento — sus 4 rubros y `rotulos` — y es la capa de UI/verificación, no esta
+       lectura, la que decide cómo señalar la etiqueta vacía. */
+    assert.equal(lectura.segmentos.length, 2);
+    assert.equal(lectura.segmentos[0].etiqueta, '');
+    assert.equal(lectura.segmentos[0].t_s, 450000000);
+    assert.equal(lectura.segmentos[0].t_c, null);
+    assert.equal(lectura.segmentos[0].rotulos.t_s, 'Ingresos');
+    assert.equal(lectura.segmentos[1].etiqueta, 'Tecnologia');
+    assert.equal(lectura.segmentos[1].t_s, 100);
     assert.ok(lectura.totalCompania, 'sin total_compania en el documento, igual se devuelve el objeto con las 4 claves en null');
     assert.equal(lectura.totalCompania.t_s, null);
   } finally {

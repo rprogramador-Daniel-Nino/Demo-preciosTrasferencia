@@ -183,16 +183,20 @@ export async function parseEeffSegmentadoWithGeminiOCR(file, anioEstudio) {
     throw new Error('La respuesta de la lectura del estado de resultados segmentado no traía un JSON reconocible.');
   }
 
+  /* Una columna sin etiqueta —el modelo no pudo transcribir el encabezado (una celda
+     combinada que el OCR saltó, un logo en vez de texto)— NO se descarta: el
+     documento SÍ imprime esa columna y sus cifras, y perderla en silencio es
+     exactamente el defecto que este módulo existe para evitar (transcribe, no
+     interpretes — y tampoco inventes que algo no estaba ahí). Se conserva con su
+     etiqueta tal cual Gemini la devolvió (cadena vacía si no vino ninguna); que Task 2
+     no pueda calzarla contra el PDF, o cómo señalarlo en la UI, es decisión de otra
+     capa, no de esta lectura. */
   const segmentos = (Array.isArray(parsed.segmentos) ? parsed.segmentos : [])
     .map((seg) => {
       const etiqueta = String((seg && seg.etiqueta) || '').trim();
       const { campos, rotulos } = mapearRubrosDeColumna(seg);
       return { etiqueta, ...campos, rotulos };
-    })
-    /* Una columna sin etiqueta no se puede ubicar después contra el PDF (Task 2 calza
-       por el texto exacto del encabezado): se descarta en vez de guardarla con un
-       rótulo vacío que nadie podría cuadrar. */
-    .filter((seg) => seg.etiqueta);
+    });
 
   const { campos: totalCompania } = mapearRubrosDeColumna(parsed.total_compania);
 
